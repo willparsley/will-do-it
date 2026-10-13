@@ -297,10 +297,10 @@ export default function WillDoIt() {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="space-y-4">
             <div 
-              className="grid gap-4" 
+              className={`grid gap-4 ${view === 'all' ? 'overflow-x-auto pb-4' : ''}`}
               style={{ 
                 gridTemplateColumns: view === 'all' 
-                  ? `180px repeat(${columns.length}, 1fr)` 
+                  ? `180px repeat(${columns.length}, minmax(120px, 1fr))` 
                   : `260px repeat(${columns.length}, 1fr)` 
               }}
             >
@@ -322,10 +322,10 @@ export default function WillDoIt() {
                     className={`stream-row rounded-xl p-4 ${stream.title === 'Uncategorized' ? 'uncategorized' : ''}`}
                   >
                     <div 
-                      className="grid gap-4" 
+                      className={`grid gap-4 ${view === 'all' ? 'min-w-max' : ''}`}
                       style={{ 
                         gridTemplateColumns: view === 'all' 
-                          ? `180px repeat(${columns.length}, 1fr)` 
+                          ? `180px repeat(${columns.length}, minmax(120px, 1fr))` 
                           : `240px repeat(${columns.length}, 1fr)` 
                       }}
                     >
