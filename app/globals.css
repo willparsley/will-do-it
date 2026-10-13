@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fafafa;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --border: #e5e5e5;
+  --muted: #f4f4f5;
+  --accent: #3b82f6;
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #ededed;
+  --card: #18181b;
+  --card-foreground: #ededed;
+  --border: #27272a;
+  --muted: #27272a;
+  --accent: #60a5fa;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans);
+}
+
+/* Better form controls in dark mode */
+input, textarea, select {
+  color: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #a1a1aa; /* zinc-400 */
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #52525b; /* zinc-600 */
+}
+
+/* Calm, easy on the eyes card styles for the matrix */
+.stream-row {
+  border: 1px solid var(--border);
+  background: var(--card);
+  transition: all 0.1s ease;
+}
+
+.stream-row.uncategorized {
+  background: var(--muted);
+  border-style: dashed;
+}
+
+.status-column {
+  border-left: 1px solid var(--border);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  transition: box-shadow 0.1s ease, transform 0.1s ease;
+}
+
+.card:hover {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.card.dragging {
+  opacity: 0.8;
+  transform: scale(0.98);
+}
+
+.badge {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.badge-overdue { background: #fee2e2; color: #991b1b; }
+.badge-today { background: #fef3c7; color: #92400e; }
+.badge-soon { background: #dbeafe; color: #1e40af; }
+.badge-future { background: var(--muted); color: #52525b; }
+
+.dark .badge-overdue { background: #450a0a; color: #fecaca; }
+.dark .badge-today { background: #451a03; color: #fde68a; }
+.dark .badge-soon { background: #1e3a8a; color: #bfdbfe; }
+.dark .badge-future { background: #27272a; color: #a1a1aa; }
