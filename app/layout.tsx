@@ -37,7 +37,13 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-canvas text-ink">
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         {children}
-        <Toaster position="top-center" richColors closeButton />
+        <Toaster
+          position="top-right"
+          offset={{ top: 124, right: 16 }}
+          mobileOffset={{ top: 124, right: 12 }}
+          richColors
+          closeButton
+        />
       </body>
     </html>
   );
