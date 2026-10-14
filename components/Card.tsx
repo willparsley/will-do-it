@@ -52,10 +52,10 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
       onClick={onClick}
       className={`card rounded-lg p-3 text-sm cursor-grab active:cursor-grabbing group relative ${
         isPriority ? 'card-priority pl-4' : ''
-      }`}
+      } ${showActions ? 'pr-14' : ''}`}
     >
-      <div className="font-medium leading-tight flex items-start justify-between gap-2 text-ink min-w-0">
-        <span className={`break-words min-w-0 ${showActions ? 'pr-10' : ''}`}>{card.title}</span>
+      <div className={`font-medium leading-tight flex items-start justify-between gap-2 text-ink min-w-0 ${showActions ? 'pr-14' : ''}`}>
+        <span className={`break-words min-w-0 ${showActions ? 'pr-12' : ''}`}>{card.title}</span>
         {card.is_recurring && (
           <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted mt-0.5" />
         )}
