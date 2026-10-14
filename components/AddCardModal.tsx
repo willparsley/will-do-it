@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, CardStatus, STATUS_LABELS } from '@/lib/types';
+import { Stream, CardStatus, STATUS_LABELS, streamsForSelect, uncategorizedId, MONTH_DAY_OPTIONS, monthDayLabel } from '@/lib/types';
 import { toast } from 'sonner';
 
 const supabase = createClient();
@@ -15,13 +15,22 @@ interface AddCardModalProps {
 }
 
 export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId }: AddCardModalProps) {
+  // Only active streams, alphabetical, "Uncategorized" last.
+  const selectableStreams = React.useMemo(() => streamsForSelect(streams), [streams]);
+
   const [title, setTitle] = useState('');
-  const [streamId, setStreamId] = useState(defaultStreamId || (streams[0]?.id ?? ''));
-  const [status, setStatus] = useState<CardStatus>('regular_backlog');
+  const [streamId, setStreamId] = useState(
+    () => defaultStreamId || uncategorizedId(selectableStreams) || selectableStreams[0]?.id || ''
+  );
+  const [status, setStatus] = useState<CardStatus>('backlog');
   const [dueAt, setDueAt] = useState('');
   const [remindAt, setRemindAt] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [stackMissed, setStackMissed] = useState(false);
+  const [frequency, setFrequency] = useState<'daily' | 'every_n_days' | 'weekly' | 'monthly'>('daily');
+  const [recInterval, setRecInterval] = useState(1);
+  const [weekdays, setWeekdays] = useState<number[]>([]); // 0=Sun, 1=Mon, ..., 6=Sat
+  const [monthDay, setMonthDay] = useState(1); // 1..31, or -1 for the last day
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,16 +46,27 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
       let recurrenceSourceId = null;
 
       if (isRecurring) {
-        // Create recurrence source
+        // Create recurrence source with full config
+        const recurrenceData: any = {
+          user_id: user.id,
+          stream_id: streamId,
+          base_title: title.trim(),
+          frequency,
+          interval: (frequency === 'daily') ? 1 : recInterval,
+          stack_missed: stackMissed,
+        };
+
+        if (frequency === 'weekly' && weekdays.length > 0) {
+          recurrenceData.weekdays = weekdays;
+        }
+
+        if (frequency === 'monthly') {
+          recurrenceData.month_day = monthDay;
+        }
+
         const { data: recurrence, error: recError } = await supabase
           .from('recurrence_sources')
-          .insert({
-            user_id: user.id,
-            stream_id: streamId,
-            base_title: title.trim(),
-            frequency: 'daily', // default for MVP
-            stack_missed: stackMissed,
-          })
+          .insert(recurrenceData)
           .select()
           .single();
 
@@ -86,21 +106,21 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="modal-backdrop" onClick={onClose}>
       <div 
-        className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-6" 
+        className="modal-panel max-w-md p-6" 
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-xl font-semibold mb-4">Add New Card</h2>
+        <h2 className="text-xl font-semibold mb-4 text-ink">Add New Card</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Title</label>
+            <label className="field-label">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+              className="control"
               placeholder="What needs to be done?"
               required
               autoFocus
@@ -109,24 +129,24 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Stream</label>
+              <label className="field-label">Stream</label>
               <select 
                 value={streamId} 
                 onChange={(e) => setStreamId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                className="control"
               >
-                {streams.map(s => (
+                {selectableStreams.map(s => (
                   <option key={s.id} value={s.id}>{s.title}</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
+              <label className="field-label">Status</label>
               <select 
                 value={status} 
                 onChange={(e) => setStatus(e.target.value as CardStatus)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                className="control"
               >
                 {Object.entries(STATUS_LABELS).map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
@@ -137,27 +157,27 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Due Date</label>
+              <label className="field-label">Due Date</label>
               <input 
                 type="datetime-local" 
                 value={dueAt} 
                 onChange={(e) => setDueAt(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                className="control"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Remind Me At</label>
+              <label className="field-label">Remind Me At</label>
               <input 
                 type="datetime-local" 
                 value={remindAt} 
                 onChange={(e) => setRemindAt(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                className="control"
               />
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm text-ink-soft">
               <input 
                 type="checkbox" 
                 checked={isRecurring} 
@@ -167,14 +187,77 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
             </label>
 
             {isRecurring && (
-              <label className="flex items-center gap-2 text-sm">
-                <input 
-                  type="checkbox" 
-                  checked={stackMissed} 
-                  onChange={(e) => setStackMissed(e.target.checked)} 
-                />
-                Stack missed occurrences
-              </label>
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <label className="flex items-center gap-2 text-ink-soft">
+                  <input 
+                    type="checkbox" 
+                    checked={stackMissed} 
+                    onChange={(e) => setStackMissed(e.target.checked)} 
+                  />
+                  Stack
+                </label>
+
+                <select 
+                  value={frequency} 
+                  onChange={(e) => setFrequency(e.target.value as any)}
+                  className="text-xs bg-surface border border-line rounded px-1 py-0.5 text-ink"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="every_n_days">Every N days</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Every N months</option>
+                </select>
+
+                {(frequency === 'every_n_days' || frequency === 'monthly') && (
+                  <label className="flex items-center gap-1 text-xs text-ink-soft">
+                    every
+                    <input 
+                      type="number" 
+                      min={1} 
+                      value={recInterval} 
+                      onChange={(e) => setRecInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-12 px-1 py-0.5 text-xs bg-surface border border-line rounded text-ink"
+                    />
+                    {frequency === 'every_n_days'
+                      ? (recInterval === 1 ? 'day' : 'days')
+                      : (recInterval === 1 ? 'month' : 'months')}
+                  </label>
+                )}
+
+                {frequency === 'monthly' && (
+                  <label className="flex items-center gap-1 text-xs text-ink-soft">
+                    on
+                    <select
+                      value={monthDay}
+                      onChange={(e) => setMonthDay(parseInt(e.target.value, 10))}
+                      className="text-xs bg-surface border border-line rounded px-1 py-0.5 text-ink"
+                    >
+                      {MONTH_DAY_OPTIONS.map((d) => (
+                        <option key={d} value={d}>{monthDayLabel(d)}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {frequency === 'weekly' && (
+                  <div className="flex gap-1 text-[10px]">
+                    {['S','M','T','W','T','F','S'].map((d, i) => (
+                      <label key={i} className={`px-1 py-0.5 border rounded cursor-pointer ${weekdays.includes(i) ? 'bg-accent text-accent-ink border-accent' : 'border-line text-ink-soft'}`}>
+                        <input 
+                          type="checkbox" 
+                          checked={weekdays.includes(i)} 
+                          onChange={(e) => {
+                            if (e.target.checked) setWeekdays([...weekdays, i].sort());
+                            else setWeekdays(weekdays.filter(w => w !== i));
+                          }} 
+                          className="hidden" 
+                        />
+                        {d}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -182,14 +265,14 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
             <button 
               type="button" 
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              className="btn btn-secondary flex-1 py-2.5"
             >
               Cancel
             </button>
             <button 
               type="submit" 
               disabled={loading || !title.trim()}
-              className="flex-1 py-2.5 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 font-medium disabled:opacity-60"
+              className="btn btn-primary flex-1 py-2.5"
             >
               {loading ? 'Creating...' : 'Create Card'}
             </button>

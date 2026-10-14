@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, Card, CardStatus, STATUS_LABELS } from '@/lib/types';
+import { Stream, Card, CardStatus, STATUS_LABELS, streamsForSelect, UNCATEGORIZED_TITLE } from '@/lib/types';
 import { toast } from 'sonner';
 
 const supabase = createClient();
@@ -16,6 +16,18 @@ interface EditCardModalProps {
 }
 
 export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDeleted }: EditCardModalProps) {
+  // Active streams only, alphabetical, "Uncategorized" last — but always keep
+  // the card's current stream selectable, even if it's complete/canceled.
+  const selectableStreams = React.useMemo(() => {
+    const active = streamsForSelect(streams);
+    const current = streams.find((s) => s.id === card.stream_id);
+    if (!current || active.some((s) => s.id === current.id)) return active;
+
+    const uncIndex = active.findIndex((s) => s.title === UNCATEGORIZED_TITLE);
+    if (uncIndex === -1) return [...active, current];
+    return [...active.slice(0, uncIndex), current, ...active.slice(uncIndex)];
+  }, [streams, card.stream_id]);
+
   const [title, setTitle] = useState(card.title);
   const [streamId, setStreamId] = useState(card.stream_id);
   const [status, setStatus] = useState<CardStatus>(card.status);
@@ -94,45 +106,45 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="modal-backdrop" onClick={onClose}>
       <div 
-        className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-auto" 
+        className="modal-panel max-w-md p-6 max-h-[90vh] overflow-auto" 
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-xl font-semibold mb-4">Edit Card</h2>
+        <h2 className="text-xl font-semibold mb-4 text-ink">Edit Card</h2>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Title</label>
+            <label className="field-label">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+              className="control"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Stream</label>
+              <label className="field-label">Stream</label>
               <select 
                 value={streamId} 
                 onChange={(e) => setStreamId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                className="control"
               >
-                {streams.map(s => (
+                {selectableStreams.map(s => (
                   <option key={s.id} value={s.id}>{s.title}</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
+              <label className="field-label">Status</label>
               <select 
                 value={status} 
                 onChange={(e) => handleStatusChange(e.target.value as CardStatus)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                className="control"
               >
                 {Object.entries(STATUS_LABELS).map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
@@ -143,32 +155,32 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Due Date</label>
+              <label className="field-label">Due Date</label>
               <input 
                 type="datetime-local" 
                 value={dueAt} 
                 onChange={(e) => setDueAt(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                className="control"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Remind Me At</label>
+              <label className="field-label">Remind Me At</label>
               <input 
                 type="datetime-local" 
                 value={remindAt} 
                 onChange={(e) => setRemindAt(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                className="control"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Notes</label>
+            <label className="field-label">Notes</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+              className="control"
               placeholder="Optional notes..."
             />
           </div>
@@ -177,7 +189,7 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
             <button 
               type="button" 
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              className="btn btn-secondary flex-1 py-2.5"
               disabled={loading}
             >
               Cancel
@@ -185,7 +197,7 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
             <button 
               onClick={handleSave}
               disabled={loading || !title.trim()}
-              className="flex-1 py-2.5 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 font-medium disabled:opacity-60"
+              className="btn btn-primary flex-1 py-2.5"
             >
               {loading ? 'Saving...' : 'Save Changes'}
             </button>
@@ -194,7 +206,7 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
           <button 
             onClick={handleDelete}
             disabled={loading}
-            className="w-full text-sm text-red-600 hover:text-red-700 dark:text-red-400 py-2"
+            className="w-full text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 py-2"
           >
             Delete Card
           </button>

@@ -15,15 +15,15 @@ export function AreaFilter({ value, onChange }: AreaFilterProps) {
   ];
 
   return (
-    <div className="flex items-center gap-1 text-sm border border-zinc-200 dark:border-zinc-800 rounded-full p-0.5">
+    <div className="flex items-center gap-0.5 text-sm border border-line rounded-full p-0.5 bg-surface">
       {options.map(opt => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
-          className={`px-3 py-1 rounded-full transition-all text-xs font-medium ${
-            value === opt.value 
-              ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' 
-              : 'text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 dark:text-zinc-400'
+          className={`px-3 py-1 rounded-full transition-colors text-xs font-medium ${
+            value === opt.value
+              ? 'bg-accent text-accent-ink'
+              : 'text-ink-soft hover:text-ink hover:bg-sunken'
           }`}
         >
           {opt.label}

@@ -35,13 +35,13 @@ export default function Login() {
 
   if (sent) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-zinc-50 dark:bg-zinc-950">
+      <div className="min-h-screen flex items-center justify-center p-6 bg-canvas">
         <div className="max-w-sm text-center">
-          <h1 className="text-2xl font-semibold mb-4">Check your inbox</h1>
-          <p className="text-zinc-600 dark:text-zinc-400">
+          <h1 className="text-2xl font-semibold mb-4 text-ink">Check your inbox</h1>
+          <p className="text-ink-soft">
             We sent a magic link to <strong>{email}</strong>. Click the link to sign in.
           </p>
-          <p className="text-xs text-zinc-500 mt-4">
+          <p className="text-xs text-ink-muted mt-4">
             You can close this tab after clicking the link.
           </p>
         </div>
@@ -50,16 +50,16 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-canvas">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight">Will Do It</h1>
-          <p className="text-zinc-500 mt-2">Sign in with a magic link</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-ink">Will Do It</h1>
+          <p className="text-ink-muted mt-2">Sign in with a magic link</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1.5 text-zinc-700 dark:text-zinc-300">
+            <label className="field-label">
               Email address
             </label>
             <input
@@ -67,11 +67,11 @@ export default function Login() {
               placeholder="Enter your email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-white"
+              className="control px-4 py-3"
               required
               autoFocus
             />
-            <p className="text-xs text-zinc-500 mt-1.5">
+            <p className="text-xs text-ink-muted mt-1.5">
               We'll send a magic link to this email. No password required.
             </p>
           </div>
@@ -79,13 +79,13 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading || !email}
-            className="w-full py-3 rounded-lg bg-zinc-900 hover:bg-black text-white dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200 font-medium disabled:bg-zinc-200 dark:disabled:bg-zinc-800 disabled:text-zinc-500 dark:disabled:text-zinc-400 transition-colors"
+            className="btn btn-primary w-full py-3"
           >
             {loading ? 'Sending magic link...' : 'Send magic link'}
           </button>
         </form>
 
-        <p className="text-center text-xs text-zinc-500 mt-6">
+        <p className="text-center text-xs text-ink-muted mt-6">
           Make sure email authentication is enabled in your Supabase project.
         </p>
       </div>

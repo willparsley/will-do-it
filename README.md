@@ -24,7 +24,7 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000).
 
 ## Project Context
-See `agents.md` for full decisions, data model, and contribution guidelines.
+See `AGENTS.md` for full decisions, data model, and contribution guidelines.
 
 ## Tech
 - Next.js (App Router)

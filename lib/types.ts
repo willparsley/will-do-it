@@ -1,7 +1,7 @@
-export type StreamState = 'backlog' | 'in_progress' | 'complete' | 'canceled';
+export type StreamState = 'in_progress' | 'complete' | 'canceled';
 export type CardStatus =
-  | 'prioritized_backlog'
-  | 'regular_backlog'
+  | 'backlog'
+  | 'priority_backlog'
   | 'research'
   | 'waiting'
   | 'in_progress'
@@ -10,6 +10,9 @@ export type CardStatus =
   | 'canceled';
 
 export type Area = 'work' | 'personal' | 'neutral';
+
+/** Title of the system-managed stream. Always pinned to the bottom of lists. */
+export const UNCATEGORIZED_TITLE = 'Uncategorized';
 
 export interface Stream {
   id: string;
@@ -21,6 +24,38 @@ export interface Stream {
   position: number;
   created_at?: string;
   updated_at?: string;
+}
+
+/**
+ * Streams to offer in card-modals' stream dropdowns: only active streams
+ * (completed/canceled are hidden), sorted alphabetically, with
+ * "Uncategorized" always last.
+ */
+export function streamsForSelect(streams: Stream[]): Stream[] {
+  return streams
+    .filter((s) => s.state === 'in_progress')
+    .sort((a, b) => {
+      const aUnc = a.title === UNCATEGORIZED_TITLE ? 1 : 0;
+      const bUnc = b.title === UNCATEGORIZED_TITLE ? 1 : 0;
+      if (aUnc !== bUnc) return aUnc - bUnc;
+      return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+    });
+}
+
+/** The id of the "Uncategorized" stream, if one exists. */
+export function uncategorizedId(streams: Stream[]): string | undefined {
+  return streams.find((s) => s.title === UNCATEGORIZED_TITLE)?.id;
+}
+
+/** Day-of-month options for a monthly recurrence. -1 means "last day". */
+export const MONTH_DAY_OPTIONS = [...Array.from({ length: 31 }, (_, i) => i + 1), -1];
+
+/** Label for a month_day value, e.g. 1 -> "1st", 22 -> "22nd", -1 -> "Last day". */
+export function monthDayLabel(day: number): string {
+  if (day === -1) return 'Last day';
+  const suffix = ['th', 'st', 'nd', 'rd'];
+  const v = day % 100;
+  return `${day}${suffix[(v - 20) % 10] || suffix[v] || suffix[0]}`;
 }
 
 export interface Card {
@@ -57,12 +92,12 @@ export interface RecurrenceSource {
 }
 
 export const ACTIVE_STATUSES: CardStatus[] = ['research', 'waiting', 'in_progress', 'review'];
-export const BACKLOG_STATUSES: CardStatus[] = ['regular_backlog', 'prioritized_backlog'];
+export const BACKLOG_STATUSES: CardStatus[] = ['backlog', 'priority_backlog'];
 export const ARCHIVE_STATUSES: CardStatus[] = ['complete', 'canceled'];
 
 export const STATUS_LABELS: Record<CardStatus, string> = {
-  prioritized_backlog: 'Prioritized',
-  regular_backlog: 'Regular',
+  backlog: 'Backlog',
+  priority_backlog: 'Priority Backlog',
   research: 'Research',
   waiting: 'Waiting',
   in_progress: 'In Progress',

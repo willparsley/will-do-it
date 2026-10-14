@@ -4,34 +4,98 @@ import React, { useEffect, useState } from 'react';
 import { 
   DndContext, 
   closestCenter, 
-  PointerSensor, 
+  MouseSensor, 
+  TouchSensor, 
   useSensor, 
   useSensors,
   DragEndEvent,
+  DragStartEvent,
+  DragCancelEvent,
+  DragOverlay,
 } from '@dnd-kit/core';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, Card, ACTIVE_STATUSES, BACKLOG_STATUSES, STATUS_LABELS, Area } from '@/lib/types';
+import { Stream, Card, ACTIVE_STATUSES, BACKLOG_STATUSES, Area } from '@/lib/types';
 import { AreaFilter } from '@/components/AreaFilter';
 import { AddCardModal } from '@/components/AddCardModal';
 import { Card as CardComponent } from '@/components/Card';
 import { DroppableCell } from '@/components/DroppableCell';
+import { StatusHeader } from '@/components/StatusHeader';
 import { EditCardModal } from '@/components/EditCardModal';
-import { Plus, LogOut } from 'lucide-react';
+import { AddStreamModal } from '@/components/AddStreamModal';
+import { EditStreamModal } from '@/components/EditStreamModal';
+import { Plus, LogOut, Pencil } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { toast } from 'sonner';
 
 const supabase = createClient();
+
+const VIEWS = [
+  { id: 'activated', label: 'Active' },
+  { id: 'backlog', label: 'Backlog' },
+  { id: 'all', label: 'All' },
+  { id: 'archive', label: 'Archive' },
+] as const;
+
+/**
+ * Resolve a pinned day-of-month to a real date, clamping to the month's
+ * length (e.g. the 31st in February becomes the 28th/29th). -1 means the
+ * last day of the month.
+ */
+function resolveMonthDay(year: number, month: number, day: number): Date {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const resolved = day === -1 ? lastDay : Math.min(day, lastDay);
+  return new Date(year, month, resolved);
+}
+
+/**
+ * Next monthly occurrence strictly after `after`, for a source pinned to a
+ * day of the month. Occurrences fall every `interval` months from the
+ * source's creation month; without a pinned day the day-of-month of `after`
+ * is preserved (matching the pre-existing behavior).
+ */
+function nextMonthlyOccurrence(after: Date, source: any, interval: number): Date {
+  const anchor = new Date(source.created_at || after);
+  const anchorYear = anchor.getFullYear();
+  const anchorMonth = anchor.getMonth();
+
+  const rawPin = source.month_day;
+  const pin = typeof rawPin === 'number' && rawPin !== 0 ? rawPin : after.getDate();
+
+  const monthsSince = (after.getFullYear() - anchorYear) * 12 + (after.getMonth() - anchorMonth);
+  let k = Math.max(0, Math.floor(monthsSince / interval));
+  let occ = resolveMonthDay(anchorYear, anchorMonth + k * interval, pin);
+
+  while (occ.getTime() <= after.getTime()) {
+    k += 1;
+    occ = resolveMonthDay(anchorYear, anchorMonth + k * interval, pin);
+  }
+
+  return occ;
+}
 
 export default function WillDoIt() {
   const [user, setUser] = useState<any>(null);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
-  const [view, setView] = useState<'activated' | 'backlog' | 'archive' | 'all'>('activated');
+  const [view, setView] = useState<'activated' | 'backlog' | 'archive' | 'all'>('all');
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [showStreamModal, setShowStreamModal] = useState(false);
+  const [editingStream, setEditingStream] = useState<Stream | null>(null);
+  const [activeDragCard, setActiveDragCard] = useState<Card | null>(null);
 
-  const sensors = useSensors(useSensor(PointerSensor));
+  const sensors = useSensors(
+    // Mouse: drag once the pointer moves a little, so plain clicks still work.
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    // Touch: press and hold briefly, so the page can still scroll.
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
+    })
+  );
 
   // Auth + Data loading
   useEffect(() => {
@@ -78,6 +142,27 @@ export default function WillDoIt() {
       if (newUnc) loadedStreams.push(newUnc);
     }
 
+    // Dedupe Uncategorized (safety if multiple rows exist in DB)
+    const uncIds = new Set();
+    loadedStreams = loadedStreams.filter((s: any) => {
+      if (s.title === 'Uncategorized') {
+        if (uncIds.size > 0) return false;
+        uncIds.add(s.id);
+      }
+      return true;
+    });
+
+    // Streams no longer use the 'backlog' state — migrate any legacy rows to active.
+    const legacyStateIds = loadedStreams
+      .filter((s: any) => s.state === 'backlog')
+      .map((s: any) => s.id);
+    if (legacyStateIds.length > 0) {
+      await supabase.from('streams').update({ state: 'in_progress' }).in('id', legacyStateIds);
+      loadedStreams = loadedStreams.map((s: any) =>
+        s.state === 'backlog' ? { ...s, state: 'in_progress' } : s
+      );
+    }
+
     setStreams(loadedStreams);
 
     const { data: cardsData } = await supabase
@@ -106,7 +191,7 @@ export default function WillDoIt() {
         date.getDate() === today.getDate();
 
       if ((isToday(due) || isToday(remind)) && 
-          (card.status === 'prioritized_backlog' || card.status === 'regular_backlog')) {
+          (card.status === 'backlog' || card.status === 'priority_backlog')) {
         newStatus = 'waiting';
       }
 
@@ -127,6 +212,115 @@ export default function WillDoIt() {
 
     setCards(loadedCards);
     setLoading(false);
+
+    // Basic recurring generation (simplified for MVP)
+    generateRecurringInstances(userId, loadedStreams, loadedCards);
+  };
+
+  const generateRecurringInstances = async (userId: string, currentStreams: Stream[], currentCards: Card[]) => {
+    const { data: sources } = await supabase
+      .from('recurrence_sources')
+      .select('*')
+      .eq('user_id', userId)
+      .is('stopped_at', null);
+
+    if (!sources || sources.length === 0) return;
+
+    const newCards: any[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (const source of sources as any[]) {
+      const activeCardsForSource = currentCards.filter(c => 
+        c.recurrence_source_id === source.id && 
+        !['complete', 'canceled'].includes(c.status)
+      );
+
+      const stackMissed = !!source.stack_missed;
+
+      // If not stacking and we already have an active instance, skip
+      if (activeCardsForSource.length > 0 && !stackMissed) continue;
+
+      // Find last completed for this source
+      const completedForSource = currentCards
+        .filter(c => c.recurrence_source_id === source.id && c.completed_at)
+        .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime());
+
+      let baseDate = completedForSource.length > 0 
+        ? new Date(completedForSource[0].completed_at!) 
+        : (source.last_completed_at ? new Date(source.last_completed_at) : new Date(source.created_at || Date.now()));
+
+      const freq = source.frequency || 'daily';
+      const intv = source.interval || 1;
+      const wd = source.weekdays || [];
+
+      // Compute next due
+      let nextDue = new Date(baseDate);
+      nextDue.setHours(0, 0, 0, 0);
+
+      const advanceDate = (date: Date) => {
+        if (freq === 'daily' || freq === 'every_n_days') {
+          date.setDate(date.getDate() + intv);
+        } else if (freq === 'weekly') {
+          date.setDate(date.getDate() + (7 * intv));
+          // If specific weekdays are set, try to land on one (simple advance for MVP)
+          if (wd.length > 0) {
+            while (!wd.includes(date.getDay())) {
+              date.setDate(date.getDate() + 1);
+            }
+          }
+        } else if (freq === 'monthly') {
+          return nextMonthlyOccurrence(date, source, intv);
+        } else {
+          date.setDate(date.getDate() + 1);
+        }
+        return date;
+      };
+
+      // Advance at least once
+      nextDue = advanceDate(nextDue);
+
+      // Respect end_date
+      if (source.end_date && new Date(source.end_date) < nextDue) {
+        continue;
+      }
+
+      // For stack_missed, we could generate multiple, but for now generate the next one
+      // (user can complete to trigger more if stacking)
+
+      // Generate title with date info
+      let generatedTitle = source.base_title;
+      const dateStr = nextDue.toLocaleDateString();
+      if (freq === 'monthly' || freq.includes('month')) {
+        const monthName = nextDue.toLocaleString('default', { month: 'long' });
+        generatedTitle = `${source.base_title} - ${monthName} ${nextDue.getFullYear()}`;
+      } else if (freq === 'weekly') {
+        generatedTitle = `${source.base_title} - Week of ${dateStr}`;
+      } else {
+        generatedTitle = `${source.base_title} - ${dateStr}`;
+      }
+
+      // Only create if the next due is not in the distant past, or always create the next pending
+      const isDueTodayOrPast = nextDue.getTime() <= today.getTime();
+      const newCard = {
+        user_id: userId,
+        stream_id: source.stream_id,
+        title: generatedTitle,
+        status: isDueTodayOrPast ? 'waiting' : 'backlog',
+        due_at: nextDue.toISOString(),
+        is_recurring: true,
+        recurrence_source_id: source.id,
+        position: 0,
+      };
+
+      const { data: created } = await supabase.from('cards').insert(newCard).select().single();
+      if (created) newCards.push(created);
+    }
+
+    if (newCards.length > 0) {
+      setCards(prev => [...prev, ...newCards]);
+      toast.info(`${newCards.length} recurring instance(s) generated`);
+    }
   };
 
   const filteredStreams = streams
@@ -142,7 +336,11 @@ export default function WillDoIt() {
     let relevantStatuses: string[];
     if (view === 'activated') relevantStatuses = ACTIVE_STATUSES;
     else if (view === 'backlog') relevantStatuses = BACKLOG_STATUSES;
-    else relevantStatuses = ['complete', 'canceled'];
+    else if (view === 'all') {
+      relevantStatuses = ['backlog', 'priority_backlog', 'research', 'waiting', 'in_progress', 'review', 'complete', 'canceled'];
+    } else {
+      relevantStatuses = ['complete', 'canceled'];
+    }
 
     return cards
       .filter((c) => c.stream_id === streamId && relevantStatuses.includes(c.status))
@@ -154,8 +352,8 @@ export default function WillDoIt() {
     if (view === 'backlog') return [...BACKLOG_STATUSES, 'research' as const];
     if (view === 'all') {
       return [
-        'regular_backlog',
-        'prioritized_backlog',
+        'backlog',
+        'priority_backlog',
         'research',
         'waiting',
         'in_progress',
@@ -169,7 +367,37 @@ export default function WillDoIt() {
 
   const columns = getColumns();
 
+  // Layout sizing.
+  const streamColWidth = view === 'all' ? 180 : 220;
+
+  // Max status-column width. Wide enough that the longest status title
+  // ("Priority Backlog") stays on one line, but not so wide that cards get
+  // stretched out on high-resolution screens.
+  const COL_MAX = 240;
+  const GRID_GAP = 12; // must match the `gap-3` class used by the grids
+
+  // Shared by the header and every row so their columns always line up.
+  // minmax(0, COL_MAX) lets columns shrink to fit but never exceed COL_MAX.
+  const gridColumns = `${streamColWidth}px repeat(${columns.length}, minmax(0, ${COL_MAX}px))`;
+
+  // Cap the whole matrix so row panels end where the columns end instead of
+  // trailing off into empty space. The +34 accounts for a row's p-4 padding
+  // (32px) and its 1px top/bottom borders.
+  const matrixMaxWidth =
+    34 + streamColWidth + columns.length * COL_MAX + columns.length * GRID_GAP;
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const card = cards.find((c) => c.id === event.active.id);
+    setActiveDragCard(card || null);
+  };
+
+  const handleDragCancel = (_event: DragCancelEvent) => {
+    setActiveDragCard(null);
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveDragCard(null);
+
     const { active, over } = event;
     if (!over || !user) return;
 
@@ -179,27 +407,88 @@ export default function WillDoIt() {
     const activeCard = cards.find((c) => c.id === activeId);
     if (!activeCard) return;
 
-    const [targetStreamId, targetStatus] = overId.includes('-')
-      ? overId.split('-')
+    // Cell ids are `${streamId}::${status}`. UUIDs contain hyphens, so a
+    // hyphen is not a safe separator.
+    const [targetStreamId, targetStatus] = overId.includes('::')
+      ? overId.split('::')
       : [activeCard.stream_id, overId];
 
     if (!targetStatus) return;
 
-    const oldStream = activeCard.stream_id;
+    // Dropped back where it started — nothing to do.
+    if (targetStreamId === activeCard.stream_id && targetStatus === activeCard.status) {
+      return;
+    }
 
     // Optimistic
-    const newCards = cards.map((c) =>
-      c.id === activeId ? { ...c, stream_id: targetStreamId, status: targetStatus as any } : c
-    );
+    const newCards = [...cards];
+    const cardIndex = newCards.findIndex(c => c.id === activeId);
+    if (cardIndex === -1) return;
+
+    const oldStreamId = newCards[cardIndex].stream_id;
+    const oldStatus = newCards[cardIndex].status;
+
+    // Remember positions before the move so we only persist what changed.
+    const originalPositions = new Map(cards.map((c) => [c.id, c.position || 0]));
+
+    newCards[cardIndex] = {
+      ...newCards[cardIndex],
+      stream_id: targetStreamId,
+      status: targetStatus as any,
+    };
+
+    // Reindex positions in the affected cells and collect the new ordering.
+    const cellsToReindex = [
+      `${oldStreamId}::${oldStatus}`,
+      `${targetStreamId}::${targetStatus}`
+    ];
+
+    const positionUpdates: { id: string; position: number }[] = [];
+    const seen = new Set<string>();
+
+    cellsToReindex.forEach(cell => {
+      const [sId, stat] = cell.split('::');
+      const cellCards = newCards
+        .filter(c => c.stream_id === sId && c.status === stat)
+        .sort((a, b) => (a.position || 0) - (b.position || 0));
+
+      cellCards.forEach((c, idx) => {
+        const idxInArray = newCards.findIndex(item => item.id === c.id);
+        if (idxInArray !== -1) {
+          newCards[idxInArray] = { ...newCards[idxInArray], position: idx };
+        }
+        if (!seen.has(c.id) && originalPositions.get(c.id) !== idx) {
+          seen.add(c.id);
+          positionUpdates.push({ id: c.id, position: idx });
+        }
+      });
+    });
+
     setCards(newCards);
 
     try {
       await supabase
         .from('cards')
-        .update({ stream_id: targetStreamId, status: targetStatus })
+        .update({ 
+          stream_id: targetStreamId, 
+          status: targetStatus,
+          position: newCards[cardIndex].position 
+        })
         .eq('id', activeId);
 
-      // Update recurrence source if this card is recurring
+      // Persist the reordering of the other cards in the affected cells so
+      // the order survives a reload. (Individual updates: an upsert would
+      // need every NOT NULL column.)
+      if (positionUpdates.length > 0) {
+        await Promise.all(
+          positionUpdates
+            .filter((u) => u.id !== activeId)
+            .map((u) =>
+              supabase.from('cards').update({ position: u.position }).eq('id', u.id)
+            )
+        );
+      }
+
       if (activeCard.is_recurring && activeCard.recurrence_source_id) {
         await supabase
           .from('recurrence_sources')
@@ -211,7 +500,7 @@ export default function WillDoIt() {
     } catch (err) {
       console.error(err);
       toast.error('Move failed');
-      setCards(cards); // revert
+      setCards(cards);
     }
   };
 
@@ -229,6 +518,121 @@ export default function WillDoIt() {
     setCards((prev) => prev.filter((c) => c.id !== cardId));
   };
 
+  const handleStreamCreated = (newStream: Stream) => {
+    setStreams((prev) => {
+      const unc = prev.find((s) => s.title === 'Uncategorized');
+      const others = prev.filter((s) => s.title !== 'Uncategorized');
+      const updated = [...others, newStream];
+      if (unc) updated.push(unc);
+      return updated.sort((a, b) => a.position - b.position);
+    });
+  };
+
+  const handleStreamUpdated = (updatedStream: Stream) => {
+    setStreams((prev) =>
+      prev.map((s) => (s.id === updatedStream.id ? updatedStream : s))
+    );
+  };
+
+  const handleStreamDeleted = (streamId: string, targetStreamId?: string) => {
+    if (targetStreamId) {
+      setCards((prev) =>
+        prev.map((c) =>
+          c.stream_id === streamId ? { ...c, stream_id: targetStreamId } : c
+        )
+      );
+    }
+    setStreams((prev) => prev.filter((s) => s.id !== streamId));
+  };
+
+  const handleCompleteCard = async (cardId: string) => {
+    const card = cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    const newStatus = 'complete';
+    const completedAt = new Date().toISOString();
+
+    // Optimistic
+    setCards(prev => prev.map(c => 
+      c.id === cardId ? { ...c, status: newStatus as any, completed_at: completedAt } : c
+    ));
+
+    try {
+      await supabase
+        .from('cards')
+        .update({ status: newStatus, completed_at: completedAt })
+        .eq('id', cardId);
+
+      // If this was a recurring card, advance the source's last_completed_at
+      // and trigger generation of the next instance
+      if (card.is_recurring && card.recurrence_source_id) {
+        await supabase
+          .from('recurrence_sources')
+          .update({ last_completed_at: completedAt })
+          .eq('id', card.recurrence_source_id);
+
+        // Generate next instance (runs on next load too, this is best-effort)
+        if (user) {
+          setTimeout(() => {
+            generateRecurringInstances(user.id, streams, cards);
+          }, 400);
+        }
+      }
+
+      toast.success('Card completed');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to complete');
+    }
+  };
+
+  const handleStreamStateChange = async (streamId: string, newState: Stream['state']): Promise<boolean> => {
+    const stream = streams.find(s => s.id === streamId);
+    if (!stream || stream.state === newState) return true;
+
+    // Check for active recurrences if going to complete/canceled
+    if (['complete', 'canceled'].includes(newState)) {
+      const activeRecurring = cards.filter(c => 
+        c.stream_id === streamId && 
+        c.is_recurring && 
+        !['complete', 'canceled'].includes(c.status) &&
+        c.recurrence_source_id
+      );
+
+      if (activeRecurring.length > 0) {
+        const uniqueSources = [...new Set(activeRecurring.map(c => c.recurrence_source_id))];
+        const proceed = confirm(
+          `This stream has ${uniqueSources.length} active recurring task(s). ` +
+          `Changing state to ${newState} may affect future instances. Proceed?`
+        );
+        if (!proceed) return false;
+
+        // For simplicity in this build: stop the recurrences
+        for (const sourceId of uniqueSources) {
+          await supabase
+            .from('recurrence_sources')
+            .update({ stopped_at: new Date().toISOString() })
+            .eq('id', sourceId);
+        }
+        toast.info('Recurring tasks stopped for this stream.');
+      }
+    }
+
+    // Optimistic
+    setStreams(prev => prev.map(s => s.id === streamId ? { ...s, state: newState } : s));
+
+    try {
+      await supabase.from('streams').update({ state: newState }).eq('id', streamId);
+      toast.success(`Stream marked as ${newState}`);
+      return true;
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update stream state');
+      setStreams(streams); // revert
+      return false;
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     window.location.href = '/login';
@@ -236,7 +640,7 @@ export default function WillDoIt() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+      <div className="min-h-screen flex items-center justify-center bg-canvas text-ink-soft">
         <div>Loading your workspace...</div>
       </div>
     );
@@ -244,70 +648,77 @@ export default function WillDoIt() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+      <header className="border-b border-line bg-surface/80 backdrop-blur sticky top-0 z-50">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="font-semibold text-xl tracking-tight">Will Do It</div>
+            <h1 className="font-semibold text-xl tracking-tight text-ink">Will Do It</h1>
           </div>
 
           <div className="flex items-center gap-4">
             <AreaFilter value={activeFilter} onChange={setActiveFilter} />
 
-            <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden text-sm">
-              {(['activated', 'backlog', 'all', 'archive'] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setView(v)}
-                  className={`px-4 py-1.5 transition-colors ${
-                    view === v
-                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950'
-                      : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                  }`}
-                >
-                  {v === 'activated' ? 'Active' : v === 'all' ? 'All' : v.charAt(0).toUpperCase() + v.slice(1)}
-                </button>
-              ))}
-            </div>
-
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-black text-white dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200 text-sm font-medium"
+              className="btn btn-primary px-4 py-1.5 text-sm"
             >
               <Plus className="h-4 w-4" /> Quick Add
             </button>
 
-            <button onClick={handleSignOut} className="p-2 text-zinc-500 hover:text-zinc-700">
+            <button
+              onClick={() => setShowStreamModal(true)}
+              className="btn btn-secondary px-3 py-1.5 text-sm"
+            >
+              New Stream
+            </button>
+
+            <ThemeToggle />
+
+            <button onClick={handleSignOut} className="btn btn-ghost p-2">
               <LogOut className="h-4 w-4" />
             </button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {view === 'activated' && 'Active Work'}
-            {view === 'backlog' && 'Backlog'}
-            {view === 'all' && 'All Statuses'}
-            {view === 'archive' && 'Archive'}
-          </h1>
-          <p className="text-sm text-zinc-500 mt-1">Drag cards between streams and columns.</p>
+      {/* View switcher lives in its own stable bar so it never shifts
+          horizontally when the number of columns changes between views. */}
+      <div className="sticky top-14 z-40 border-b border-line bg-surface/80 backdrop-blur">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-center">
+          <div className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
+            {VIEWS.map((v) => (
+              <button
+                key={v.id}
+                onClick={() => setView(v.id)}
+                className={`px-4 sm:px-6 py-2 text-base transition-colors whitespace-nowrap ${
+                  view === v.id
+                    ? 'bg-accent text-accent-ink'
+                    : 'text-ink-soft hover:text-ink hover:bg-sunken'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
         </div>
+      </div>
 
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="space-y-4">
-            <div 
-              className={`grid gap-4 ${view === 'all' ? 'overflow-x-auto pb-4' : ''}`}
-              style={{ 
-                gridTemplateColumns: view === 'all' 
-                  ? `180px repeat(${columns.length}, minmax(120px, 1fr))` 
-                  : `260px repeat(${columns.length}, 1fr)` 
-              }}
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 flex-1">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragCancel={handleDragCancel}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="space-y-3 mx-auto" style={{ maxWidth: matrixMaxWidth }}>
+            <div
+              className="grid gap-3 px-4 border border-transparent"
+              style={{ gridTemplateColumns: gridColumns }}
             >
-              <div className="font-medium text-sm px-3 text-zinc-500">Stream</div>
+              <div className="font-medium text-sm px-3 text-ink-soft">Stream</div>
               {columns.map((status) => (
-                <div key={status} className="px-3 py-2 text-xs font-medium tracking-wider uppercase text-zinc-500 dark:text-zinc-400">
-                  {STATUS_LABELS[status as keyof typeof STATUS_LABELS] || status}
+                <div key={status} className="status-column">
+                  <StatusHeader status={status} />
                 </div>
               ))}
             </div>
@@ -322,19 +733,20 @@ export default function WillDoIt() {
                     className={`stream-row rounded-xl p-4 ${stream.title === 'Uncategorized' ? 'uncategorized' : ''}`}
                   >
                     <div 
-                      className={`grid gap-4 ${view === 'all' ? 'min-w-max' : ''}`}
-                      style={{ 
-                        gridTemplateColumns: view === 'all' 
-                          ? `180px repeat(${columns.length}, minmax(120px, 1fr))` 
-                          : `240px repeat(${columns.length}, 1fr)` 
-                      }}
+                      className="grid gap-3"
+                      style={{ gridTemplateColumns: gridColumns }}
                     >
                       <div className="pr-4">
-                        <div className="font-medium flex items-center gap-2">
-                          {stream.title}
+                        <div className="font-medium flex flex-wrap items-center gap-2 text-ink">
+                          <span className="cursor-pointer hover:underline break-words min-w-0" onClick={() => stream.title !== "Uncategorized" && setEditingStream(stream)}>{stream.title}</span>
                           {stream.area !== 'neutral' && (
-                            <span className="text-[10px] px-1.5 py-px rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                            <span className="text-[10px] px-1.5 py-px rounded bg-sunken text-ink-muted">
                               {stream.area}
+                            </span>
+                          )}
+                          {stream.state !== 'in_progress' && (
+                            <span className="text-[10px] px-1.5 py-px rounded bg-sunken text-ink-muted">
+                              {stream.state === 'complete' ? 'Complete' : 'Canceled'}
                             </span>
                           )}
                         </div>
@@ -342,23 +754,23 @@ export default function WillDoIt() {
 
                       {columns.map((status) => {
                         const cellCards = streamCards.filter((c) => c.status === status);
-                        const cellId = `${stream.id}-${status}`;
+                        const cellId = `${stream.id}::${status}`;
 
                         return (
-                          <DroppableCell key={status} id={cellId}>
-                            <div className="space-y-2">
-                              {cellCards.map((card) => (
-                                <CardComponent 
-                                  key={card.id} 
-                                  card={card} 
-                                  onClick={() => setEditingCard(card)} 
-                                />
-                              ))}
-                              {cellCards.length === 0 && (
-                                <div className="text-[10px] text-zinc-400 h-8 flex items-center justify-center">Drop here</div>
-                              )}
-                            </div>
-                          </DroppableCell>
+                          <div key={status} className="status-column h-full">
+                            <DroppableCell id={cellId} isEmpty={cellCards.length === 0}>
+                              <div className="space-y-2">
+                                {cellCards.map((card) => (
+                                  <CardComponent 
+                                    key={card.id} 
+                                    card={card} 
+                                    onClick={() => setEditingCard(card)} 
+                                     onComplete={handleCompleteCard}
+                                  />
+                                ))}
+                              </div>
+                            </DroppableCell>
+                          </div>
                         );
                       })}
                     </div>
@@ -366,11 +778,19 @@ export default function WillDoIt() {
                 );
               })
             ) : (
-              <div className="text-center py-12 text-zinc-500">
+              <div className="text-center py-12 text-ink-soft">
                 No streams with cards in this view.
               </div>
             )}
           </div>
+
+          <DragOverlay dropAnimation={null}>
+            {activeDragCard ? (
+              <div className="w-64 max-w-full">
+                <CardComponent card={activeDragCard} overlay />
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
 
         {showAddModal && (
@@ -388,6 +808,25 @@ export default function WillDoIt() {
             onClose={() => setEditingCard(null)}
             onCardUpdated={handleCardUpdated}
             onCardDeleted={handleCardDeleted}
+          />
+        )}
+
+        {showStreamModal && (
+          <AddStreamModal
+            streams={streams}
+            onClose={() => setShowStreamModal(false)}
+            onStreamCreated={handleStreamCreated}
+          />
+        )}
+
+        {editingStream && (
+          <EditStreamModal
+            stream={editingStream}
+            streams={streams}
+            onClose={() => setEditingStream(null)}
+            onStreamUpdated={handleStreamUpdated}
+            onStreamDeleted={handleStreamDeleted}
+            onStateChange={handleStreamStateChange}
           />
         )}
       </div>

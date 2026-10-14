@@ -1,5 +1,9 @@
 -- Will Do It - Initial Schema
 -- Run this in your Supabase SQL editor
+--
+-- Note: Card status values were updated (regular_backlog → backlog, prioritized_backlog → priority_backlog).
+-- Since you already ran the original schema and have no cards yet, no data migration is required.
+-- If you run this file fresh, it will use the current values.
 
 -- Enable UUID extension if not already
 create extension if not exists "uuid-ossp";
@@ -9,7 +13,7 @@ create table streams (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   title text not null,
-  state text not null check (state in ('backlog', 'in_progress', 'complete', 'canceled')),
+  state text not null check (state in ('in_progress', 'complete', 'canceled')),
   area text not null check (area in ('work', 'personal', 'neutral')),
   notes text,
   position integer not null default 0,
@@ -24,7 +28,16 @@ create table cards (
   stream_id uuid references streams(id) on delete cascade not null,
   title text not null,
   notes text,
-  status text not null,
+  status text not null check (status in (
+    'backlog', 
+    'priority_backlog', 
+    'research', 
+    'waiting', 
+    'in_progress', 
+    'review', 
+    'complete', 
+    'canceled'
+  )),
   due_at timestamptz,
   remind_at timestamptz,
   position integer not null default 0,
@@ -71,3 +84,12 @@ create policy "Users can manage their own recurrences" on recurrence_sources
 create index on cards (stream_id, status);
 create index on cards (recurrence_source_id);
 create index on cards (user_id, completed_at);
+
+-- ---------------------------------------------------------------------------
+-- Migration: streams no longer use the 'backlog' state (only active/complete/
+-- canceled). Run this once against an existing database. Safe to re-run.
+-- ---------------------------------------------------------------------------
+update streams set state = 'in_progress' where state = 'backlog';
+alter table streams drop constraint if exists streams_state_check;
+alter table streams add constraint streams_state_check
+  check (state in ('in_progress', 'complete', 'canceled'));

@@ -1,4 +1,4 @@
-# Will Do It - Agents.md
+# Will Do It - AGENTS.md
 
 ## Project Overview
 Will Do It is a calm, visual personal productivity app for managing to-dos as cards under "Streams" (organizational containers, similar to epics but lighter).
@@ -33,7 +33,7 @@ Project freshly initialized with Next.js + Tailwind.
 
 ### streams
 - id, user_id, title
-- state: backlog | in_progress | complete | canceled
+- state: in_progress | complete | canceled
 - area: work | personal | neutral
 - notes (plain text + markdown)
 - position (for row ordering)
@@ -43,7 +43,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 ### cards
 - id, user_id, stream_id
 - title, notes
-- status: prioritized_backlog | regular_backlog | research | waiting | in_progress | review | complete | canceled
+- status: backlog | priority_backlog | research | waiting | in_progress | review | complete | canceled
 - due_at, remind_at
 - position (within cell)
 - is_recurring
@@ -66,8 +66,8 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 ## Statuses
 
 **Card Statuses:**
-- Prioritized Backlog
-- Regular Backlog
+- Backlog
+- Priority Backlog
 - Research
 - Waiting
 - In Progress
@@ -77,11 +77,11 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 
 **Main Activated View:** Research | Waiting | In Progress | Review
 
-**Backlog View:** Prioritized Backlog | Regular Backlog | Research (3 columns for easy promotion)
+**Backlog View:** Backlog | Priority Backlog | Research (3 columns for easy promotion)
 
 **Archive:** Complete + Canceled with time filters (Past month default, Past 1 year, All time). Filters on `completed_at`.
 
-**Stream States:** backlog | in_progress | complete | canceled
+**Stream States:** in_progress (active) | complete | canceled
 
 ## Key Features & Rules
 
@@ -154,7 +154,19 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Auto-promotion conservative for time-sensitive items
 - No manual "process recurrences" button
 - Uncategorized is special but participates in normal visibility/movement
+- Streams have no "backlog" state — only active (in_progress), complete, canceled. Legacy `backlog` rows auto-migrate to active on load.
+- Stream status is edited inside the stream edit modal (with area/rename/delete), not inline on the row. Rows show a subtle badge only when complete/canceled.
 
 ---
 
 **This document should be updated as we build.** Add new decisions, ADRs, or clarifications here.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
