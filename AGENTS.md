@@ -130,6 +130,11 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Conventional Commits
 - PRs for changes (even solo) for previews + clean history
 - Squash merge to main preferred for clean main history
+- **Commit early and often.** Commit each self-contained change as soon as it
+  works (and type-checks) instead of batching. Don't let many features stack up
+  in one working tree for a single giant commit — if a batch does accumulate,
+  split it into logical commits before pushing. Agents: make a commit as part of
+  finishing a piece of work, and ask before leaving large uncommitted changes.
 
 ## Build Order (Current Plan)
 1. Project setup + auth + basic Supabase
