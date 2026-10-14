@@ -167,12 +167,12 @@ textarea::placeholder {
   transform: scale(0.98);
 }
 
-/* Priority cards: a short amber inset bar, the only card color accent */
-.card-priority {
+/* Left status accent bar (3px, inset, rounded on right) */
+.status-bar {
   position: relative;
 }
 
-.card-priority::before {
+.status-bar::before {
   content: "";
   position: absolute;
   left: 0;
@@ -180,7 +180,7 @@ textarea::placeholder {
   bottom: 8px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--status-priority_backlog);
+  background: var(--status-color);
 }
 
 /* ------------------------------------------------------------------ */
