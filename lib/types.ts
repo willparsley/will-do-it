@@ -48,17 +48,14 @@ export function uncategorizedId(streams: Stream[]): string | undefined {
 }
 
 /**
- * Display order for stream rows in the matrix: alphabetical, with neutral-area
- * streams last and "Uncategorized" pinned to the very bottom.
+ * Display order for stream rows in the matrix: alphabetical, with
+ * "Uncategorized" pinned to the very bottom.
  */
 export function streamsForDisplay(streams: Stream[]): Stream[] {
-  const rank = (s: Stream) =>
-    s.title === UNCATEGORIZED_TITLE ? 2 : s.area === 'neutral' ? 1 : 0;
-
   return [...streams].sort((a, b) => {
-    const ra = rank(a);
-    const rb = rank(b);
-    if (ra !== rb) return ra - rb;
+    const aUnc = a.title === UNCATEGORIZED_TITLE ? 1 : 0;
+    const bUnc = b.title === UNCATEGORIZED_TITLE ? 1 : 0;
+    if (aUnc !== bUnc) return aUnc - bUnc;
     return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
   });
 }
