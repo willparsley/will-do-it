@@ -47,6 +47,22 @@ export function uncategorizedId(streams: Stream[]): string | undefined {
   return streams.find((s) => s.title === UNCATEGORIZED_TITLE)?.id;
 }
 
+/**
+ * Display order for stream rows in the matrix: alphabetical, with neutral-area
+ * streams last and "Uncategorized" pinned to the very bottom.
+ */
+export function streamsForDisplay(streams: Stream[]): Stream[] {
+  const rank = (s: Stream) =>
+    s.title === UNCATEGORIZED_TITLE ? 2 : s.area === 'neutral' ? 1 : 0;
+
+  return [...streams].sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+  });
+}
+
 /** Day-of-month options for a monthly recurrence. -1 means "last day". */
 export const MONTH_DAY_OPTIONS = [...Array.from({ length: 31 }, (_, i) => i + 1), -1];
 

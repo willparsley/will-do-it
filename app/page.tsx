@@ -14,7 +14,7 @@ import {
   DragOverlay,
 } from '@dnd-kit/core';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, Card, ACTIVE_STATUSES, BACKLOG_STATUSES, Area } from '@/lib/types';
+import { Stream, Card, ACTIVE_STATUSES, BACKLOG_STATUSES, Area, streamsForDisplay } from '@/lib/types';
 import { AreaFilter } from '@/components/AreaFilter';
 import { AddCardModal } from '@/components/AddCardModal';
 import { Card as CardComponent } from '@/components/Card';
@@ -323,14 +323,14 @@ export default function WillDoIt() {
     }
   };
 
-  const filteredStreams = streams
-    .filter((stream) => {
+  const filteredStreams = streamsForDisplay(
+    streams.filter((stream) => {
       if (activeFilter !== 'all' && stream.area !== activeFilter && stream.area !== 'neutral') {
         return false;
       }
       return getCardsForStream(stream.id).length > 0;
     })
-    .sort((a, b) => a.position - b.position);
+  );
 
   function getCardsForStream(streamId: string): Card[] {
     let relevantStatuses: string[];

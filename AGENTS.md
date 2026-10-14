@@ -87,7 +87,8 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 
 ### Streams
 - Rows in the matrix.
-- Manual drag to reorder (new streams placed just above Uncategorized).
+- Ordered alphabetically, with neutral-area streams last (Uncategorized pinned at the very bottom).
+- Manual drag to reorder is not implemented; row order is rule-based (see above).
 - Uncategorized always at bottom, special treatment.
 - Hidden if no cards in current view/filter.
 - Work/Personal filter applies to streams.
