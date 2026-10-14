@@ -186,24 +186,26 @@ textarea::placeholder {
 /* ------------------------------------------------------------------ */
 /* Card hover actions (complete / advance)                             */
 /* ------------------------------------------------------------------ */
-/* Inset shadow on hover reads as "pressed in", hinting it's clickable. */
+/* Buttons are absolutely positioned in the top-right of the title row.
+   On hover they get a tinted "depressed" look using their own status color. */
 .card-action {
-  border-radius: 4px;
-  padding: 2px;
+  border-radius: 5px;
+  padding: 3px;
   transition: background-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease;
 }
 
 .card-action:hover {
-  background: var(--surface-sunken);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25), inset 0 -1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .card-action:active {
   transform: translateY(1px);
+  box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.35);
 }
 
 .dark .card-action:hover {
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
 /* ------------------------------------------------------------------ */

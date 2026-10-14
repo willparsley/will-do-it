@@ -40,6 +40,7 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
 
   const next = nextStatus(card.status);
   const isFinished = card.status === 'complete' || card.status === 'canceled';
+  const showActions = !isFinished && (onComplete || (onAdvance && next));
 
   const handleAdvance = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -53,13 +54,13 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
         isPriority ? 'card-priority pl-4' : ''
       }`}
     >
-      <div className="font-medium leading-tight flex items-start justify-between gap-2 text-ink min-w-0">
-        <span className="break-words min-w-0">{card.title}</span>
+      <div className="font-medium leading-tight flex items-start justify-between gap-2 text-ink min-w-0 relative">
+        <span className={`break-words min-w-0 ${showActions ? 'pr-7' : ''}`}>{card.title}</span>
         {card.is_recurring && (
           <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted mt-0.5" />
         )}
-        {!isFinished && (onComplete || (onAdvance && next)) && (
-          <div className="flex flex-col items-center gap-1 flex-shrink-0">
+        {showActions && (
+          <div className="absolute top-1 right-1 flex flex-col items-center gap-1.5">
             {onComplete && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
@@ -68,7 +69,7 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
                 style={{ color: 'var(--status-complete)' }}
                 title="Mark complete"
               >
-                <Check className="h-3 w-3" />
+                <Check className="h-3.5 w-3.5" />
               </button>
             )}
             {onAdvance && next && (
@@ -79,7 +80,7 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
                 style={{ color: `var(--status-${next})` }}
                 title={`Advance to ${STATUS_LABELS[next]}`}
               >
-                <ArrowRight className="h-3 w-3" />
+                <ArrowRight className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
