@@ -15,7 +15,7 @@ interface AddStreamModalProps {
 
 export function AddStreamModal({ streams, onClose, onStreamCreated }: AddStreamModalProps) {
   const [title, setTitle] = useState('');
-  const [area, setArea] = useState<Area>('neutral');
+  const [area, setArea] = useState<Area>('personal');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
