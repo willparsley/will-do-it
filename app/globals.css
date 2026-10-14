@@ -186,9 +186,9 @@ textarea::placeholder {
 /* ------------------------------------------------------------------ */
 /* Card hover actions (complete / advance)                             */
 /* ------------------------------------------------------------------ */
-/* Large buttons on the right, equally spaced with flex-1 spacers from
-   near top to near bottom of the card (within p-3). Hover shows strong
-   tinted depressed background for good contrast. */
+/* Large buttons (h-7) on the right, compact vertical stack near the top
+   with small equal spaces (h-2) above / between / below. Hover shows
+   tinted depressed background (40% light, 30% dark). */
 .card-action {
   border-radius: 6px;
   padding: 4px;
@@ -196,7 +196,7 @@ textarea::placeholder {
 }
 
 .card-action:hover {
-  background: color-mix(in srgb, currentColor 42%, transparent);
+  background: color-mix(in srgb, currentColor 40%, transparent);
   box-shadow: inset 0 4px 7px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
@@ -206,7 +206,7 @@ textarea::placeholder {
 }
 
 .dark .card-action:hover {
-  background: color-mix(in srgb, currentColor 48%, transparent);
+  background: color-mix(in srgb, currentColor 30%, transparent);
   box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.85);
 }
 

@@ -54,7 +54,7 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
         isPriority ? 'card-priority pl-4' : ''
       }`}
     >
-      <div className="font-medium leading-tight flex items-start justify-between gap-2 text-ink min-w-0 min-h-24">
+      <div className="font-medium leading-tight flex items-start justify-between gap-2 text-ink min-w-0">
         <span className={`break-words min-w-0 ${showActions ? 'pr-10' : ''}`}>{card.title}</span>
         {card.is_recurring && (
           <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted mt-0.5" />
@@ -62,8 +62,8 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
       </div>
 
       {showActions && (
-        <div className="absolute top-3 right-3 bottom-3 z-10 flex flex-col items-center">
-          <div className="flex-1" />
+        <div className="absolute top-3 right-3 z-10 flex flex-col items-center">
+          <div className="h-2" />
           {onComplete && (
             <button
               onPointerDown={(e) => e.stopPropagation()}
@@ -75,7 +75,7 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
               <Check className="h-7 w-7" />
             </button>
           )}
-          <div className="flex-1" />
+          <div className="h-2" />
           {onAdvance && next && (
             <button
               onPointerDown={(e) => e.stopPropagation()}
@@ -87,7 +87,7 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
               <ArrowRight className="h-7 w-7" />
             </button>
           )}
-          <div className="flex-1" />
+          <div className="h-2" />
         </div>
       )}
 
