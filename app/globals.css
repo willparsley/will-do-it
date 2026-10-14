@@ -186,8 +186,8 @@ textarea::placeholder {
 /* ------------------------------------------------------------------ */
 /* Card hover actions (complete / advance)                             */
 /* ------------------------------------------------------------------ */
-/* Buttons are absolutely positioned in the top-right of the title row.
-   On hover they get a tinted "depressed" look using their own status color. */
+/* Absolutely positioned at the card's top-right (inset by p-3 padding).
+   Hover produces a clearly visible depressed/pushed-in look. */
 .card-action {
   border-radius: 5px;
   padding: 3px;
@@ -195,17 +195,18 @@ textarea::placeholder {
 }
 
 .card-action:hover {
-  background: color-mix(in srgb, currentColor 18%, transparent);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25), inset 0 -1px 0 rgba(255, 255, 255, 0.3);
+  background: color-mix(in srgb, currentColor 30%, transparent);
+  box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .card-action:active {
   transform: translateY(1px);
-  box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 4px 6px rgba(0, 0, 0, 0.45);
 }
 
 .dark .card-action:hover {
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+  background: color-mix(in srgb, currentColor 35%, transparent);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.75);
 }
 
 /* ------------------------------------------------------------------ */

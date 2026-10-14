@@ -50,42 +50,43 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
   return (
     <div
       onClick={onClick}
-      className={`card rounded-lg p-3 text-sm cursor-grab active:cursor-grabbing group ${
+      className={`card rounded-lg p-3 text-sm cursor-grab active:cursor-grabbing group relative ${
         isPriority ? 'card-priority pl-4' : ''
       }`}
     >
-      <div className="font-medium leading-tight flex items-start justify-between gap-2 text-ink min-w-0 relative">
-        <span className={`break-words min-w-0 ${showActions ? 'pr-7' : ''}`}>{card.title}</span>
+      <div className="font-medium leading-tight flex items-start justify-between gap-2 text-ink min-w-0">
+        <span className={`break-words min-w-0 ${showActions ? 'pr-8' : ''}`}>{card.title}</span>
         {card.is_recurring && (
           <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted mt-0.5" />
         )}
-        {showActions && (
-          <div className="absolute top-1 right-1 flex flex-col items-center gap-1.5">
-            {onComplete && (
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={handleComplete}
-                className="card-action opacity-0 group-hover:opacity-100"
-                style={{ color: 'var(--status-complete)' }}
-                title="Mark complete"
-              >
-                <Check className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {onAdvance && next && (
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={handleAdvance}
-                className="card-action opacity-0 group-hover:opacity-100"
-                style={{ color: `var(--status-${next})` }}
-                title={`Advance to ${STATUS_LABELS[next]}`}
-              >
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        )}
       </div>
+
+      {showActions && (
+        <div className="absolute top-3 right-3 z-10 flex flex-col items-center gap-1.5">
+          {onComplete && (
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleComplete}
+              className="card-action opacity-0 group-hover:opacity-100"
+              style={{ color: 'var(--status-complete)' }}
+              title="Mark complete"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onAdvance && next && (
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleAdvance}
+              className="card-action opacity-0 group-hover:opacity-100"
+              style={{ color: `var(--status-${next})` }}
+              title={`Advance to ${STATUS_LABELS[next]}`}
+            >
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
 
       {card.is_recurring && card.last_completed_at && (
         <div className="text-[10px] text-ink-muted mt-1">
