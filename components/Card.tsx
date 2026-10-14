@@ -63,27 +63,30 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
 
       {showActions && (
         <div className="absolute top-0 right-0 bottom-0 z-10 w-8 flex flex-col">
+          {/* Complete tab - upper, dark bg + green icon, visible on hover */}
           <div className="flex-[49] flex items-end justify-end">
             {onComplete && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={handleComplete}
-                className="card-action opacity-0 group-hover:opacity-100 w-[22px] min-h-[20px] h-[70%] rounded-r-lg flex items-center justify-center"
-                style={{ color: 'var(--status-complete)' }}
+                className="opacity-0 group-hover:opacity-100 w-full min-h-[20px] h-[70%] rounded-r-lg flex items-center justify-center transition-all hover:shadow-[inset_0_3px_5px_rgba(0,0,0,0.5)]"
+                style={{ backgroundColor: '#285748', color: '#00C177' }}
                 title="Mark complete"
               >
                 <Check className="h-5 w-5" />
               </button>
             )}
           </div>
-          <div className="flex-[2]" />
+          {/* Fixed small gap */}
+          <div className="h-[3px] flex-shrink-0" />
+          {/* Promote tab - lower, bg = next status color, icon contrasting (white for visibility) */}
           <div className="flex-[49] flex items-start justify-end">
             {onAdvance && next && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={handleAdvance}
-                className="card-action opacity-0 group-hover:opacity-100 w-[22px] min-h-[20px] h-[70%] rounded-r-lg flex items-center justify-center"
-                style={{ color: `var(--status-${next})` }}
+                className="opacity-0 group-hover:opacity-100 w-full min-h-[20px] h-[70%] rounded-r-lg flex items-center justify-center transition-all hover:shadow-[inset_0_3px_5px_rgba(0,0,0,0.5)]"
+                style={{ backgroundColor: `var(--status-${next})`, color: 'white' }}
                 title={`Advance to ${STATUS_LABELS[next]}`}
               >
                 <ArrowRight className="h-5 w-5" />
