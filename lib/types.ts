@@ -108,6 +108,27 @@ export const ACTIVE_STATUSES: CardStatus[] = ['research', 'waiting', 'in_progres
 export const BACKLOG_STATUSES: CardStatus[] = ['backlog', 'priority_backlog'];
 export const ARCHIVE_STATUSES: CardStatus[] = ['complete', 'canceled'];
 
+/**
+ * Forward progression of a card, used by the "advance" arrow on a card.
+ * `canceled` is deliberately absent: it is a terminal off-ramp, not a step.
+ */
+export const STATUS_FLOW: CardStatus[] = [
+  'backlog',
+  'priority_backlog',
+  'research',
+  'waiting',
+  'in_progress',
+  'review',
+  'complete',
+];
+
+/** The next status in {@link STATUS_FLOW}, or null at/beyond the end. */
+export function nextStatus(status: CardStatus): CardStatus | null {
+  const i = STATUS_FLOW.indexOf(status);
+  if (i === -1 || i === STATUS_FLOW.length - 1) return null;
+  return STATUS_FLOW[i + 1];
+}
+
 export const STATUS_LABELS: Record<CardStatus, string> = {
   backlog: 'Backlog',
   priority_backlog: 'Priority Backlog',

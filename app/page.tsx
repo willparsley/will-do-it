@@ -14,7 +14,7 @@ import {
   DragOverlay,
 } from '@dnd-kit/core';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, Card, ACTIVE_STATUSES, BACKLOG_STATUSES, Area, streamsForDisplay } from '@/lib/types';
+import { Stream, Card, ACTIVE_STATUSES, BACKLOG_STATUSES, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { AreaFilter } from '@/components/AreaFilter';
 import { AddCardModal } from '@/components/AddCardModal';
 import { Card as CardComponent } from '@/components/Card';
@@ -586,6 +586,37 @@ export default function WillDoIt() {
     }
   };
 
+  const handleAdvanceCard = async (cardId: string) => {
+    const card = cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    const next = nextStatus(card.status);
+    if (!next) return;
+
+    // Landing on complete goes through the full completion path so
+    // completed_at and recurring-bookkeeping stay consistent.
+    if (next === 'complete') {
+      return handleCompleteCard(cardId);
+    }
+
+    // Optimistic
+    setCards(prev => prev.map(c =>
+      c.id === cardId ? { ...c, status: next } : c
+    ));
+
+    try {
+      await supabase.from('cards').update({ status: next }).eq('id', cardId);
+      toast.success(`Moved to ${STATUS_LABELS[next]}`);
+    } catch (err) {
+      console.error(err);
+      // Revert on failure
+      setCards(prev => prev.map(c =>
+        c.id === cardId ? { ...c, status: card.status } : c
+      ));
+      toast.error('Failed to move card');
+    }
+  };
+
   const handleStreamStateChange = async (streamId: string, newState: Stream['state']): Promise<boolean> => {
     const stream = streams.find(s => s.id === streamId);
     if (!stream || stream.state === newState) return true;
@@ -766,6 +797,7 @@ export default function WillDoIt() {
                                     card={card} 
                                     onClick={() => setEditingCard(card)} 
                                      onComplete={handleCompleteCard}
+                                     onAdvance={handleAdvanceCard}
                                   />
                                 ))}
                               </div>

@@ -97,6 +97,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Every card must be in a stream.
 - Drag cards between streams (rows) and statuses (columns) with grid highlighting.
 - Quick-add allows choosing stream + status.
+- On hover, a card shows two quick actions (stacked, top-right): a green check to complete it, and an arrow to advance it one step along `STATUS_FLOW` (backlog → priority_backlog → research → waiting → in_progress → review → complete). Advancing into Complete runs the full completion path (stamps `completed_at`, handles recurrence).
 
 ### Recurring Tasks
 - Configurable per source: frequency patterns (daily, every N days, specific weekdays, monthly 1st/last, etc.).

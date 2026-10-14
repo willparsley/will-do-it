@@ -1,20 +1,21 @@
 'use client';
 
-import { Card as CardType } from '@/lib/types';
-import { Check, Repeat } from 'lucide-react';
+import { Card as CardType, nextStatus, STATUS_LABELS } from '@/lib/types';
+import { ArrowRight, Check, Repeat } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 
 interface CardViewProps {
   card: CardType;
   onClick?: () => void;
   onComplete?: (id: string) => void;
+  onAdvance?: (id: string) => void;
 }
 
 /**
  * Presentational card. Used both for the real, draggable card and for the
  * DragOverlay preview (so the preview doesn't register a duplicate draggable).
  */
-export function CardView({ card, onClick, onComplete }: CardViewProps) {
+export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps) {
   const hasReminder = !!card.remind_at;
   const dueDate = card.due_at ? new Date(card.due_at) : null;
   const isOverdue = dueDate && dueDate < new Date();
@@ -37,6 +38,14 @@ export function CardView({ card, onClick, onComplete }: CardViewProps) {
     if (onComplete) onComplete(card.id);
   };
 
+  const next = nextStatus(card.status);
+  const isFinished = card.status === 'complete' || card.status === 'canceled';
+
+  const handleAdvance = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onAdvance) onAdvance(card.id);
+  };
+
   return (
     <div
       onClick={onClick}
@@ -49,16 +58,31 @@ export function CardView({ card, onClick, onComplete }: CardViewProps) {
         {card.is_recurring && (
           <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted mt-0.5" />
         )}
-        {onComplete && card.status !== 'complete' && card.status !== 'canceled' && (
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={handleComplete}
-            className="opacity-0 group-hover:opacity-100 hover:opacity-80 p-0.5 transition-opacity"
-            style={{ color: 'var(--status-complete)' }}
-            title="Mark complete"
-          >
-            <Check className="h-3 w-3" />
-          </button>
+        {!isFinished && (onComplete || (onAdvance && next)) && (
+          <div className="flex flex-col items-center gap-1 flex-shrink-0">
+            {onComplete && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={handleComplete}
+                className="card-action opacity-0 group-hover:opacity-100"
+                style={{ color: 'var(--status-complete)' }}
+                title="Mark complete"
+              >
+                <Check className="h-3 w-3" />
+              </button>
+            )}
+            {onAdvance && next && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={handleAdvance}
+                className="card-action opacity-0 group-hover:opacity-100"
+                style={{ color: `var(--status-${next})` }}
+                title={`Advance to ${STATUS_LABELS[next]}`}
+              >
+                <ArrowRight className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -85,7 +109,7 @@ interface CardProps extends CardViewProps {
   overlay?: boolean;
 }
 
-export function Card({ card, onClick, onComplete, overlay = false }: CardProps) {
+export function Card({ card, onClick, onComplete, onAdvance, overlay = false }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     disabled: overlay,
@@ -106,7 +130,7 @@ export function Card({ card, onClick, onComplete, overlay = false }: CardProps) 
       {...listeners}
       className={isDragging ? 'opacity-40' : ''}
     >
-      <CardView card={card} onClick={onClick} onComplete={onComplete} />
+      <CardView card={card} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} />
     </div>
   );
 }
