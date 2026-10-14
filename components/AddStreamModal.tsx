@@ -106,9 +106,9 @@ export function AddStreamModal({ streams, onClose, onStreamCreated }: AddStreamM
               onChange={(e) => setArea(e.target.value as Area)}
               className="control"
             >
-              <option value="neutral">Neutral</option>
-              <option value="work">Work</option>
               <option value="personal">Personal</option>
+              <option value="work">Work</option>
+              <option value="neutral">Neutral</option>
             </select>
             <p className="text-xs text-ink-muted mt-1">
               Used for Work / Personal filtering.

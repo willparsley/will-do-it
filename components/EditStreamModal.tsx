@@ -169,9 +169,9 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
               disabled={isUncategorized}
               className="control"
             >
-              <option value="neutral">Neutral</option>
-              <option value="work">Work</option>
               <option value="personal">Personal</option>
+              <option value="work">Work</option>
+              <option value="neutral">Neutral</option>
             </select>
           </div>
 
