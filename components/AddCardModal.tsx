@@ -54,6 +54,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
           frequency,
           interval: (frequency === 'daily') ? 1 : recInterval,
           stack_missed: stackMissed,
+          recurrence_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         };
 
         if (frequency === 'weekly' && weekdays.length > 0) {

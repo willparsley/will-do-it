@@ -1,5 +1,5 @@
 -- Will Do It - Initial Schema
--- Run this in your Supabase SQL editor
+-- Run this in your Supabase SQL editor, then apply supabase/migrations/*.sql in order.
 --
 -- Note: Card status values were updated (regular_backlog → backlog, prioritized_backlog → priority_backlog).
 -- Since you already ran the original schema and have no cards yet, no data migration is required.

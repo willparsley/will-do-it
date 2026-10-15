@@ -99,10 +99,6 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
 
   const handleStatusChange = (newStatus: CardStatus) => {
     setStatus(newStatus);
-    // Auto set completed_at if moving to complete/canceled
-    if ((newStatus === 'complete' || newStatus === 'canceled') && !card.completed_at) {
-      // We don't set it here, the backend or a trigger could, but for now we can leave it
-    }
   };
 
   return (

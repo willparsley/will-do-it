@@ -83,6 +83,7 @@ export interface Card {
   position: number;
   is_recurring: boolean;
   recurrence_source_id?: string;
+  recurrence_date?: string;
   last_completed_at?: string;
   completed_at?: string;
   created_at?: string;
@@ -96,9 +97,12 @@ export interface RecurrenceSource {
   base_title: string;
   frequency?: string;
   interval?: number;
-  weekdays?: any;
+  weekdays?: number[];
   month_day?: number;
   stack_missed: boolean;
+  created_at?: string;
+  recurrence_timezone?: string;
+  generated_through?: string;
   end_date?: string;
   stopped_at?: string;
   last_completed_at?: string;

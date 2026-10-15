@@ -36,43 +36,6 @@ const VIEWS = [
   { id: 'archive', label: 'Archive' },
 ] as const;
 
-/**
- * Resolve a pinned day-of-month to a real date, clamping to the month's
- * length (e.g. the 31st in February becomes the 28th/29th). -1 means the
- * last day of the month.
- */
-function resolveMonthDay(year: number, month: number, day: number): Date {
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const resolved = day === -1 ? lastDay : Math.min(day, lastDay);
-  return new Date(year, month, resolved);
-}
-
-/**
- * Next monthly occurrence strictly after `after`, for a source pinned to a
- * day of the month. Occurrences fall every `interval` months from the
- * source's creation month; without a pinned day the day-of-month of `after`
- * is preserved (matching the pre-existing behavior).
- */
-function nextMonthlyOccurrence(after: Date, source: any, interval: number): Date {
-  const anchor = new Date(source.created_at || after);
-  const anchorYear = anchor.getFullYear();
-  const anchorMonth = anchor.getMonth();
-
-  const rawPin = source.month_day;
-  const pin = typeof rawPin === 'number' && rawPin !== 0 ? rawPin : after.getDate();
-
-  const monthsSince = (after.getFullYear() - anchorYear) * 12 + (after.getMonth() - anchorMonth);
-  let k = Math.max(0, Math.floor(monthsSince / interval));
-  let occ = resolveMonthDay(anchorYear, anchorMonth + k * interval, pin);
-
-  while (occ.getTime() <= after.getTime()) {
-    k += 1;
-    occ = resolveMonthDay(anchorYear, anchorMonth + k * interval, pin);
-  }
-
-  return occ;
-}
-
 export default function WillDoIt() {
   const [user, setUser] = useState<any>(null);
   const [streams, setStreams] = useState<Stream[]>([]);
@@ -165,6 +128,15 @@ export default function WillDoIt() {
 
     setStreams(loadedStreams);
 
+    // Database locks and occurrence keys make refreshes safe across tabs/devices.
+    const { error: recurrenceError } = await supabase.rpc('generate_recurring_instances', {
+      p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    if (recurrenceError) {
+      console.error(recurrenceError);
+      toast.error('Could not refresh recurring tasks');
+    }
+
     const { data: cardsData } = await supabase
       .from('cards')
       .select('*')
@@ -212,115 +184,6 @@ export default function WillDoIt() {
 
     setCards(loadedCards);
     setLoading(false);
-
-    // Basic recurring generation (simplified for MVP)
-    generateRecurringInstances(userId, loadedStreams, loadedCards);
-  };
-
-  const generateRecurringInstances = async (userId: string, currentStreams: Stream[], currentCards: Card[]) => {
-    const { data: sources } = await supabase
-      .from('recurrence_sources')
-      .select('*')
-      .eq('user_id', userId)
-      .is('stopped_at', null);
-
-    if (!sources || sources.length === 0) return;
-
-    const newCards: any[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (const source of sources as any[]) {
-      const activeCardsForSource = currentCards.filter(c => 
-        c.recurrence_source_id === source.id && 
-        !['complete', 'canceled'].includes(c.status)
-      );
-
-      const stackMissed = !!source.stack_missed;
-
-      // If not stacking and we already have an active instance, skip
-      if (activeCardsForSource.length > 0 && !stackMissed) continue;
-
-      // Find last completed for this source
-      const completedForSource = currentCards
-        .filter(c => c.recurrence_source_id === source.id && c.completed_at)
-        .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime());
-
-      let baseDate = completedForSource.length > 0 
-        ? new Date(completedForSource[0].completed_at!) 
-        : (source.last_completed_at ? new Date(source.last_completed_at) : new Date(source.created_at || Date.now()));
-
-      const freq = source.frequency || 'daily';
-      const intv = source.interval || 1;
-      const wd = source.weekdays || [];
-
-      // Compute next due
-      let nextDue = new Date(baseDate);
-      nextDue.setHours(0, 0, 0, 0);
-
-      const advanceDate = (date: Date) => {
-        if (freq === 'daily' || freq === 'every_n_days') {
-          date.setDate(date.getDate() + intv);
-        } else if (freq === 'weekly') {
-          date.setDate(date.getDate() + (7 * intv));
-          // If specific weekdays are set, try to land on one (simple advance for MVP)
-          if (wd.length > 0) {
-            while (!wd.includes(date.getDay())) {
-              date.setDate(date.getDate() + 1);
-            }
-          }
-        } else if (freq === 'monthly') {
-          return nextMonthlyOccurrence(date, source, intv);
-        } else {
-          date.setDate(date.getDate() + 1);
-        }
-        return date;
-      };
-
-      // Advance at least once
-      nextDue = advanceDate(nextDue);
-
-      // Respect end_date
-      if (source.end_date && new Date(source.end_date) < nextDue) {
-        continue;
-      }
-
-      // For stack_missed, we could generate multiple, but for now generate the next one
-      // (user can complete to trigger more if stacking)
-
-      // Generate title with date info
-      let generatedTitle = source.base_title;
-      const dateStr = nextDue.toLocaleDateString();
-      if (freq === 'monthly' || freq.includes('month')) {
-        const monthName = nextDue.toLocaleString('default', { month: 'long' });
-        generatedTitle = `${source.base_title} - ${monthName} ${nextDue.getFullYear()}`;
-      } else if (freq === 'weekly') {
-        generatedTitle = `${source.base_title} - Week of ${dateStr}`;
-      } else {
-        generatedTitle = `${source.base_title} - ${dateStr}`;
-      }
-
-      // Only create if the next due is not in the distant past, or always create the next pending
-      const isDueTodayOrPast = nextDue.getTime() <= today.getTime();
-      const newCard = {
-        user_id: userId,
-        stream_id: source.stream_id,
-        title: generatedTitle,
-        status: isDueTodayOrPast ? 'waiting' : 'backlog',
-        due_at: nextDue.toISOString(),
-        is_recurring: true,
-        recurrence_source_id: source.id,
-        position: 0,
-      };
-
-      const { data: created } = await supabase.from('cards').insert(newCard).select().single();
-      if (created) newCards.push(created);
-    }
-
-    if (newCards.length > 0) {
-      setCards(prev => [...prev, ...newCards]);
-      toast.info(`${newCards.length} recurring instance(s) generated`);
-    }
   };
 
   const filteredStreams = streamsForDisplay(
@@ -467,14 +330,18 @@ export default function WillDoIt() {
     setCards(newCards);
 
     try {
-      await supabase
+      const { data: movedCard, error } = await supabase
         .from('cards')
         .update({ 
           stream_id: targetStreamId, 
           status: targetStatus,
           position: newCards[cardIndex].position 
         })
-        .eq('id', activeId);
+        .eq('id', activeId)
+        .select()
+        .single();
+      if (error) throw error;
+      setCards(prev => prev.map(c => c.id === activeId ? movedCard : c));
 
       // Persist the reordering of the other cards in the affected cells so
       // the order survives a reload. (Individual updates: an upsert would
@@ -496,6 +363,10 @@ export default function WillDoIt() {
           .eq('id', activeCard.recurrence_source_id);
       }
 
+      if (activeCard.is_recurring && ['complete', 'canceled'].includes(targetStatus)) {
+        await loadData(user.id);
+      }
+
       toast.success('Moved');
     } catch (err) {
       console.error(err);
@@ -508,10 +379,13 @@ export default function WillDoIt() {
     setCards((prev) => [...prev, newCard]);
   };
 
-  const handleCardUpdated = (updatedCard: Card) => {
+  const handleCardUpdated = async (updatedCard: Card) => {
     setCards((prev) =>
       prev.map((c) => (c.id === updatedCard.id ? updatedCard : c))
     );
+    if (updatedCard.is_recurring && user) {
+      await loadData(user.id);
+    }
   };
 
   const handleCardDeleted = (cardId: string) => {
@@ -558,30 +432,21 @@ export default function WillDoIt() {
     ));
 
     try {
-      await supabase
+      const { data: updatedCard, error } = await supabase
         .from('cards')
-        .update({ status: newStatus, completed_at: completedAt })
-        .eq('id', cardId);
+        .update({ status: newStatus })
+        .eq('id', cardId)
+        .select()
+        .single();
+      if (error) throw error;
 
-      // If this was a recurring card, advance the source's last_completed_at
-      // and trigger generation of the next instance
-      if (card.is_recurring && card.recurrence_source_id) {
-        await supabase
-          .from('recurrence_sources')
-          .update({ last_completed_at: completedAt })
-          .eq('id', card.recurrence_source_id);
-
-        // Generate next instance (runs on next load too, this is best-effort)
-        if (user) {
-          setTimeout(() => {
-            generateRecurringInstances(user.id, streams, cards);
-          }, 400);
-        }
-      }
+      // The database stamps completion and updates the source atomically.
+      await handleCardUpdated(updatedCard);
 
       toast.success('Card completed');
     } catch (err) {
       console.error(err);
+      setCards(prev => prev.map(c => c.id === cardId ? card : c));
       toast.error('Failed to complete');
     }
   };
