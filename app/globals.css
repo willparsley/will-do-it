@@ -34,14 +34,6 @@
   --status-complete: #10b981;
   --status-canceled: #a1a1aa;
 
-  /* Card promotion buttons use the dark-mode palette in both themes. */
-  --card-action-priority_backlog: #fbbf24;
-  --card-action-research: #a78bfa;
-  --card-action-waiting: #38bdf8;
-  --card-action-in_progress: #7aa2f7;
-  --card-action-review: #2dd4bf;
-  --card-action-complete: #34d399;
-
   color-scheme: light;
 }
 
