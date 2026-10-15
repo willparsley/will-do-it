@@ -192,9 +192,9 @@ for(const action of ['complete','advance','drag']) test(`failed stale ${action} 
   let persisted={...base};
   const source={id:'source',stream_id:'old-stream',base_title:'Walk',recurrence_timezone:'America/New_York'};
   const supabase={auth:{async getUser(){return {data:{user}};}},rpc(name){
-    if(name==='save_card') {
+    if(name==='save_card_with_undo') {
       persisted={...base,status:'complete',completed_at:new Date().toISOString()};
-      return {async single(){return {error:{message:'This card changed elsewhere. Refresh and try again.'}};}};
+      return Promise.resolve({error:{message:'This card changed elsewhere. Refresh and try again.'}});
     }
     return Promise.resolve({error:null,data:0});
   },from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[persisted]:[source]});},async order(){return {data:streams};}};}};
@@ -233,10 +233,14 @@ for (const operation of ['create', 'edit', 'drag']) {
           auth: { async getUser() { return { data: { user } }; } },
           rpc(name, args) {
             calls.push(name);
-            if (name === 'save_card') return { async single() {
+            if (name === 'save_card_with_undo') {
               persisted = persisted.map(c => ({ ...c, ...args.p_changes }));
-              return { data: persisted[0], error: null };
-            } };
+              // The transactional quick-action RPC includes promotion.
+              persisted = persisted.map(c => ['backlog', 'priority_backlog'].includes(c.status) &&
+                [c.due_at, c.remind_at].some(value => value && new Date(value).getTime() <= Date.now())
+                ? { ...c, status: 'waiting' } : c);
+              return Promise.resolve({ data: { card: persisted[0], undo_id: 'undo' }, error: null });
+            }
             if (name === 'promote_due_cards') persisted = persisted.map(c => {
               const eligible = ['backlog', 'priority_backlog'].includes(c.status) &&
                 [c.due_at, c.remind_at].some(value => value && new Date(value).getTime() <= Date.now());
@@ -269,10 +273,59 @@ for (const operation of ['create', 'edit', 'drag']) {
           await nodes(tree, n => typeof n.props?.[callback] === 'function')[0].props[callback](saved);
         }
         const displayed = nodes(ui.render(), n => n.props.card?.id === card.id)[0].props.card;
-        assert.equal(calls.slice(callsBefore).filter(name => name === 'promote_due_cards').length, 1);
+        assert.equal(calls.slice(callsBefore).filter(name => name === (operation === 'drag' ? 'save_card_with_undo' : 'promote_due_cards')).length, 1);
         assert.equal(displayed.status, ['backlog', 'priority_backlog'].includes(initial) ? 'waiting' : initial);
         assert.equal(notices.errors.length, 0);
+        if (operation === 'drag') {
+          assert.equal(displayed.stream_id, 'new-stream');
+          assert.deepEqual(notices.successes, []);
+        }
       });
     }
   }
+}
+
+for (const action of ['complete','advance']) for (const fails of [false,true]) {
+  test(`${action} toast Undo ${fails ? 'reports a conflict' : 'restores the card'} without re-promoting it`, async () => {
+    const successes=[],errors=[],calls=[];
+    let persisted={...base,is_recurring:false,recurrence_source_id:null,status:action==='advance'?'research':'waiting'};
+    let before;
+    const supabase={
+      auth:{async getUser(){return {data:{user}};}},
+      async rpc(name,args){
+        calls.push(name);
+        if(name==='save_card_with_undo') {
+          before={...persisted};persisted={...persisted,...args.p_changes};
+          return {data:{card:persisted,undo_id:'token'}};
+        }
+        if(name==='undo_card_action') {
+          assert.deepEqual(args,{p_undo_id:'token'});
+          if(fails)return {error:{message:'This card changed since then'}};
+          persisted=before;
+        }
+        return {data:0};
+      },
+      from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[persisted]:[]});},async order(){return {data:streams};}};},
+    };
+    const ui=driver('app/page.tsx','default',{}, {
+      '@/lib/supabase/client':{createClient:()=>supabase},
+      sonner:{toast:{success:(message,options)=>{successes.push({message,options});return 'toast';},error:message=>errors.push(message),loading:()=> 'pending',dismiss(){}}},
+      '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},closestCenter(){}},
+    });
+    ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
+    button(ui.render(),'All').props.onClick();
+    const tree=ui.render();
+    await nodes(tree,n=>n.props.card?.id==='card')[0].props[action==='complete'?'onComplete':'onAdvance']('card');
+    const notification=successes[0];
+    assert.equal(notification.options.duration,8000);
+    assert.equal(notification.options.action.label,'Undo');
+    const changed={...persisted};
+    const callsBefore=calls.length;
+    await Promise.all([notification.options.action.onClick(),notification.options.action.onClick()]);
+    assert.deepEqual(calls.slice(callsBefore),['undo_card_action']);
+    const displayed=nodes(ui.render(),n=>n.props.card?.id==='card')[0].props.card;
+    for (const [key,value] of Object.entries(fails?changed:before)) assert.deepEqual(displayed[key],value);
+    assert.deepEqual(errors,fails?['This card changed since then']:[]);
+    assert.equal(successes.at(-1).message,fails?notification.message:'Undone');
+  });
 }
