@@ -276,12 +276,16 @@ for (const operation of ['create', 'edit', 'drag']) {
         assert.equal(calls.slice(callsBefore).filter(name => name === (operation === 'drag' ? 'save_card_with_undo' : 'promote_due_cards')).length, 1);
         assert.equal(displayed.status, ['backlog', 'priority_backlog'].includes(initial) ? 'waiting' : initial);
         assert.equal(notices.errors.length, 0);
+        if (operation === 'drag') {
+          assert.equal(displayed.stream_id, 'new-stream');
+          assert.deepEqual(notices.successes, []);
+        }
       });
     }
   }
 }
 
-for (const action of ['complete','advance','drag']) for (const fails of [false,true]) {
+for (const action of ['complete','advance']) for (const fails of [false,true]) {
   test(`${action} toast Undo ${fails ? 'reports a conflict' : 'restores the card'} without re-promoting it`, async () => {
     const successes=[],errors=[],calls=[];
     let persisted={...base,is_recurring:false,recurrence_source_id:null,status:action==='advance'?'research':'waiting'};
@@ -311,8 +315,7 @@ for (const action of ['complete','advance','drag']) for (const fails of [false,t
     ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
     button(ui.render(),'All').props.onClick();
     const tree=ui.render();
-    if(action==='drag')await nodes(tree,n=>typeof n.props?.onDragEnd==='function')[0].props.onDragEnd({active:{id:'card'},over:{id:'new-stream::review'}});
-    else await nodes(tree,n=>n.props.card?.id==='card')[0].props[action==='complete'?'onComplete':'onAdvance']('card');
+    await nodes(tree,n=>n.props.card?.id==='card')[0].props[action==='complete'?'onComplete':'onAdvance']('card');
     const notification=successes[0];
     assert.equal(notification.options.duration,8000);
     assert.equal(notification.options.action.label,'Undo');

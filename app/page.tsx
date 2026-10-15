@@ -283,11 +283,10 @@ export default function WillDoIt() {
     setCards(newCards);
 
     try {
-      const result = await saveQuickAction(activeCard, {
+      await saveQuickAction(activeCard, {
         stream_id: targetStreamId, status: targetStatus as Card['status'], position: newCards[cardIndex].position,
       });
       await loadData(user.id, false);
-      showUndoToast('Moved', result.undo_id);
     } catch (err) {
       console.error(err);
       setCards(cards);
