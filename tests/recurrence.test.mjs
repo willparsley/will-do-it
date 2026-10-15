@@ -815,3 +815,93 @@ test('ordinary undated backlogs stay put and promotion is restricted to the sign
   assert.equal((await query('select status from cards where id = $1', [original]))[0].status, 'backlog');
   assert.equal((await promote())[0].count, 1);
 });
+
+const quickAction = async (id, status, changes) => (await query(
+  'select public.save_card_with_undo($1,$2::jsonb,$3,$4) as result',
+  [id, JSON.stringify(changes), status, 'America/New_York']))[0].result;
+const undoAction = id => query('select public.undo_card_action($1)', [id]);
+const cardSnapshot = async () => (await query("select jsonb_agg(to_jsonb(c) - 'updated_at' order by id) as cards from cards c"))[0].cards;
+
+for (const stack of [false, true]) test(`Undo recurring completion restores reminders and bookkeeping (${stack ? 'stacking' : 'non-stacking'})`, async () => {
+  await fixture({ active: true, stack });
+  await generate();
+  const before = await cardSnapshot();
+  const settings = await recurrenceSettings();
+  const result = await quickAction(original, 'in_progress', { status: 'complete' });
+  assert.equal(result.card.status, 'complete');
+  await generate(); // A normal refresh must not invalidate Undo.
+  await undoAction(result.undo_id);
+  assert.deepEqual(await cardSnapshot(), before);
+  const restored = await recurrenceSettings();
+  assert.deepEqual(restored.last_completed_at, settings.last_completed_at);
+  assert.deepEqual(restored.generated_through, settings.generated_through);
+  await assert.rejects(undoAction(result.undo_id), /no longer available/);
+});
+
+test('Undo recurring drag restores source stream and pending siblings, preserving archived storage', async () => {
+  await fixture({ active: true, stack: true });
+  await generate();
+  const target = '00000000-0000-0000-0000-000000000009';
+  await query("insert into streams(id,user_id,title,state,area) values($1,$2,'Next','in_progress','personal')", [target,user]);
+  const before = await cardSnapshot();
+  const result = await quickAction(original,'in_progress',{stream_id:target,status:'review',position:12});
+  assert.equal((await recurrenceSettings()).stream_id,target);
+  await undoAction(result.undo_id);
+  assert.equal((await recurrenceSettings()).stream_id,stream);
+  assert.deepEqual(await cardSnapshot(),before);
+});
+
+test('Undo restores automatic Waiting provenance after advance and completion', async () => {
+  await fixture({ active: true });
+  await query("update cards set status='waiting',auto_promoted_from='priority_backlog' where id=$1",[original]);
+  // Set provenance separately, just as the promotion RPC does for eligible rows.
+  await query("update cards set auto_promoted_from='priority_backlog' where id=$1",[original]);
+  const before=await cardSnapshot();
+  for (const status of ['in_progress','complete']) {
+    const action=await quickAction(original,'waiting',{status});
+    await undoAction(action.undo_id);
+    assert.deepEqual(await cardSnapshot(),before);
+  }
+});
+
+for (const change of ['card','successor','source']) test(`Undo refuses to overwrite a subsequent ${change} edit`, async () => {
+  await fixture({ active: true });
+  const action=await quickAction(original,'in_progress',{status:'complete'});
+  if(change==='source') await editRecurrence({base_title:'New title'});
+  else await query('update cards set title=$1 where '+(change==='card'?'id=$2':'id<>$2'),['Changed later',original]);
+  const before=await cardSnapshot();
+  await assert.rejects(undoAction(action.undo_id),/changed since then/);
+  assert.deepEqual(await cardSnapshot(),before);
+});
+
+test('Undo tokens are private, expire, and cannot be used by another user',async()=>{
+  await fixture({active:true});
+  const action=await quickAction(original,'in_progress',{status:'complete'});
+  await query("select set_config('request.jwt.claim.sub',$1,false)",[other]);
+  await assert.rejects(undoAction(action.undo_id),/no longer available/);
+  await assert.rejects(quickAction(original,'complete',{status:'review'}),/Card not found/);
+  assert.equal((await query('select * from card_action_undos')).length,0);
+  await query("select set_config('request.jwt.claim.sub',$1,false)",[user]);
+  await db.exec('reset role');
+  await query("update card_action_undos set expires_at=now()-interval '1 second' where id=$1",[action.undo_id]);
+  await db.exec('set role authenticated');
+  await assert.rejects(undoAction(action.undo_id),/no longer available/);
+});
+
+test('Undo ordinary completion restores the exact reminder and position',async()=>{
+  await query("insert into cards(id,user_id,stream_id,title,status,remind_at,position) values($1,$2,$3,'Ordinary','research',now()+interval '2 days',7)",[original,user,stream]);
+  await db.exec('set role authenticated');
+  const before=await cardSnapshot();
+  const action=await quickAction(original,'research',{status:'complete'});
+  await undoAction(action.undo_id);
+  assert.deepEqual(await cardSnapshot(),before);
+});
+
+test('Undo rejects a now-closed original stream without partial changes',async()=>{
+  await fixture({active:true});
+  const action=await quickAction(original,'in_progress',{status:'complete'});
+  // Stop generation and close the stream using the normal transactional path.
+  await query('select public.save_stream($1,$2,$3,$4,$5,$6::jsonb)',[stream,'Health','personal',null,'complete',JSON.stringify([{source_id:source,action:'stop'}])]);
+  await assert.rejects(undoAction(action.undo_id),/changed since then|no longer active/);
+  assert.equal((await query('select status from cards where id=$1',[original]))[0].status,'complete');
+});

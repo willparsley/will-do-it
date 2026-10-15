@@ -68,7 +68,7 @@ export default function WillDoIt() {
     })
   );
 
-  const loadData = useCallback(async (userId: string) => {
+  const loadData = useCallback(async (userId: string, processTasks = true) => {
     const sequence = ++loadSequence.current;
     // Keep the workspace mounted during mutation-triggered refreshes. Only the
     // first load needs a full-screen placeholder; later loads update it in place.
@@ -98,11 +98,13 @@ export default function WillDoIt() {
         if (error) throw error;
         loadedStreams = loadedStreams.map(s => legacyIds.includes(s.id) ? { ...s, state: 'in_progress' } : s);
       }
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const { error: recurrenceError } = await supabase.rpc('generate_recurring_instances', { p_timezone: timezone });
-      if (recurrenceError) toast.error(errorMessage(recurrenceError, 'Could not refresh recurring tasks'));
-      const { error: promotionError } = await supabase.rpc('promote_due_cards', { p_timezone: timezone });
-      if (promotionError) toast.error(errorMessage(promotionError, 'Could not refresh reminders'));
+      if (processTasks) {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const { error: recurrenceError } = await supabase.rpc('generate_recurring_instances', { p_timezone: timezone });
+        if (recurrenceError) toast.error(errorMessage(recurrenceError, 'Could not refresh recurring tasks'));
+        const { error: promotionError } = await supabase.rpc('promote_due_cards', { p_timezone: timezone });
+        if (promotionError) toast.error(errorMessage(promotionError, 'Could not refresh reminders'));
+      }
 
       const [cardResult, sourceResult] = await Promise.all([
         supabase.from('cards').select('*').eq('user_id', userId),
@@ -189,6 +191,46 @@ export default function WillDoIt() {
   const matrixMaxWidth =
     34 + streamColWidth + columns.length * COL_MAX + columns.length * GRID_GAP;
 
+  const saveQuickAction = async (card: Card, changes: Partial<Card>) => {
+    const { data, error } = await supabase.rpc('save_card_with_undo', {
+      p_card_id: card.id,
+      p_expected_status: card.status,
+      p_changes: changes,
+      p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    if (error) throw error;
+    return data as { card: Card; undo_id: string };
+  };
+
+  const showUndoToast = (message: string, undoId: string) => {
+    let undoing = false;
+    const toastId = toast.success(message, {
+      duration: 8000,
+      action: {
+        label: 'Undo',
+        onClick: async () => {
+          if (undoing || !user) return;
+          undoing = true;
+          // Sonner dismisses the action toast after this callback returns.
+          // Use a separate toast for the asynchronous result.
+          const pendingId = toast.loading('Undoing…');
+          try {
+            const { error } = await supabase.rpc('undo_card_action', { p_undo_id: undoId });
+            if (error) throw error;
+            // Preserve the restored status until the next normal refresh.
+            await loadData(user.id, false);
+            toast.success('Undone', { id: pendingId });
+          } catch (error) {
+            toast.error(errorMessage(error, 'Could not undo'), { id: pendingId });
+            await loadData(user.id, false);
+          } finally {
+            toast.dismiss(toastId);
+          }
+        },
+      },
+    });
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const card = cards.find((c) => c.id === event.active.id);
     setActiveDragCard(card || null);
@@ -228,72 +270,24 @@ export default function WillDoIt() {
     const cardIndex = newCards.findIndex(c => c.id === activeId);
     if (cardIndex === -1) return;
 
-    const oldStreamId = newCards[cardIndex].stream_id;
-    const oldStatus = newCards[cardIndex].status;
-
-    // Remember positions before the move so we only persist what changed.
-    const originalPositions = new Map(cards.map((c) => [c.id, c.position || 0]));
-
+    // Append in the destination without renumbering siblings, so Undo only
+    // needs to restore this card and any recurrence siblings that followed it.
     newCards[cardIndex] = {
-      ...newCards[cardIndex],
+      ...activeCard,
       stream_id: targetStreamId,
       status: targetStatus as Card['status'],
+      position: Math.max(-1, ...cards.filter(c => c.id !== activeId && c.stream_id === targetStreamId && c.status === targetStatus)
+        .map(c => c.position || 0)) + 1,
     };
-
-    // Reindex positions in the affected cells and collect the new ordering.
-    const cellsToReindex = [
-      `${oldStreamId}::${oldStatus}`,
-      `${targetStreamId}::${targetStatus}`
-    ];
-
-    const positionUpdates: { id: string; position: number }[] = [];
-    const seen = new Set<string>();
-
-    cellsToReindex.forEach(cell => {
-      const [sId, stat] = cell.split('::');
-      const cellCards = newCards
-        .filter(c => c.stream_id === sId && c.status === stat)
-        .sort((a, b) => (a.position || 0) - (b.position || 0));
-
-      cellCards.forEach((c, idx) => {
-        const idxInArray = newCards.findIndex(item => item.id === c.id);
-        if (idxInArray !== -1) {
-          newCards[idxInArray] = { ...newCards[idxInArray], position: idx };
-        }
-        if (!seen.has(c.id) && originalPositions.get(c.id) !== idx) {
-          seen.add(c.id);
-          positionUpdates.push({ id: c.id, position: idx });
-        }
-      });
-    });
 
     setCards(newCards);
 
     try {
-      const { data: movedCard, error } = await supabase.rpc('save_card', {
-        p_card_id: activeId,
-        p_expected_status: activeCard.status,
-        p_changes: { stream_id: targetStreamId, status: targetStatus, position: newCards[cardIndex].position },
-      }).single<Card>();
-      if (error) throw error;
-      setCards(prev => prev.map(c => c.id === activeId ? movedCard : c));
-
-      // Persist the reordering of the other cards in the affected cells so
-      // the order survives a reload. (Individual updates: an upsert would
-      // need every NOT NULL column.)
-      if (positionUpdates.length > 0) {
-        await Promise.all(
-          positionUpdates
-            .filter((u) => u.id !== activeId)
-            .map((u) =>
-              supabase.from('cards').update({ position: u.position }).eq('id', u.id)
-            )
-        );
-      }
-
-      await loadData(user.id);
-
-      toast.success('Moved');
+      const result = await saveQuickAction(activeCard, {
+        stream_id: targetStreamId, status: targetStatus as Card['status'], position: newCards[cardIndex].position,
+      });
+      await loadData(user.id, false);
+      showUndoToast('Moved', result.undo_id);
     } catch (err) {
       console.error(err);
       setCards(cards);
@@ -362,17 +356,9 @@ export default function WillDoIt() {
     ));
 
     try {
-      const { data: updatedCard, error } = await supabase.rpc('save_card', {
-        p_card_id: cardId,
-        p_expected_status: card.status,
-        p_changes: { status: newStatus },
-      }).single<Card>();
-      if (error) throw error;
-
-      // The database stamps completion and updates the source atomically.
-      await handleCardUpdated(updatedCard);
-
-      toast.success('Card completed');
+      const result = await saveQuickAction(card, { status: newStatus });
+      if (user) await loadData(user.id, false);
+      showUndoToast('Card completed', result.undo_id);
     } catch (err) {
       console.error(err);
       setCards(prev => prev.map(c => c.id === cardId ? card : c));
@@ -400,14 +386,9 @@ export default function WillDoIt() {
     ));
 
     try {
-      const { data: updatedCard, error } = await supabase.rpc('save_card', {
-        p_card_id: cardId,
-        p_expected_status: card.status,
-        p_changes: { status: next },
-      }).single<Card>();
-      if (error) throw error;
-      await handleCardUpdated(updatedCard);
-      toast.success(`Moved to ${STATUS_LABELS[next]}`);
+      const result = await saveQuickAction(card, { status: next });
+      if (user) await loadData(user.id, false);
+      showUndoToast(`Moved to ${STATUS_LABELS[next]}`, result.undo_id);
     } catch (err) {
       console.error(err);
       // Revert on failure
