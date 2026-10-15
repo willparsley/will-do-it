@@ -179,3 +179,60 @@ for(const action of ['complete','advance','drag']) test(`failed stale ${action} 
   assert.ok(refreshed.completed_at);
   assert.deepEqual(notices.errors,['This card changed elsewhere. Refresh and try again.']);
 });
+
+for (const operation of ['create', 'edit', 'drag']) {
+  for (const initial of ['backlog', 'priority_backlog', 'research', 'complete']) {
+    for (const field of ['due_at', 'remind_at']) {
+      test(`ordinary ${operation}: overdue ${field} refreshes promotion and respects ${initial}`, async () => {
+        const notices = notifications(), calls = [];
+        const future = new Date(); future.setDate(future.getDate() + 2);
+        const past = new Date(); past.setDate(past.getDate() - 2);
+        const card = { ...base, is_recurring: false, recurrence_source_id: null, status: initial,
+          due_at: null, remind_at: null, [field]: future.toISOString() };
+        let persisted = operation === 'create' ? [] : [card];
+        const supabase = {
+          auth: { async getUser() { return { data: { user } }; } },
+          rpc(name, args) {
+            calls.push(name);
+            if (name === 'save_card') return { async single() {
+              persisted = persisted.map(c => ({ ...c, ...args.p_changes }));
+              return { data: persisted[0], error: null };
+            } };
+            if (name === 'promote_due_cards') persisted = persisted.map(c => {
+              const eligible = ['backlog', 'priority_backlog'].includes(c.status) &&
+                [c.due_at, c.remind_at].some(value => value && new Date(value).getTime() <= Date.now());
+              return eligible ? { ...c, status: 'waiting' } : c;
+            });
+            return Promise.resolve({ data: 0, error: null });
+          },
+          from(table) { return { select() { return this; },
+            eq() { return table === 'streams' ? this : Promise.resolve({ data: table === 'cards' ? persisted : [] }); },
+            async order() { return { data: streams }; },
+          }; },
+        };
+        const ui = driver('app/page.tsx', 'default', {}, {
+          '@/lib/supabase/client': { createClient: () => supabase }, sonner: notices.module,
+          '@dnd-kit/core': { useSensors: () => [], useSensor: () => null, MouseSensor() {}, TouchSensor() {}, DndContext() {}, DragOverlay() {}, closestCenter() {} },
+        });
+        ui.render(); ui.effects[0](); await new Promise(resolve => setTimeout(resolve, 0));
+        let tree = ui.render();
+        const callsBefore = calls.length;
+        const saved = { ...card, [field]: past.toISOString() };
+        persisted = [saved];
+        if (operation === 'drag') {
+          await nodes(tree, n => typeof n.props?.onDragEnd === 'function')[0].props.onDragEnd({ active: { id: card.id }, over: { id: `new-stream::${initial}` } });
+        } else {
+          if (operation === 'create') nodes(tree, n => n.type === 'button' && text(n).includes('Quick Add'))[0].props.onClick();
+          else nodes(tree, n => n.props.card?.id === card.id)[0].props.onClick();
+          tree = ui.render();
+          const callback = operation === 'create' ? 'onCardCreated' : 'onCardUpdated';
+          await nodes(tree, n => typeof n.props?.[callback] === 'function')[0].props[callback](saved);
+        }
+        const displayed = nodes(ui.render(), n => n.props.card?.id === card.id)[0].props.card;
+        assert.equal(calls.slice(callsBefore).filter(name => name === 'promote_due_cards').length, 1);
+        assert.equal(displayed.status, ['backlog', 'priority_backlog'].includes(initial) ? 'waiting' : initial);
+        assert.equal(notices.errors.length, 0);
+      });
+    }
+  }
+}

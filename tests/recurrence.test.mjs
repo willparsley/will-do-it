@@ -264,15 +264,15 @@ test('promotion cannot resurrect a completed card after another tab read its old
   assert.ok(persisted.completed_at);
 });
 
-test('promotion catches up overdue recurring backlogs without advancing other active statuses or ordinary overdue cards', async () => {
+test('promotion catches up overdue recurring and ordinary backlogs without advancing other active statuses', async () => {
   await fixture({ active: true, daysAgo: 2 });
   await query("update cards set status = 'backlog' where id = $1", [original]);
   await query("insert into cards (user_id, stream_id, title, status, due_at) values ($1,$2,'Ordinary overdue','backlog',now() - interval '2 days')", [user, stream]);
-  assert.equal((await promote())[0].count, 1);
+  assert.equal((await promote())[0].count, 2);
   assert.equal((await query('select status from cards where id = $1', [original]))[0].status, 'waiting');
   await query("update cards set status = 'in_progress' where id = $1", [original]);
   assert.equal((await promote())[0].count, 0);
-  assert.equal((await query("select status from cards where title = 'Ordinary overdue'"))[0].status, 'backlog');
+  assert.equal((await query("select status from cards where title = 'Ordinary overdue'"))[0].status, 'waiting');
 });
 
 test('ordinary reminders still promote on their day, with future cards left alone', async () => {
@@ -530,4 +530,55 @@ test('ended stacking schedules with missing periods still require resolution and
   assert.equal(await generate(),2);
   assert.ok((await instances()).every(c=>c.status==='waiting'));
   assert.equal((await closingSources()).length,0);
+});
+
+for (const recurring of [false, true]) {
+  for (const initial of ['backlog', 'priority_backlog', 'research', 'waiting', 'in_progress', 'review', 'complete', 'canceled']) {
+    for (const field of ['due_at', 'remind_at']) {
+      for (const offset of [-1, 0, 1]) {
+        test(`${recurring ? 'recurring' : 'ordinary'} ${initial}: ${field} day ${offset} promotes only an eligible backlog`, async () => {
+          const [calendar] = await query("select (((now() at time zone 'America/New_York')::date + $1::integer)::timestamp at time zone 'America/New_York') as instant", [offset]);
+          const instant = calendar.instant.toISOString();
+          const due = field === 'due_at' ? instant : null;
+          const reminder = field === 'remind_at' ? instant : null;
+          if (recurring) {
+            await fixture({ active: true });
+            await query("update recurrence_sources set recurrence_timezone = 'America/New_York' where id = $1", [source]);
+            await query('update cards set status = $1, due_at = $2, remind_at = $3 where id = $4', [initial, due, reminder, original]);
+          } else {
+            await db.exec('set role authenticated');
+            await query(`insert into cards (id,user_id,stream_id,title,status,due_at,remind_at)
+              values ($1,$2,$3,'Ordinary dated task',$4,$5,$6)`, [original,user,stream,initial,due,reminder]);
+          }
+          const eligible = ['backlog', 'priority_backlog'].includes(initial) && offset <= 0;
+          const before = await query('select completed_at,stream_id,title from cards where id = $1', [original]);
+          assert.equal((await promote())[0].count, eligible ? 1 : 0);
+          assert.equal((await query('select status from cards where id = $1', [original]))[0].status, eligible ? 'waiting' : initial);
+          assert.deepEqual(await query('select completed_at,stream_id,title from cards where id = $1', [original]), before);
+          assert.equal((await promote())[0].count, 0);
+        });
+      }
+    }
+  }
+}
+
+for (const trigger of ['due_at', 'remind_at']) test(`ordinary overdue ${trigger} promotes even when the other date is future`, async () => {
+  await db.exec('set role authenticated');
+  await query(`insert into cards (id,user_id,stream_id,title,status,due_at,remind_at) values
+    ($1,$2,$3,'Separate triggers','priority_backlog',now() + make_interval(days => $4),now() + make_interval(days => $5))`,
+  [original,user,stream,trigger === 'due_at' ? -2 : 2,trigger === 'remind_at' ? -2 : 2]);
+  assert.equal((await promote())[0].count, 1);
+});
+
+test('ordinary undated backlogs stay put and promotion is restricted to the signed-in user', async () => {
+  await db.exec('set role authenticated');
+  await query(`insert into cards (id,user_id,stream_id,title,status)
+    values ($1,$2,$3,'Undated task','backlog')`, [original,user,stream]);
+  assert.equal((await promote())[0].count, 0);
+  await query("update cards set due_at = now() - interval '2 days' where id = $1", [original]);
+  await query("select set_config('request.jwt.claim.sub',$1,false)", [other]);
+  assert.equal((await promote())[0].count, 0);
+  await query("select set_config('request.jwt.claim.sub',$1,false)", [user]);
+  assert.equal((await query('select status from cards where id = $1', [original]))[0].status, 'backlog');
+  assert.equal((await promote())[0].count, 1);
 });
