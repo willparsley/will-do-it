@@ -302,16 +302,11 @@ export default function WillDoIt() {
     setCards(newCards);
 
     try {
-      const { data: movedCard, error } = await supabase
-        .from('cards')
-        .update({ 
-          stream_id: targetStreamId, 
-          status: targetStatus,
-          position: newCards[cardIndex].position 
-        })
-        .eq('id', activeId)
-        .select()
-        .single();
+      const { data: movedCard, error } = await supabase.rpc('save_card', {
+        p_card_id: activeId,
+        p_expected_status: activeCard.status,
+        p_changes: { stream_id: targetStreamId, status: targetStatus, position: newCards[cardIndex].position },
+      }).single<Card>();
       if (error) throw error;
       setCards(prev => prev.map(c => c.id === activeId ? movedCard : c));
 
@@ -328,16 +323,7 @@ export default function WillDoIt() {
         );
       }
 
-      if (activeCard.is_recurring && activeCard.recurrence_source_id) {
-        await supabase
-          .from('recurrence_sources')
-          .update({ stream_id: targetStreamId })
-          .eq('id', activeCard.recurrence_source_id);
-      }
-
-      if (activeCard.is_recurring && ['complete', 'canceled'].includes(targetStatus)) {
-        await loadData(user.id);
-      }
+      if (activeCard.is_recurring) await loadData(user.id);
 
       toast.success('Moved');
     } catch (err) {
@@ -347,8 +333,9 @@ export default function WillDoIt() {
     }
   };
 
-  const handleCardCreated = (newCard: Card) => {
+  const handleCardCreated = async (newCard: Card) => {
     setCards((prev) => [...prev, newCard]);
+    if (newCard.is_recurring && user) await loadData(user.id);
   };
 
   const handleCardUpdated = async (updatedCard: Card) => {
@@ -374,10 +361,11 @@ export default function WillDoIt() {
     });
   };
 
-  const handleStreamUpdated = (updatedStream: Stream) => {
+  const handleStreamUpdated = async (updatedStream: Stream) => {
     setStreams((prev) =>
       prev.map((s) => (s.id === updatedStream.id ? updatedStream : s))
     );
+    if (user) await loadData(user.id);
   };
 
   const handleStreamDeleted = (streamId: string, targetStreamId?: string) => {
@@ -404,12 +392,11 @@ export default function WillDoIt() {
     ));
 
     try {
-      const { data: updatedCard, error } = await supabase
-        .from('cards')
-        .update({ status: newStatus })
-        .eq('id', cardId)
-        .select()
-        .single();
+      const { data: updatedCard, error } = await supabase.rpc('save_card', {
+        p_card_id: cardId,
+        p_expected_status: card.status,
+        p_changes: { status: newStatus },
+      }).single<Card>();
       if (error) throw error;
 
       // The database stamps completion and updates the source atomically.
@@ -419,7 +406,7 @@ export default function WillDoIt() {
     } catch (err) {
       console.error(err);
       setCards(prev => prev.map(c => c.id === cardId ? card : c));
-      toast.error('Failed to complete');
+      toast.error(err instanceof Error ? err.message : 'Failed to complete');
     }
   };
 
@@ -442,7 +429,13 @@ export default function WillDoIt() {
     ));
 
     try {
-      await supabase.from('cards').update({ status: next }).eq('id', cardId);
+      const { data: updatedCard, error } = await supabase.rpc('save_card', {
+        p_card_id: cardId,
+        p_expected_status: card.status,
+        p_changes: { status: next },
+      }).single<Card>();
+      if (error) throw error;
+      await handleCardUpdated(updatedCard);
       toast.success(`Moved to ${STATUS_LABELS[next]}`);
     } catch (err) {
       console.error(err);
@@ -451,53 +444,6 @@ export default function WillDoIt() {
         c.id === cardId ? { ...c, status: card.status } : c
       ));
       toast.error('Failed to move card');
-    }
-  };
-
-  const handleStreamStateChange = async (streamId: string, newState: Stream['state']): Promise<boolean> => {
-    const stream = streams.find(s => s.id === streamId);
-    if (!stream || stream.state === newState) return true;
-
-    // Check for active recurrences if going to complete/canceled
-    if (['complete', 'canceled'].includes(newState)) {
-      const activeRecurring = cards.filter(c => 
-        c.stream_id === streamId && 
-        c.is_recurring && 
-        !['complete', 'canceled'].includes(c.status) &&
-        c.recurrence_source_id
-      );
-
-      if (activeRecurring.length > 0) {
-        const uniqueSources = [...new Set(activeRecurring.map(c => c.recurrence_source_id))];
-        const proceed = confirm(
-          `This stream has ${uniqueSources.length} active recurring task(s). ` +
-          `Changing state to ${newState} may affect future instances. Proceed?`
-        );
-        if (!proceed) return false;
-
-        // For simplicity in this build: stop the recurrences
-        for (const sourceId of uniqueSources) {
-          await supabase
-            .from('recurrence_sources')
-            .update({ stopped_at: new Date().toISOString() })
-            .eq('id', sourceId);
-        }
-        toast.info('Recurring tasks stopped for this stream.');
-      }
-    }
-
-    // Optimistic
-    setStreams(prev => prev.map(s => s.id === streamId ? { ...s, state: newState } : s));
-
-    try {
-      await supabase.from('streams').update({ state: newState }).eq('id', streamId);
-      toast.success(`Stream marked as ${newState}`);
-      return true;
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to update stream state');
-      setStreams(streams); // revert
-      return false;
     }
   };
 
@@ -695,7 +641,6 @@ export default function WillDoIt() {
             onClose={() => setEditingStream(null)}
             onStreamUpdated={handleStreamUpdated}
             onStreamDeleted={handleStreamDeleted}
-            onStateChange={handleStreamStateChange}
           />
         )}
       </div>

@@ -43,56 +43,23 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      let recurrenceSourceId = null;
-
-      if (isRecurring) {
-        // Create recurrence source with full config
-        const recurrenceData: any = {
-          user_id: user.id,
-          stream_id: streamId,
-          base_title: title.trim(),
-          frequency,
-          interval: (frequency === 'daily') ? 1 : recInterval,
-          stack_missed: stackMissed,
-          recurrence_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        };
-
-        if (frequency === 'weekly' && weekdays.length > 0) {
-          recurrenceData.weekdays = weekdays;
-        }
-
-        if (frequency === 'monthly') {
-          recurrenceData.month_day = monthDay;
-        }
-
-        const { data: recurrence, error: recError } = await supabase
-          .from('recurrence_sources')
-          .insert(recurrenceData)
-          .select()
-          .single();
-
-        if (recError) throw recError;
-        recurrenceSourceId = recurrence.id;
-      }
-
-      const newCard = {
-        user_id: user.id,
-        stream_id: streamId,
-        title: title.trim(),
-        status,
-        due_at: dueAt ? new Date(dueAt).toISOString() : null,
-        remind_at: remindAt ? new Date(remindAt).toISOString() : null,
-        is_recurring: isRecurring,
-        recurrence_source_id: recurrenceSourceId,
-        position: 0, // will be adjusted by backend or client
-      };
-
-      const { data: card, error } = await supabase
-        .from('cards')
-        .insert(newCard)
-        .select()
-        .single();
-
+      const due = dueAt ? new Date(dueAt).toISOString() : null;
+      const reminder = remindAt ? new Date(remindAt).toISOString() : null;
+      const result = isRecurring
+        ? await supabase.rpc('create_recurring_card', {
+            p_title: title.trim(), p_stream_id: streamId, p_status: status,
+            p_due_at: due, p_remind_at: reminder,
+            p_frequency: frequency, p_interval: frequency === 'daily' ? 1 : recInterval,
+            p_weekdays: frequency === 'weekly' ? weekdays : null,
+            p_month_day: frequency === 'monthly' ? monthDay : null,
+            p_stack_missed: stackMissed,
+            p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }).single()
+        : await supabase.from('cards').insert({
+            user_id: user.id, stream_id: streamId, title: title.trim(), status,
+            due_at: due, remind_at: reminder, is_recurring: false, position: 0,
+          }).select().single();
+      const { data: card, error } = result;
       if (error) throw error;
 
       onCardCreated(card);
@@ -209,7 +176,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
                   <option value="monthly">Every N months</option>
                 </select>
 
-                {(frequency === 'every_n_days' || frequency === 'monthly') && (
+                {(frequency === 'every_n_days' || frequency === 'weekly' || frequency === 'monthly') && (
                   <label className="flex items-center gap-1 text-xs text-ink-soft">
                     every
                     <input 
@@ -221,6 +188,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
                     />
                     {frequency === 'every_n_days'
                       ? (recInterval === 1 ? 'day' : 'days')
+                      : frequency === 'weekly' ? (recInterval === 1 ? 'week' : 'weeks')
                       : (recInterval === 1 ? 'month' : 'months')}
                   </label>
                 )}

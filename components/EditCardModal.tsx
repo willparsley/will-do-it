@@ -51,22 +51,12 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
         notes: notes.trim() || null,
       };
 
-      const { data: updatedCard, error } = await supabase
-        .from('cards')
-        .update(updates)
-        .eq('id', card.id)
-        .select()
-        .single();
-
+      const { data: updatedCard, error } = await supabase.rpc('save_card', {
+        p_card_id: card.id,
+        p_expected_status: card.status,
+        p_changes: updates,
+      }).single<Card>();
       if (error) throw error;
-
-      // If stream changed and this is recurring, update the source
-      if (streamId !== card.stream_id && card.is_recurring && card.recurrence_source_id) {
-        await supabase
-          .from('recurrence_sources')
-          .update({ stream_id: streamId })
-          .eq('id', card.recurrence_source_id);
-      }
 
       onCardUpdated(updatedCard);
       toast.success('Card updated');
