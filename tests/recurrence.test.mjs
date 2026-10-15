@@ -510,3 +510,24 @@ test('recurrence pattern validation rejects malformed weekdays instead of loopin
   await assert.rejects(query(`select public.next_recurrence_date(current_date,
     jsonb_populate_record(null::public.recurrence_sources, '{"frequency":"weekly","weekdays":[7]}'))`), /Invalid weekdays/);
 });
+
+test('exhausted legacy stacking history does not produce a false closure warning', async () => {
+  await fixture({stack:true,daysAgo:3});
+  await db.exec('reset role; alter table cards disable trigger cards_recurring_insert');
+  for(const days of [2,1]) await query(`insert into cards (user_id,stream_id,title,status,is_recurring,recurrence_source_id,due_at)
+    values ($1,$2,'Recorded occurrence','complete',true,$3,((now() at time zone 'America/New_York')::date - $4::integer)::timestamp at time zone 'America/New_York')`,[user,stream,source,days]);
+  await db.exec('alter table cards enable trigger cards_recurring_insert; set role authenticated');
+  await query("update recurrence_sources set end_date=now() - interval '1 day'");
+  assert.equal((await closingSources()).length,0);
+  await saveStream('complete');
+});
+
+test('ended stacking schedules with missing periods still require resolution and can catch up to their end date', async () => {
+  await fixture({stack:true,daysAgo:3});
+  await query("update recurrence_sources set end_date=now() - interval '1 day'");
+  assert.equal((await closingSources()).length,1);
+  await assert.rejects(saveStream('complete'), /Choose move or stop/);
+  assert.equal(await generate(),2);
+  assert.ok((await instances()).every(c=>c.status==='waiting'));
+  assert.equal((await closingSources()).length,0);
+});

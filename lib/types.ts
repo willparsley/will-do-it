@@ -84,6 +84,9 @@ export interface Card {
   is_recurring: boolean;
   recurrence_source_id?: string;
   recurrence_date?: string;
+  recurrence_timezone?: string;
+  recurrence_stream_id?: string;
+  recurrence_title?: string;
   last_completed_at?: string;
   completed_at?: string;
   created_at?: string;

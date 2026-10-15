@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
   DndContext, 
   closestCenter, 
@@ -10,11 +10,10 @@ import {
   useSensors,
   DragEndEvent,
   DragStartEvent,
-  DragCancelEvent,
   DragOverlay,
 } from '@dnd-kit/core';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, Card, ACTIVE_STATUSES, BACKLOG_STATUSES, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
+import { Stream, Card, RecurrenceSource, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { AreaFilter } from '@/components/AreaFilter';
 import { AddCardModal } from '@/components/AddCardModal';
 import { Card as CardComponent } from '@/components/Card';
@@ -23,9 +22,13 @@ import { StatusHeader } from '@/components/StatusHeader';
 import { EditCardModal } from '@/components/EditCardModal';
 import { AddStreamModal } from '@/components/AddStreamModal';
 import { EditStreamModal } from '@/components/EditStreamModal';
-import { Plus, LogOut, Pencil } from 'lucide-react';
+import { Plus, LogOut } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { toast } from 'sonner';
+import type { User } from '@supabase/supabase-js';
+import { ArchiveCards } from '@/components/ArchiveCards';
+import { ArchivePeriod, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
+import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
 
@@ -37,11 +40,14 @@ const VIEWS = [
 ] as const;
 
 export default function WillDoIt() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
+  const [recurrenceSources, setRecurrenceSources] = useState<RecurrenceSource[]>([]);
+  const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('month');
+  const loadSequence = useRef(0);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
-  const [view, setView] = useState<'activated' | 'backlog' | 'archive' | 'all'>('all');
+  const [view, setView] = useState<View>('all');
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
@@ -60,103 +66,71 @@ export default function WillDoIt() {
     })
   );
 
-  // Auth + Data loading
+  const loadData = useCallback(async (userId: string) => {
+    const sequence = ++loadSequence.current;
+    setLoading(true);
+    try {
+      const { data: streamsData, error: streamsError } = await supabase
+        .from('streams').select('*').eq('user_id', userId).order('position', { ascending: true });
+      if (streamsError) throw streamsError;
+      let loadedStreams = (streamsData || []) as Stream[];
+      if (!loadedStreams.some(s => s.title === 'Uncategorized')) {
+        const { data: uncategorized, error } = await supabase.from('streams').insert({
+          user_id: userId, title: 'Uncategorized', state: 'in_progress', area: 'neutral', position: 999,
+        }).select().single<Stream>();
+        if (error) throw error;
+        loadedStreams = [...loadedStreams, uncategorized];
+      }
+      // Retain the existing compatibility path for duplicate system streams.
+      let seenUncategorized = false;
+      loadedStreams = loadedStreams.filter(s => {
+        if (s.title !== 'Uncategorized') return true;
+        if (seenUncategorized) return false;
+        seenUncategorized = true;
+        return true;
+      });
+      const legacyIds = loadedStreams.filter(s => String(s.state) === 'backlog').map(s => s.id);
+      if (legacyIds.length > 0) {
+        const { error } = await supabase.from('streams').update({ state: 'in_progress' }).in('id', legacyIds);
+        if (error) throw error;
+        loadedStreams = loadedStreams.map(s => legacyIds.includes(s.id) ? { ...s, state: 'in_progress' } : s);
+      }
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const { error: recurrenceError } = await supabase.rpc('generate_recurring_instances', { p_timezone: timezone });
+      if (recurrenceError) toast.error(errorMessage(recurrenceError, 'Could not refresh recurring tasks'));
+      const { error: promotionError } = await supabase.rpc('promote_due_cards', { p_timezone: timezone });
+      if (promotionError) toast.error(errorMessage(promotionError, 'Could not refresh reminders'));
+
+      const [cardResult, sourceResult] = await Promise.all([
+        supabase.from('cards').select('*').eq('user_id', userId),
+        supabase.from('recurrence_sources').select('*').eq('user_id', userId),
+      ]);
+      if (cardResult.error) throw cardResult.error;
+      if (sourceResult.error) throw sourceResult.error;
+      if (sequence !== loadSequence.current) return;
+      const sources = (sourceResult.data || []) as RecurrenceSource[];
+      setRecurrenceSources(sources);
+      setStreams(loadedStreams);
+      setCards(hydrateRecurringCards((cardResult.data || []) as Card[], sources));
+    } catch (error) {
+      if (sequence === loadSequence.current) toast.error(errorMessage(error, 'Could not load your workspace'));
+    } finally {
+      if (sequence === loadSequence.current) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
         window.location.replace('/login');
         return;
       }
-      
       setUser(user);
       await loadData(user.id);
     };
-    init();
-  }, []);
-
-  const loadData = async (userId: string) => {
-    setLoading(true);
-
-    const { data: streamsData } = await supabase
-      .from('streams')
-      .select('*')
-      .eq('user_id', userId)
-      .order('position', { ascending: true });
-
-    let loadedStreams = streamsData || [];
-
-    // Auto-create Uncategorized if missing
-    const hasUncategorized = loadedStreams.some((s: any) => s.title === 'Uncategorized');
-    if (!hasUncategorized) {
-      const { data: newUnc } = await supabase
-        .from('streams')
-        .insert({
-          user_id: userId,
-          title: 'Uncategorized',
-          state: 'in_progress',
-          area: 'neutral',
-          position: 999,
-        })
-        .select()
-        .single();
-
-      if (newUnc) loadedStreams.push(newUnc);
-    }
-
-    // Dedupe Uncategorized (safety if multiple rows exist in DB)
-    const uncIds = new Set();
-    loadedStreams = loadedStreams.filter((s: any) => {
-      if (s.title === 'Uncategorized') {
-        if (uncIds.size > 0) return false;
-        uncIds.add(s.id);
-      }
-      return true;
-    });
-
-    // Streams no longer use the 'backlog' state — migrate any legacy rows to active.
-    const legacyStateIds = loadedStreams
-      .filter((s: any) => s.state === 'backlog')
-      .map((s: any) => s.id);
-    if (legacyStateIds.length > 0) {
-      await supabase.from('streams').update({ state: 'in_progress' }).in('id', legacyStateIds);
-      loadedStreams = loadedStreams.map((s: any) =>
-        s.state === 'backlog' ? { ...s, state: 'in_progress' } : s
-      );
-    }
-
-    setStreams(loadedStreams);
-
-    // Database locks and occurrence keys make refreshes safe across tabs/devices.
-    const { error: recurrenceError } = await supabase.rpc('generate_recurring_instances', {
-      p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
-    if (recurrenceError) {
-      console.error(recurrenceError);
-      toast.error('Could not refresh recurring tasks');
-    }
-
-    const { error: promotionError } = await supabase.rpc('promote_due_cards', {
-      p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
-    if (promotionError) {
-      console.error(promotionError);
-      toast.error('Could not refresh reminders');
-    }
-
-    const { data: cardsData, error: cardsError } = await supabase
-      .from('cards')
-      .select('*')
-      .eq('user_id', userId);
-    if (cardsError) {
-      console.error(cardsError);
-      toast.error('Could not load cards');
-    } else {
-      setCards(cardsData || []);
-    }
-    setLoading(false);
-  };
+    void init();
+  }, [loadData]);
 
   const filteredStreams = streamsForDisplay(
     streams.filter((stream) => {
@@ -168,39 +142,10 @@ export default function WillDoIt() {
   );
 
   function getCardsForStream(streamId: string): Card[] {
-    let relevantStatuses: string[];
-    if (view === 'activated') relevantStatuses = ACTIVE_STATUSES;
-    else if (view === 'backlog') relevantStatuses = BACKLOG_STATUSES;
-    else if (view === 'all') {
-      relevantStatuses = ['backlog', 'priority_backlog', 'research', 'waiting', 'in_progress', 'review', 'complete', 'canceled'];
-    } else {
-      relevantStatuses = ['complete', 'canceled'];
-    }
-
-    return cards
-      .filter((c) => c.stream_id === streamId && relevantStatuses.includes(c.status))
-      .sort((a, b) => a.position - b.position);
+    return cardsForStream(cards, streamId, view, archivePeriod);
   }
 
-  function getColumns() {
-    if (view === 'activated') return ACTIVE_STATUSES;
-    if (view === 'backlog') return [...BACKLOG_STATUSES, 'research' as const];
-    if (view === 'all') {
-      return [
-        'backlog',
-        'priority_backlog',
-        'research',
-        'waiting',
-        'in_progress',
-        'review',
-        'complete',
-        'canceled',
-      ] as const;
-    }
-    return ['complete', 'canceled'] as const;
-  }
-
-  const columns = getColumns();
+  const columns = statusesForView(view);
 
   // Layout sizing.
   const streamColWidth = view === 'all' ? 180 : 220;
@@ -226,7 +171,7 @@ export default function WillDoIt() {
     setActiveDragCard(card || null);
   };
 
-  const handleDragCancel = (_event: DragCancelEvent) => {
+  const handleDragCancel = () => {
     setActiveDragCard(null);
   };
 
@@ -251,7 +196,7 @@ export default function WillDoIt() {
     if (!targetStatus) return;
 
     // Dropped back where it started — nothing to do.
-    if (targetStreamId === activeCard.stream_id && targetStatus === activeCard.status) {
+    if (targetStreamId === displayStreamId(activeCard) && targetStatus === activeCard.status) {
       return;
     }
 
@@ -269,7 +214,7 @@ export default function WillDoIt() {
     newCards[cardIndex] = {
       ...newCards[cardIndex],
       stream_id: targetStreamId,
-      status: targetStatus as any,
+      status: targetStatus as Card['status'],
     };
 
     // Reindex positions in the affected cells and collect the new ordering.
@@ -328,8 +273,9 @@ export default function WillDoIt() {
       toast.success('Moved');
     } catch (err) {
       console.error(err);
-      toast.error('Move failed');
       setCards(cards);
+      toast.error(errorMessage(err, 'Move failed'));
+      await loadData(user.id);
     }
   };
 
@@ -340,7 +286,7 @@ export default function WillDoIt() {
 
   const handleCardUpdated = async (updatedCard: Card) => {
     setCards((prev) =>
-      prev.map((c) => (c.id === updatedCard.id ? updatedCard : c))
+      prev.map((c) => (c.id === updatedCard.id ? hydrateRecurringCards([updatedCard], recurrenceSources)[0] : c))
     );
     if (updatedCard.is_recurring && user) {
       await loadData(user.id);
@@ -368,7 +314,7 @@ export default function WillDoIt() {
     if (user) await loadData(user.id);
   };
 
-  const handleStreamDeleted = (streamId: string, targetStreamId?: string) => {
+  const handleStreamDeleted = async (streamId: string, targetStreamId?: string) => {
     if (targetStreamId) {
       setCards((prev) =>
         prev.map((c) =>
@@ -377,6 +323,7 @@ export default function WillDoIt() {
       );
     }
     setStreams((prev) => prev.filter((s) => s.id !== streamId));
+    if (user) await loadData(user.id);
   };
 
   const handleCompleteCard = async (cardId: string) => {
@@ -388,7 +335,7 @@ export default function WillDoIt() {
 
     // Optimistic
     setCards(prev => prev.map(c => 
-      c.id === cardId ? { ...c, status: newStatus as any, completed_at: completedAt } : c
+      c.id === cardId ? { ...c, status: newStatus, completed_at: completedAt } : c
     ));
 
     try {
@@ -406,7 +353,8 @@ export default function WillDoIt() {
     } catch (err) {
       console.error(err);
       setCards(prev => prev.map(c => c.id === cardId ? card : c));
-      toast.error(err instanceof Error ? err.message : 'Failed to complete');
+      toast.error(errorMessage(err, 'Failed to complete'));
+      if (user) await loadData(user.id);
     }
   };
 
@@ -443,14 +391,20 @@ export default function WillDoIt() {
       setCards(prev => prev.map(c =>
         c.id === cardId ? { ...c, status: card.status } : c
       ));
-      toast.error('Failed to move card');
+      toast.error(errorMessage(err, 'Failed to move card'));
+      if (user) await loadData(user.id);
     }
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = '/login';
+    window.location.replace('/login');
   };
+
+  const renderCard = (card: Card) => (
+    <CardComponent key={card.id} card={card} onClick={() => setEditingCard(card)}
+      onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} />
+  );
 
   if (loading || !user) {
     return (
@@ -514,6 +468,19 @@ export default function WillDoIt() {
             ))}
           </div>
         </div>
+        {view === 'archive' && (
+          <div className="flex justify-center pb-3 px-4">
+            <label className="flex items-center gap-2 text-sm text-ink-soft">
+              Archive period
+              <select className="control w-auto text-sm" value={archivePeriod}
+                onChange={e => setArchivePeriod(e.target.value as ArchivePeriod)}>
+                <option value="month">Past month</option>
+                <option value="year">Past 1 year</option>
+                <option value="all">All time</option>
+              </select>
+            </label>
+          </div>
+        )}
       </div>
 
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6 flex-1">
@@ -574,15 +541,9 @@ export default function WillDoIt() {
                           <div key={status} className="status-column h-full">
                             <DroppableCell id={cellId} isEmpty={cellCards.length === 0}>
                               <div className="space-y-2">
-                                {cellCards.map((card) => (
-                                  <CardComponent 
-                                    key={card.id} 
-                                    card={card} 
-                                    onClick={() => setEditingCard(card)} 
-                                     onComplete={handleCompleteCard}
-                                     onAdvance={handleAdvanceCard}
-                                  />
-                                ))}
+                                {view === 'archive'
+                                  ? <ArchiveCards cards={cellCards} renderCard={renderCard} />
+                                  : cellCards.map(renderCard)}
                               </div>
                             </DroppableCell>
                           </div>

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Area, RecurrenceSource, streamsForSelect } from '@/lib/types';
 import { toast } from 'sonner';
+import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
 
@@ -63,9 +64,9 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
       onStreamUpdated(updatedStream as Stream);
       toast.success('Stream updated');
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Failed to update stream');
+      toast.error(errorMessage(err, 'Failed to update stream'));
     } finally {
       setLoading(false);
     }
@@ -107,9 +108,9 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
       onStreamDeleted(stream.id, deleteTargetId);
       toast.success(`Stream deleted. Cards moved to "${targetStream.title}".`);
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Failed to delete stream');
+      toast.error(errorMessage(err, 'Failed to delete stream'));
     } finally {
       setLoading(false);
       setShowDeleteConfirm(false);

@@ -110,16 +110,20 @@ end;
 $$;
 
 create or replace function public.recurrences_for_stream(p_stream_id uuid, p_timezone text)
-returns setof public.recurrence_sources language plpgsql stable security invoker set search_path = '' as $$
+returns setof public.recurrence_sources language plpgsql security invoker set search_path = '' as $$
 declare
   source public.recurrence_sources;
 begin
   if auth.uid() is null then raise exception 'Not authenticated'; end if;
   if not exists (select 1 from pg_catalog.pg_timezone_names where name = p_timezone) then raise exception 'Invalid timezone'; end if;
+  perform id from public.streams where user_id = auth.uid() order by id for update;
   for source in select * from public.recurrence_sources
-    where stream_id = p_stream_id and user_id = auth.uid() order by base_title, id
+    where stream_id = p_stream_id and user_id = auth.uid() order by id for update
   loop
-    source.recurrence_timezone := coalesce(source.recurrence_timezone, p_timezone);
+    if source.recurrence_timezone is null then
+      source.recurrence_timezone := p_timezone;
+      update public.recurrence_sources set recurrence_timezone = p_timezone where id = source.id and user_id = auth.uid();
+    end if;
     if public.recurrence_can_generate(source) then return next source; end if;
   end loop;
 end;

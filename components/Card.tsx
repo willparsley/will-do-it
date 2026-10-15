@@ -1,7 +1,8 @@
 'use client';
 
 import { Card as CardType, nextStatus, STATUS_LABELS } from '@/lib/types';
-import { Check, Repeat } from 'lucide-react';
+import { Repeat } from 'lucide-react';
+import { dueBadge, isTerminal } from '@/lib/card-views';
 import { useDraggable } from '@dnd-kit/core';
 
 interface CardViewProps {
@@ -16,21 +17,9 @@ interface CardViewProps {
  * DragOverlay preview (so the preview doesn't register a duplicate draggable).
  */
 export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps) {
-  const hasReminder = !!card.remind_at;
-  const dueDate = card.due_at ? new Date(card.due_at) : null;
-  const isOverdue = dueDate && dueDate < new Date();
-  const isToday = dueDate && dueDate.toDateString() === new Date().toDateString();
-
-  let dueBadge = null;
-  if (dueDate) {
-    if (isOverdue) {
-      dueBadge = <span className="badge badge-overdue">Overdue</span>;
-    } else if (isToday) {
-      dueBadge = <span className="badge badge-today">Today</span>;
-    } else {
-      dueBadge = <span className="badge badge-future">{dueDate.toLocaleDateString()}</span>;
-    }
-  }
+  const isFinished = isTerminal(card);
+  const hasReminder = !isFinished && !!card.remind_at;
+  const badge = dueBadge(card);
 
   const handleComplete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -38,7 +27,6 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
   };
 
   const next = nextStatus(card.status);
-  const isFinished = card.status === 'complete' || card.status === 'canceled';
   const isComplete = card.status === 'complete';
   const canComplete = !!onComplete;
   const canPromote = !!(onAdvance && next);
@@ -65,14 +53,20 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
           <span className="break-words min-w-0">{card.title}</span>
         </div>
 
-        {card.is_recurring && card.last_completed_at && (
+        {!isFinished && card.is_recurring && card.last_completed_at && (
           <div className="text-[10px] text-ink-muted mt-1">
-            Last done {new Date(card.last_completed_at).toLocaleDateString()}
+            Last completed on {new Date(card.last_completed_at).toLocaleDateString(undefined, { timeZone: card.recurrence_timezone })}
+          </div>
+        )}
+
+        {isFinished && card.completed_at && (
+          <div className="text-[10px] text-ink-muted mt-1">
+            {isComplete ? 'Completed' : 'Canceled'} {new Date(card.completed_at).toLocaleDateString()}
           </div>
         )}
 
         <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
-          {dueBadge}
+          {badge && <span className={`badge badge-${badge.kind}`}>{badge.label}</span>}
           {card.is_recurring && (
             <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted" />
           )}

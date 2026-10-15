@@ -2,15 +2,16 @@
 
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, CardStatus, STATUS_LABELS, streamsForSelect, uncategorizedId, MONTH_DAY_OPTIONS, monthDayLabel } from '@/lib/types';
+import { Stream, Card, CardStatus, STATUS_LABELS, streamsForSelect, uncategorizedId, MONTH_DAY_OPTIONS, monthDayLabel } from '@/lib/types';
 import { toast } from 'sonner';
+import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
 
 interface AddCardModalProps {
   streams: Stream[];
   onClose: () => void;
-  onCardCreated: (card: any) => void;
+  onCardCreated: (card: Card) => void;
   defaultStreamId?: string;
 }
 
@@ -54,20 +55,20 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
             p_month_day: frequency === 'monthly' ? monthDay : null,
             p_stack_missed: stackMissed,
             p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          }).single()
+          }).single<Card>()
         : await supabase.from('cards').insert({
             user_id: user.id, stream_id: streamId, title: title.trim(), status,
             due_at: due, remind_at: reminder, is_recurring: false, position: 0,
-          }).select().single();
+          }).select().single<Card>();
       const { data: card, error } = result;
       if (error) throw error;
 
       onCardCreated(card);
       toast.success('Card created');
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Failed to create card');
+      toast.error(errorMessage(err, 'Failed to create card'));
     } finally {
       setLoading(false);
     }
@@ -167,7 +168,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
 
                 <select 
                   value={frequency} 
-                  onChange={(e) => setFrequency(e.target.value as any)}
+                  onChange={(e) => setFrequency(e.target.value as typeof frequency)}
                   className="text-xs bg-surface border border-line rounded px-1 py-0.5 text-ink"
                 >
                   <option value="daily">Daily</option>
