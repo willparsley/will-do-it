@@ -161,6 +161,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Auto-promotion conservative for time-sensitive items
 - Recurrence generation runs through the Supabase `generate_recurring_instances` RPC with per-source row locks, immutable `cards.recurrence_date` occurrence keys, and a persisted `generated_through` cursor. Apply SQL migrations before deploying dependent UI changes.
 - Recurrence timezone is pinned at creation (legacy sources on first generation). Stacking catches up distinct missed dates and keeps one future instance (1000-period cap per refresh); non-stacking keeps one pending instance and schedules late completions from their completion day. Existing duplicate history is preserved for manual review.
+- Non-stacking recurrence reopening is blocked while another occurrence is pending. Refresh promotion updates current database rows conditionally; overdue recurring cards catch up, while ordinary reminders retain their today-only policy. Stream deletion must atomically rehome cards and sources; foreign keys prevent cascading history loss.
 - A database trigger stamps/clears `completed_at`, clears terminal-card reminders, and updates recurrence completion bookkeeping for all status-change paths.
 - No manual "process recurrences" button
 - Uncategorized is special but participates in normal visibility/movement

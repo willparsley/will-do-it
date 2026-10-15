@@ -102,20 +102,10 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
       const targetStream = streams.find(s => s.id === deleteTargetId);
       if (!targetStream) throw new Error('Target stream not found');
 
-      // Move cards
-      await supabase
-        .from('cards')
-        .update({ stream_id: deleteTargetId })
-        .eq('stream_id', stream.id);
-
-      // Move recurrence sources to the new target stream
-      await supabase
-        .from('recurrence_sources')
-        .update({ stream_id: deleteTargetId })
-        .eq('stream_id', stream.id);
-
-      // Delete the stream
-      const { error } = await supabase.from('streams').delete().eq('id', stream.id);
+      const { error } = await supabase.rpc('delete_stream_rehoming', {
+        p_stream_id: stream.id,
+        p_target_id: deleteTargetId,
+      });
       if (error) throw error;
 
       onStreamDeleted(stream.id, deleteTargetId);

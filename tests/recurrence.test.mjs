@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { before, beforeEach, after, test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -27,9 +27,12 @@ before(async () => {
     .replace('create extension if not exists "uuid-ossp";', '')
     .replaceAll('uuid_generate_v4()', 'gen_random_uuid()');
   await db.exec(schema);
-  const migration = await readFile(new URL('../supabase/migrations/202610140001_recurrence_idempotency.sql', import.meta.url), 'utf8');
-  await db.exec(migration);
-  await db.exec(migration); // Safe to reapply without touching history.
+  const migrations = await readdir(new URL('../supabase/migrations/', import.meta.url));
+  for (const name of migrations.filter(name => name.endsWith('.sql')).sort()) {
+    const migration = await readFile(new URL('../supabase/migrations/' + name, import.meta.url), 'utf8');
+    await db.exec(migration);
+    await db.exec(migration); // Each migration can be reapplied safely.
+  }
   await db.exec('grant select, insert, update, delete on all tables in schema public to authenticated');
 });
 
@@ -233,4 +236,93 @@ test('older stacking clients get an occurrence key and cannot duplicate a date',
   await assert.rejects(query(`insert into cards (user_id, stream_id, title, status, is_recurring, recurrence_source_id, due_at)
     select user_id, stream_id, 'Legacy generated copy', status, true, recurrence_source_id, due_at
     from cards where recurrence_date is not null`), /duplicate key/);
+});
+
+const target = '00000000-0000-0000-0000-000000000006';
+async function addTarget(state = 'in_progress') {
+  await query("insert into streams (id, user_id, title, state, area) values ($1, $2, 'Target', $3, 'personal')", [target, user, state]);
+}
+const promote = () => query("select public.promote_due_cards('America/New_York') as count");
+
+test('non-stacking rejects reopening an old occurrence while its successor is pending', async () => {
+  await fixture();
+  await generate();
+  await assert.rejects(query("update cards set status = 'waiting' where id = $1", [original]), /already has a pending card/);
+  assert.equal((await query('select status from cards where id = $1', [original]))[0].status, 'complete');
+});
+
+test('promotion cannot resurrect a completed card after another tab read its old status', async () => {
+  await fixture({ active: true });
+  await query("update cards set status = 'backlog' where id = $1", [original]);
+  const snapshot = await query('select * from cards where id = $1', [original]);
+  assert.equal(snapshot[0].status, 'backlog');
+  await query("update cards set status = 'complete' where id = $1", [original]);
+  await generate();
+  await promote();
+  const [persisted] = await query('select * from cards where id = $1', [original]);
+  assert.equal(persisted.status, 'complete');
+  assert.ok(persisted.completed_at);
+});
+
+test('promotion catches up overdue recurring backlogs without advancing other active statuses or ordinary overdue cards', async () => {
+  await fixture({ active: true, daysAgo: 2 });
+  await query("update cards set status = 'backlog' where id = $1", [original]);
+  await query("insert into cards (user_id, stream_id, title, status, due_at) values ($1,$2,'Ordinary overdue','backlog',now() - interval '2 days')", [user, stream]);
+  assert.equal((await promote())[0].count, 1);
+  assert.equal((await query('select status from cards where id = $1', [original]))[0].status, 'waiting');
+  await query("update cards set status = 'in_progress' where id = $1", [original]);
+  assert.equal((await promote())[0].count, 0);
+  assert.equal((await query("select status from cards where title = 'Ordinary overdue'"))[0].status, 'backlog');
+});
+
+test('ordinary reminders still promote on their day, with future cards left alone', async () => {
+  await fixture({ active: true });
+  await query("update cards set due_at = null, remind_at = null where id = $1", [original]);
+  await query(`insert into cards (user_id, stream_id, title, status, remind_at) values
+    ($1,$2,'Today','priority_backlog',now()), ($1,$2,'Future','backlog',now() + interval '3 days')`, [user, stream]);
+  assert.equal((await promote())[0].count, 1);
+  assert.equal((await query("select status from cards where title = 'Today'"))[0].status, 'waiting');
+  assert.equal((await query("select status from cards where title = 'Future'"))[0].status, 'backlog');
+});
+
+test('stream rehome preserves all cards, timestamps, and sources before deleting the stream', async () => {
+  await fixture({ stack: true, daysAgo: 2 });
+  await generate();
+  await addTarget();
+  const before = await query('select id, completed_at from cards order by id');
+  await query('select public.delete_stream_rehoming($1,$2)', [stream, target]);
+  assert.equal((await query('select * from streams where id = $1', [stream])).length, 0);
+  assert.ok((await query('select stream_id from cards')).every(c => c.stream_id === target));
+  assert.equal((await query('select stream_id from recurrence_sources'))[0].stream_id, target);
+  assert.deepEqual(await query('select id, completed_at from cards order by id'), before);
+});
+
+test('a failed rehome rolls back source movement and keeps the original stream and history', async () => {
+  await fixture();
+  await addTarget();
+  await db.exec(`reset role;
+    create or replace function public.test_rehome_failure() returns trigger language plpgsql as
+      $$ begin raise exception 'Simulated rehome failure'; end $$;
+    create trigger test_rehome_failure before update of stream_id on cards for each row execute function public.test_rehome_failure();
+    set role authenticated;`);
+  await assert.rejects(query('select public.delete_stream_rehoming($1,$2)', [stream, target]), /Simulated rehome failure/);
+  assert.equal((await query('select stream_id from recurrence_sources'))[0].stream_id, stream);
+  assert.equal((await query('select stream_id from cards'))[0].stream_id, stream);
+  assert.equal((await query('select id from streams where id = $1', [stream])).length, 1);
+  await db.exec('reset role; drop trigger test_rehome_failure on cards; drop function public.test_rehome_failure(); set role authenticated');
+});
+
+test('direct deletion cannot cascade-delete card history; invalid and inactive targets are rejected', async () => {
+  await fixture();
+  await assert.rejects(query('delete from streams where id = $1', [stream]), /foreign key constraint/);
+  await addTarget('complete');
+  await assert.rejects(query('select public.delete_stream_rehoming($1,$2)', [stream, target]), /active stream/);
+  await assert.rejects(query('select public.delete_stream_rehoming($1,$2)', [stream, stream]), /active stream/);
+  assert.equal((await query('select * from cards')).length, 1);
+});
+
+test('occurrence identity cannot be edited even when due_at can', async () => {
+  await fixture();
+  await generate();
+  await assert.rejects(query("update cards set recurrence_date = recurrence_date + 1 where recurrence_date is not null"), /cannot change its recurrence identity/);
 });

@@ -137,52 +137,24 @@ export default function WillDoIt() {
       toast.error('Could not refresh recurring tasks');
     }
 
-    const { data: cardsData } = await supabase
+    const { error: promotionError } = await supabase.rpc('promote_due_cards', {
+      p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    if (promotionError) {
+      console.error(promotionError);
+      toast.error('Could not refresh reminders');
+    }
+
+    const { data: cardsData, error: cardsError } = await supabase
       .from('cards')
       .select('*')
       .eq('user_id', userId);
-
-    let loadedCards = cardsData || [];
-
-    // Basic auto-promotion on load (time-sensitive + recurring)
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const cardsToUpdate: any[] = [];
-
-    loadedCards = loadedCards.map((card: any) => {
-      let newStatus = card.status;
-
-      // Time-sensitive auto-promotion
-      const due = card.due_at ? new Date(card.due_at) : null;
-      const remind = card.remind_at ? new Date(card.remind_at) : null;
-
-      const isToday = (date: Date | null) => 
-        date && date.getFullYear() === today.getFullYear() &&
-        date.getMonth() === today.getMonth() &&
-        date.getDate() === today.getDate();
-
-      if ((isToday(due) || isToday(remind)) && 
-          (card.status === 'backlog' || card.status === 'priority_backlog')) {
-        newStatus = 'waiting';
-      }
-
-      if (newStatus !== card.status) {
-        cardsToUpdate.push({ id: card.id, status: newStatus });
-        return { ...card, status: newStatus };
-      }
-      return card;
-    });
-
-    // Persist auto-promotions
-    if (cardsToUpdate.length > 0) {
-      for (const update of cardsToUpdate) {
-        await supabase.from('cards').update({ status: update.status }).eq('id', update.id);
-      }
-      toast.info(`${cardsToUpdate.length} item(s) auto-promoted`);
+    if (cardsError) {
+      console.error(cardsError);
+      toast.error('Could not load cards');
+    } else {
+      setCards(cardsData || []);
     }
-
-    setCards(loadedCards);
     setLoading(false);
   };
 
