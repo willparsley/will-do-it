@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, Area, streamsForSelect } from '@/lib/types';
+import { Stream, Area, RecurrenceSource, streamsForSelect } from '@/lib/types';
 import { toast } from 'sonner';
+import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
 
@@ -13,19 +14,17 @@ interface EditStreamModalProps {
   onClose: () => void;
   onStreamUpdated: (stream: Stream) => void;
   onStreamDeleted: (streamId: string, targetStreamId?: string) => void;
-  /**
-   * Applies a status change (handles the recurrence warning + persistence).
-   * Returns false if the user declined, in which case the save is aborted.
-   */
-  onStateChange: (streamId: string, newState: Stream['state']) => Promise<boolean>;
 }
 
-export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onStreamDeleted, onStateChange }: EditStreamModalProps) {
+export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onStreamDeleted }: EditStreamModalProps) {
   const [title, setTitle] = useState(stream.title);
   const [area, setArea] = useState<Area>(stream.area);
   const [state, setState] = useState<Stream['state']>(stream.state);
   const [notes, setNotes] = useState(stream.notes || '');
   const [loading, setLoading] = useState(false);
+  const [closingSources, setClosingSources] = useState<RecurrenceSource[]>([]);
+  const [choices, setChoices] = useState<Record<string, { action: string; stream_id?: string }>>({});
+  const moveTargets = streamsForSelect(streams).filter(s => s.id !== stream.id);
 
   // Delete rehome flow
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -39,37 +38,35 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
     setLoading(true);
 
     try {
-      // Status changes have their own flow (recurrence warning), so apply
-      // that first and abort the whole save if the user declined.
-      if (state !== stream.state) {
-        const ok = await onStateChange(stream.id, state);
-        if (!ok) {
-          setLoading(false);
-          return;
-        }
+      if (state !== 'in_progress') {
+        const { data: sources, error: sourceError } = await supabase.rpc('recurrences_for_stream', {
+          p_stream_id: stream.id,
+          p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        });
+        if (sourceError) throw sourceError;
+        const currentSources = (sources || []) as RecurrenceSource[];
+        setClosingSources(currentSources);
+        if (currentSources.some(source => !choices[source.id]?.action ||
+          (choices[source.id].action === 'move' && !choices[source.id].stream_id))) return;
       }
 
-      const updates: any = {
-        title: title.trim(),
-        area,
-        notes: notes.trim() || null,
-      };
-
-      const { data: updatedStream, error } = await supabase
-        .from('streams')
-        .update(updates)
-        .eq('id', stream.id)
-        .select()
-        .single();
+      const { data: updatedStream, error } = await supabase.rpc('save_stream', {
+        p_stream_id: stream.id,
+        p_title: title.trim(),
+        p_area: area,
+        p_notes: notes.trim() || null,
+        p_state: state,
+        p_recurrences: Object.entries(choices).map(([source_id, choice]) => ({ source_id, ...choice })),
+      }).single<Stream>();
 
       if (error) throw error;
 
       onStreamUpdated(updatedStream as Stream);
       toast.success('Stream updated');
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Failed to update stream');
+      toast.error(errorMessage(err, 'Failed to update stream'));
     } finally {
       setLoading(false);
     }
@@ -102,28 +99,18 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
       const targetStream = streams.find(s => s.id === deleteTargetId);
       if (!targetStream) throw new Error('Target stream not found');
 
-      // Move cards
-      await supabase
-        .from('cards')
-        .update({ stream_id: deleteTargetId })
-        .eq('stream_id', stream.id);
-
-      // Move recurrence sources to the new target stream
-      await supabase
-        .from('recurrence_sources')
-        .update({ stream_id: deleteTargetId })
-        .eq('stream_id', stream.id);
-
-      // Delete the stream
-      const { error } = await supabase.from('streams').delete().eq('id', stream.id);
+      const { error } = await supabase.rpc('delete_stream_rehoming', {
+        p_stream_id: stream.id,
+        p_target_id: deleteTargetId,
+      });
       if (error) throw error;
 
       onStreamDeleted(stream.id, deleteTargetId);
       toast.success(`Stream deleted. Cards moved to "${targetStream.title}".`);
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Failed to delete stream');
+      toast.error(errorMessage(err, 'Failed to delete stream'));
     } finally {
       setLoading(false);
       setShowDeleteConfirm(false);
@@ -138,7 +125,7 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className="modal-panel max-w-md p-6"
+        className="modal-panel max-w-md p-6 max-h-[90dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-semibold mb-4 text-ink">
@@ -181,7 +168,7 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
             </label>
             <select
               value={state}
-              onChange={(e) => setState(e.target.value as Stream['state'])}
+              onChange={(e) => { setState(e.target.value as Stream['state']); setClosingSources([]); setChoices({}); }}
               disabled={isUncategorized}
               className="control"
             >
@@ -190,6 +177,30 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
               <option value="canceled">Canceled</option>
             </select>
           </div>
+
+          {state !== 'in_progress' && closingSources.length > 0 && (
+            <div className="rounded-lg border border-line bg-sunken p-3 space-y-3">
+              <p className="text-sm text-ink-soft">Choose what happens to each recurrence before closing this stream. Moving a recurrence also moves all its pending cards.</p>
+              {closingSources.map(source => (
+                <div key={source.id} className="space-y-2">
+                  <label className="field-label" htmlFor={`recurrence-${source.id}`}>{source.base_title}</label>
+                  <select id={`recurrence-${source.id}`} className="control" value={choices[source.id]?.action || ''}
+                    onChange={e => setChoices(prev => ({ ...prev, [source.id]: { action: e.target.value } }))}>
+                    <option value="">Choose an action</option>
+                    <option value="move" disabled={moveTargets.length === 0}>Move recurrence</option>
+                    <option value="stop">Stop future occurrences</option>
+                  </select>
+                  {choices[source.id]?.action === 'move' && (
+                    <select aria-label={`Move ${source.base_title} to stream`} className="control" value={choices[source.id]?.stream_id || ''}
+                      onChange={e => setChoices(prev => ({ ...prev, [source.id]: { ...prev[source.id], stream_id: e.target.value } }))}>
+                      <option value="">Choose an active stream</option>
+                      {moveTargets.map(target => <option key={target.id} value={target.id}>{target.title}</option>)}
+                    </select>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div>
             <label className="field-label">

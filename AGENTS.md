@@ -27,7 +27,7 @@ Will Do It is a calm, visual personal productivity app for managing to-dos as ca
 **PWA**: Installable web app. Reminders work via in-app visuals + auto-promotion. Push notifications planned as future enhancement.
 
 ## Current Status (as of Oct 2026)
-Project freshly initialized with Next.js + Tailwind.
+Supabase-backed Streams/Cards CRUD, matrix drag-and-drop, transactional recurrence generation/lifecycle, reminders, and grouped archive views are implemented. PWA installation and push notifications remain future work.
 
 ## Core Data Model (High Level)
 
@@ -47,7 +47,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - due_at, remind_at
 - position (within cell)
 - is_recurring
-- recurrence_source_id
+- recurrence_source_id, recurrence_date (immutable scheduled occurrence identity)
 - completed_at (for archive filtering)
 
 ### recurrence_sources
@@ -56,6 +56,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - frequency, interval, weekdays, month_day, stack_missed
 - end_date, stopped_at
 - last_completed_at
+- recurrence_timezone, generated_through (calendar generation cursor)
 
 **Important Behaviors:**
 - Dragging a recurring card updates the recurrence source's stream (future instances follow).
@@ -159,6 +160,14 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Terminology: Streams (not epics/areas/projects)
 - Grouping by recurrence source (survives stream changes)
 - Auto-promotion conservative for time-sensitive items
+- Recurrence generation runs through the Supabase `generate_recurring_instances` RPC with per-source row locks, immutable `cards.recurrence_date` occurrence keys, and a persisted `generated_through` cursor. Apply SQL migrations before deploying dependent UI changes.
+- Archive filters use `completed_at` (calendar month/year lookback); legacy records with no completion date are retained in All time. Recurrence groups follow the current source stream and area without rewriting completed-card storage. Due badges compare calendar days in the source timezone; terminal cards hide due/reminder and last-completed metadata.
+- datetime-local controls display local calendar fields and preserve unchanged stored instants, including seconds and DST repeated hours. Weekly recurrence intervals are explicitly visible.
+- Initial recurring cards receive a scheduled date when none is supplied: daily/every-N-days starts today; weekly/monthly starts on the next matching day, including today. Explicit initial due dates are retained. Recurring creation is atomic.
+- Stream closure queries live recurrence sources and requires a separate move-or-stop choice for every source that could still generate. Card/source moves and stream edits are atomic; pending siblings follow the source and completed storage stays intact. Stale card status actions are rejected.
+- Recurrence timezone is pinned at creation (legacy sources on first generation). Stacking catches up distinct missed dates and keeps one future instance (1000-period cap per refresh); non-stacking keeps one pending instance and schedules late completions from their completion day. Existing duplicate history is preserved for manual review.
+- Non-stacking recurrence reopening is blocked while another occurrence is pending. Refresh promotion updates current database rows conditionally; overdue recurring cards catch up, while ordinary reminders retain their today-only policy. Stream deletion must atomically rehome cards and sources; foreign keys prevent cascading history loss.
+- A database trigger stamps/clears `completed_at`, clears terminal-card reminders, and updates recurrence completion bookkeeping for all status-change paths.
 - No manual "process recurrences" button
 - Uncategorized is special but participates in normal visibility/movement
 - Streams have no "backlog" state — only active (in_progress), complete, canceled. Legacy `backlog` rows auto-migrate to active on load.

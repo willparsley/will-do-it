@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
   DndContext, 
   closestCenter, 
@@ -10,11 +10,10 @@ import {
   useSensors,
   DragEndEvent,
   DragStartEvent,
-  DragCancelEvent,
   DragOverlay,
 } from '@dnd-kit/core';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, Card, ACTIVE_STATUSES, BACKLOG_STATUSES, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
+import { Stream, Card, RecurrenceSource, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { AreaFilter } from '@/components/AreaFilter';
 import { AddCardModal } from '@/components/AddCardModal';
 import { Card as CardComponent } from '@/components/Card';
@@ -23,9 +22,13 @@ import { StatusHeader } from '@/components/StatusHeader';
 import { EditCardModal } from '@/components/EditCardModal';
 import { AddStreamModal } from '@/components/AddStreamModal';
 import { EditStreamModal } from '@/components/EditStreamModal';
-import { Plus, LogOut, Pencil } from 'lucide-react';
+import { Plus, LogOut } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { toast } from 'sonner';
+import type { User } from '@supabase/supabase-js';
+import { ArchiveCards } from '@/components/ArchiveCards';
+import { ArchivePeriod, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
+import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
 
@@ -36,49 +39,15 @@ const VIEWS = [
   { id: 'archive', label: 'Archive' },
 ] as const;
 
-/**
- * Resolve a pinned day-of-month to a real date, clamping to the month's
- * length (e.g. the 31st in February becomes the 28th/29th). -1 means the
- * last day of the month.
- */
-function resolveMonthDay(year: number, month: number, day: number): Date {
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const resolved = day === -1 ? lastDay : Math.min(day, lastDay);
-  return new Date(year, month, resolved);
-}
-
-/**
- * Next monthly occurrence strictly after `after`, for a source pinned to a
- * day of the month. Occurrences fall every `interval` months from the
- * source's creation month; without a pinned day the day-of-month of `after`
- * is preserved (matching the pre-existing behavior).
- */
-function nextMonthlyOccurrence(after: Date, source: any, interval: number): Date {
-  const anchor = new Date(source.created_at || after);
-  const anchorYear = anchor.getFullYear();
-  const anchorMonth = anchor.getMonth();
-
-  const rawPin = source.month_day;
-  const pin = typeof rawPin === 'number' && rawPin !== 0 ? rawPin : after.getDate();
-
-  const monthsSince = (after.getFullYear() - anchorYear) * 12 + (after.getMonth() - anchorMonth);
-  let k = Math.max(0, Math.floor(monthsSince / interval));
-  let occ = resolveMonthDay(anchorYear, anchorMonth + k * interval, pin);
-
-  while (occ.getTime() <= after.getTime()) {
-    k += 1;
-    occ = resolveMonthDay(anchorYear, anchorMonth + k * interval, pin);
-  }
-
-  return occ;
-}
-
 export default function WillDoIt() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
+  const [recurrenceSources, setRecurrenceSources] = useState<RecurrenceSource[]>([]);
+  const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('month');
+  const loadSequence = useRef(0);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
-  const [view, setView] = useState<'activated' | 'backlog' | 'archive' | 'all'>('all');
+  const [view, setView] = useState<View>('all');
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
@@ -97,231 +66,71 @@ export default function WillDoIt() {
     })
   );
 
-  // Auth + Data loading
+  const loadData = useCallback(async (userId: string) => {
+    const sequence = ++loadSequence.current;
+    setLoading(true);
+    try {
+      const { data: streamsData, error: streamsError } = await supabase
+        .from('streams').select('*').eq('user_id', userId).order('position', { ascending: true });
+      if (streamsError) throw streamsError;
+      let loadedStreams = (streamsData || []) as Stream[];
+      if (!loadedStreams.some(s => s.title === 'Uncategorized')) {
+        const { data: uncategorized, error } = await supabase.from('streams').insert({
+          user_id: userId, title: 'Uncategorized', state: 'in_progress', area: 'neutral', position: 999,
+        }).select().single<Stream>();
+        if (error) throw error;
+        loadedStreams = [...loadedStreams, uncategorized];
+      }
+      // Retain the existing compatibility path for duplicate system streams.
+      let seenUncategorized = false;
+      loadedStreams = loadedStreams.filter(s => {
+        if (s.title !== 'Uncategorized') return true;
+        if (seenUncategorized) return false;
+        seenUncategorized = true;
+        return true;
+      });
+      const legacyIds = loadedStreams.filter(s => String(s.state) === 'backlog').map(s => s.id);
+      if (legacyIds.length > 0) {
+        const { error } = await supabase.from('streams').update({ state: 'in_progress' }).in('id', legacyIds);
+        if (error) throw error;
+        loadedStreams = loadedStreams.map(s => legacyIds.includes(s.id) ? { ...s, state: 'in_progress' } : s);
+      }
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const { error: recurrenceError } = await supabase.rpc('generate_recurring_instances', { p_timezone: timezone });
+      if (recurrenceError) toast.error(errorMessage(recurrenceError, 'Could not refresh recurring tasks'));
+      const { error: promotionError } = await supabase.rpc('promote_due_cards', { p_timezone: timezone });
+      if (promotionError) toast.error(errorMessage(promotionError, 'Could not refresh reminders'));
+
+      const [cardResult, sourceResult] = await Promise.all([
+        supabase.from('cards').select('*').eq('user_id', userId),
+        supabase.from('recurrence_sources').select('*').eq('user_id', userId),
+      ]);
+      if (cardResult.error) throw cardResult.error;
+      if (sourceResult.error) throw sourceResult.error;
+      if (sequence !== loadSequence.current) return;
+      const sources = (sourceResult.data || []) as RecurrenceSource[];
+      setRecurrenceSources(sources);
+      setStreams(loadedStreams);
+      setCards(hydrateRecurringCards((cardResult.data || []) as Card[], sources));
+    } catch (error) {
+      if (sequence === loadSequence.current) toast.error(errorMessage(error, 'Could not load your workspace'));
+    } finally {
+      if (sequence === loadSequence.current) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
         window.location.replace('/login');
         return;
       }
-      
       setUser(user);
       await loadData(user.id);
     };
-    init();
-  }, []);
-
-  const loadData = async (userId: string) => {
-    setLoading(true);
-
-    const { data: streamsData } = await supabase
-      .from('streams')
-      .select('*')
-      .eq('user_id', userId)
-      .order('position', { ascending: true });
-
-    let loadedStreams = streamsData || [];
-
-    // Auto-create Uncategorized if missing
-    const hasUncategorized = loadedStreams.some((s: any) => s.title === 'Uncategorized');
-    if (!hasUncategorized) {
-      const { data: newUnc } = await supabase
-        .from('streams')
-        .insert({
-          user_id: userId,
-          title: 'Uncategorized',
-          state: 'in_progress',
-          area: 'neutral',
-          position: 999,
-        })
-        .select()
-        .single();
-
-      if (newUnc) loadedStreams.push(newUnc);
-    }
-
-    // Dedupe Uncategorized (safety if multiple rows exist in DB)
-    const uncIds = new Set();
-    loadedStreams = loadedStreams.filter((s: any) => {
-      if (s.title === 'Uncategorized') {
-        if (uncIds.size > 0) return false;
-        uncIds.add(s.id);
-      }
-      return true;
-    });
-
-    // Streams no longer use the 'backlog' state — migrate any legacy rows to active.
-    const legacyStateIds = loadedStreams
-      .filter((s: any) => s.state === 'backlog')
-      .map((s: any) => s.id);
-    if (legacyStateIds.length > 0) {
-      await supabase.from('streams').update({ state: 'in_progress' }).in('id', legacyStateIds);
-      loadedStreams = loadedStreams.map((s: any) =>
-        s.state === 'backlog' ? { ...s, state: 'in_progress' } : s
-      );
-    }
-
-    setStreams(loadedStreams);
-
-    const { data: cardsData } = await supabase
-      .from('cards')
-      .select('*')
-      .eq('user_id', userId);
-
-    let loadedCards = cardsData || [];
-
-    // Basic auto-promotion on load (time-sensitive + recurring)
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const cardsToUpdate: any[] = [];
-
-    loadedCards = loadedCards.map((card: any) => {
-      let newStatus = card.status;
-
-      // Time-sensitive auto-promotion
-      const due = card.due_at ? new Date(card.due_at) : null;
-      const remind = card.remind_at ? new Date(card.remind_at) : null;
-
-      const isToday = (date: Date | null) => 
-        date && date.getFullYear() === today.getFullYear() &&
-        date.getMonth() === today.getMonth() &&
-        date.getDate() === today.getDate();
-
-      if ((isToday(due) || isToday(remind)) && 
-          (card.status === 'backlog' || card.status === 'priority_backlog')) {
-        newStatus = 'waiting';
-      }
-
-      if (newStatus !== card.status) {
-        cardsToUpdate.push({ id: card.id, status: newStatus });
-        return { ...card, status: newStatus };
-      }
-      return card;
-    });
-
-    // Persist auto-promotions
-    if (cardsToUpdate.length > 0) {
-      for (const update of cardsToUpdate) {
-        await supabase.from('cards').update({ status: update.status }).eq('id', update.id);
-      }
-      toast.info(`${cardsToUpdate.length} item(s) auto-promoted`);
-    }
-
-    setCards(loadedCards);
-    setLoading(false);
-
-    // Basic recurring generation (simplified for MVP)
-    generateRecurringInstances(userId, loadedStreams, loadedCards);
-  };
-
-  const generateRecurringInstances = async (userId: string, currentStreams: Stream[], currentCards: Card[]) => {
-    const { data: sources } = await supabase
-      .from('recurrence_sources')
-      .select('*')
-      .eq('user_id', userId)
-      .is('stopped_at', null);
-
-    if (!sources || sources.length === 0) return;
-
-    const newCards: any[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (const source of sources as any[]) {
-      const activeCardsForSource = currentCards.filter(c => 
-        c.recurrence_source_id === source.id && 
-        !['complete', 'canceled'].includes(c.status)
-      );
-
-      const stackMissed = !!source.stack_missed;
-
-      // If not stacking and we already have an active instance, skip
-      if (activeCardsForSource.length > 0 && !stackMissed) continue;
-
-      // Find last completed for this source
-      const completedForSource = currentCards
-        .filter(c => c.recurrence_source_id === source.id && c.completed_at)
-        .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime());
-
-      let baseDate = completedForSource.length > 0 
-        ? new Date(completedForSource[0].completed_at!) 
-        : (source.last_completed_at ? new Date(source.last_completed_at) : new Date(source.created_at || Date.now()));
-
-      const freq = source.frequency || 'daily';
-      const intv = source.interval || 1;
-      const wd = source.weekdays || [];
-
-      // Compute next due
-      let nextDue = new Date(baseDate);
-      nextDue.setHours(0, 0, 0, 0);
-
-      const advanceDate = (date: Date) => {
-        if (freq === 'daily' || freq === 'every_n_days') {
-          date.setDate(date.getDate() + intv);
-        } else if (freq === 'weekly') {
-          date.setDate(date.getDate() + (7 * intv));
-          // If specific weekdays are set, try to land on one (simple advance for MVP)
-          if (wd.length > 0) {
-            while (!wd.includes(date.getDay())) {
-              date.setDate(date.getDate() + 1);
-            }
-          }
-        } else if (freq === 'monthly') {
-          return nextMonthlyOccurrence(date, source, intv);
-        } else {
-          date.setDate(date.getDate() + 1);
-        }
-        return date;
-      };
-
-      // Advance at least once
-      nextDue = advanceDate(nextDue);
-
-      // Respect end_date
-      if (source.end_date && new Date(source.end_date) < nextDue) {
-        continue;
-      }
-
-      // For stack_missed, we could generate multiple, but for now generate the next one
-      // (user can complete to trigger more if stacking)
-
-      // Generate title with date info
-      let generatedTitle = source.base_title;
-      const dateStr = nextDue.toLocaleDateString();
-      if (freq === 'monthly' || freq.includes('month')) {
-        const monthName = nextDue.toLocaleString('default', { month: 'long' });
-        generatedTitle = `${source.base_title} - ${monthName} ${nextDue.getFullYear()}`;
-      } else if (freq === 'weekly') {
-        generatedTitle = `${source.base_title} - Week of ${dateStr}`;
-      } else {
-        generatedTitle = `${source.base_title} - ${dateStr}`;
-      }
-
-      // Only create if the next due is not in the distant past, or always create the next pending
-      const isDueTodayOrPast = nextDue.getTime() <= today.getTime();
-      const newCard = {
-        user_id: userId,
-        stream_id: source.stream_id,
-        title: generatedTitle,
-        status: isDueTodayOrPast ? 'waiting' : 'backlog',
-        due_at: nextDue.toISOString(),
-        is_recurring: true,
-        recurrence_source_id: source.id,
-        position: 0,
-      };
-
-      const { data: created } = await supabase.from('cards').insert(newCard).select().single();
-      if (created) newCards.push(created);
-    }
-
-    if (newCards.length > 0) {
-      setCards(prev => [...prev, ...newCards]);
-      toast.info(`${newCards.length} recurring instance(s) generated`);
-    }
-  };
+    void init();
+  }, [loadData]);
 
   const filteredStreams = streamsForDisplay(
     streams.filter((stream) => {
@@ -333,39 +142,10 @@ export default function WillDoIt() {
   );
 
   function getCardsForStream(streamId: string): Card[] {
-    let relevantStatuses: string[];
-    if (view === 'activated') relevantStatuses = ACTIVE_STATUSES;
-    else if (view === 'backlog') relevantStatuses = BACKLOG_STATUSES;
-    else if (view === 'all') {
-      relevantStatuses = ['backlog', 'priority_backlog', 'research', 'waiting', 'in_progress', 'review', 'complete', 'canceled'];
-    } else {
-      relevantStatuses = ['complete', 'canceled'];
-    }
-
-    return cards
-      .filter((c) => c.stream_id === streamId && relevantStatuses.includes(c.status))
-      .sort((a, b) => a.position - b.position);
+    return cardsForStream(cards, streamId, view, archivePeriod);
   }
 
-  function getColumns() {
-    if (view === 'activated') return ACTIVE_STATUSES;
-    if (view === 'backlog') return [...BACKLOG_STATUSES, 'research' as const];
-    if (view === 'all') {
-      return [
-        'backlog',
-        'priority_backlog',
-        'research',
-        'waiting',
-        'in_progress',
-        'review',
-        'complete',
-        'canceled',
-      ] as const;
-    }
-    return ['complete', 'canceled'] as const;
-  }
-
-  const columns = getColumns();
+  const columns = statusesForView(view);
 
   // Layout sizing.
   const streamColWidth = view === 'all' ? 180 : 220;
@@ -391,7 +171,7 @@ export default function WillDoIt() {
     setActiveDragCard(card || null);
   };
 
-  const handleDragCancel = (_event: DragCancelEvent) => {
+  const handleDragCancel = () => {
     setActiveDragCard(null);
   };
 
@@ -416,7 +196,7 @@ export default function WillDoIt() {
     if (!targetStatus) return;
 
     // Dropped back where it started — nothing to do.
-    if (targetStreamId === activeCard.stream_id && targetStatus === activeCard.status) {
+    if (targetStreamId === displayStreamId(activeCard) && targetStatus === activeCard.status) {
       return;
     }
 
@@ -434,7 +214,7 @@ export default function WillDoIt() {
     newCards[cardIndex] = {
       ...newCards[cardIndex],
       stream_id: targetStreamId,
-      status: targetStatus as any,
+      status: targetStatus as Card['status'],
     };
 
     // Reindex positions in the affected cells and collect the new ordering.
@@ -467,14 +247,13 @@ export default function WillDoIt() {
     setCards(newCards);
 
     try {
-      await supabase
-        .from('cards')
-        .update({ 
-          stream_id: targetStreamId, 
-          status: targetStatus,
-          position: newCards[cardIndex].position 
-        })
-        .eq('id', activeId);
+      const { data: movedCard, error } = await supabase.rpc('save_card', {
+        p_card_id: activeId,
+        p_expected_status: activeCard.status,
+        p_changes: { stream_id: targetStreamId, status: targetStatus, position: newCards[cardIndex].position },
+      }).single<Card>();
+      if (error) throw error;
+      setCards(prev => prev.map(c => c.id === activeId ? movedCard : c));
 
       // Persist the reordering of the other cards in the affected cells so
       // the order survives a reload. (Individual updates: an upsert would
@@ -489,29 +268,29 @@ export default function WillDoIt() {
         );
       }
 
-      if (activeCard.is_recurring && activeCard.recurrence_source_id) {
-        await supabase
-          .from('recurrence_sources')
-          .update({ stream_id: targetStreamId })
-          .eq('id', activeCard.recurrence_source_id);
-      }
+      if (activeCard.is_recurring) await loadData(user.id);
 
       toast.success('Moved');
     } catch (err) {
       console.error(err);
-      toast.error('Move failed');
       setCards(cards);
+      toast.error(errorMessage(err, 'Move failed'));
+      await loadData(user.id);
     }
   };
 
-  const handleCardCreated = (newCard: Card) => {
+  const handleCardCreated = async (newCard: Card) => {
     setCards((prev) => [...prev, newCard]);
+    if (newCard.is_recurring && user) await loadData(user.id);
   };
 
-  const handleCardUpdated = (updatedCard: Card) => {
+  const handleCardUpdated = async (updatedCard: Card) => {
     setCards((prev) =>
-      prev.map((c) => (c.id === updatedCard.id ? updatedCard : c))
+      prev.map((c) => (c.id === updatedCard.id ? hydrateRecurringCards([updatedCard], recurrenceSources)[0] : c))
     );
+    if (updatedCard.is_recurring && user) {
+      await loadData(user.id);
+    }
   };
 
   const handleCardDeleted = (cardId: string) => {
@@ -528,13 +307,14 @@ export default function WillDoIt() {
     });
   };
 
-  const handleStreamUpdated = (updatedStream: Stream) => {
+  const handleStreamUpdated = async (updatedStream: Stream) => {
     setStreams((prev) =>
       prev.map((s) => (s.id === updatedStream.id ? updatedStream : s))
     );
+    if (user) await loadData(user.id);
   };
 
-  const handleStreamDeleted = (streamId: string, targetStreamId?: string) => {
+  const handleStreamDeleted = async (streamId: string, targetStreamId?: string) => {
     if (targetStreamId) {
       setCards((prev) =>
         prev.map((c) =>
@@ -543,6 +323,7 @@ export default function WillDoIt() {
       );
     }
     setStreams((prev) => prev.filter((s) => s.id !== streamId));
+    if (user) await loadData(user.id);
   };
 
   const handleCompleteCard = async (cardId: string) => {
@@ -554,35 +335,26 @@ export default function WillDoIt() {
 
     // Optimistic
     setCards(prev => prev.map(c => 
-      c.id === cardId ? { ...c, status: newStatus as any, completed_at: completedAt } : c
+      c.id === cardId ? { ...c, status: newStatus, completed_at: completedAt } : c
     ));
 
     try {
-      await supabase
-        .from('cards')
-        .update({ status: newStatus, completed_at: completedAt })
-        .eq('id', cardId);
+      const { data: updatedCard, error } = await supabase.rpc('save_card', {
+        p_card_id: cardId,
+        p_expected_status: card.status,
+        p_changes: { status: newStatus },
+      }).single<Card>();
+      if (error) throw error;
 
-      // If this was a recurring card, advance the source's last_completed_at
-      // and trigger generation of the next instance
-      if (card.is_recurring && card.recurrence_source_id) {
-        await supabase
-          .from('recurrence_sources')
-          .update({ last_completed_at: completedAt })
-          .eq('id', card.recurrence_source_id);
-
-        // Generate next instance (runs on next load too, this is best-effort)
-        if (user) {
-          setTimeout(() => {
-            generateRecurringInstances(user.id, streams, cards);
-          }, 400);
-        }
-      }
+      // The database stamps completion and updates the source atomically.
+      await handleCardUpdated(updatedCard);
 
       toast.success('Card completed');
     } catch (err) {
       console.error(err);
-      toast.error('Failed to complete');
+      setCards(prev => prev.map(c => c.id === cardId ? card : c));
+      toast.error(errorMessage(err, 'Failed to complete'));
+      if (user) await loadData(user.id);
     }
   };
 
@@ -605,7 +377,13 @@ export default function WillDoIt() {
     ));
 
     try {
-      await supabase.from('cards').update({ status: next }).eq('id', cardId);
+      const { data: updatedCard, error } = await supabase.rpc('save_card', {
+        p_card_id: cardId,
+        p_expected_status: card.status,
+        p_changes: { status: next },
+      }).single<Card>();
+      if (error) throw error;
+      await handleCardUpdated(updatedCard);
       toast.success(`Moved to ${STATUS_LABELS[next]}`);
     } catch (err) {
       console.error(err);
@@ -613,61 +391,20 @@ export default function WillDoIt() {
       setCards(prev => prev.map(c =>
         c.id === cardId ? { ...c, status: card.status } : c
       ));
-      toast.error('Failed to move card');
-    }
-  };
-
-  const handleStreamStateChange = async (streamId: string, newState: Stream['state']): Promise<boolean> => {
-    const stream = streams.find(s => s.id === streamId);
-    if (!stream || stream.state === newState) return true;
-
-    // Check for active recurrences if going to complete/canceled
-    if (['complete', 'canceled'].includes(newState)) {
-      const activeRecurring = cards.filter(c => 
-        c.stream_id === streamId && 
-        c.is_recurring && 
-        !['complete', 'canceled'].includes(c.status) &&
-        c.recurrence_source_id
-      );
-
-      if (activeRecurring.length > 0) {
-        const uniqueSources = [...new Set(activeRecurring.map(c => c.recurrence_source_id))];
-        const proceed = confirm(
-          `This stream has ${uniqueSources.length} active recurring task(s). ` +
-          `Changing state to ${newState} may affect future instances. Proceed?`
-        );
-        if (!proceed) return false;
-
-        // For simplicity in this build: stop the recurrences
-        for (const sourceId of uniqueSources) {
-          await supabase
-            .from('recurrence_sources')
-            .update({ stopped_at: new Date().toISOString() })
-            .eq('id', sourceId);
-        }
-        toast.info('Recurring tasks stopped for this stream.');
-      }
-    }
-
-    // Optimistic
-    setStreams(prev => prev.map(s => s.id === streamId ? { ...s, state: newState } : s));
-
-    try {
-      await supabase.from('streams').update({ state: newState }).eq('id', streamId);
-      toast.success(`Stream marked as ${newState}`);
-      return true;
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to update stream state');
-      setStreams(streams); // revert
-      return false;
+      toast.error(errorMessage(err, 'Failed to move card'));
+      if (user) await loadData(user.id);
     }
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = '/login';
+    window.location.replace('/login');
   };
+
+  const renderCard = (card: Card) => (
+    <CardComponent key={card.id} card={card} onClick={() => setEditingCard(card)}
+      onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} />
+  );
 
   if (loading || !user) {
     return (
@@ -731,6 +468,19 @@ export default function WillDoIt() {
             ))}
           </div>
         </div>
+        {view === 'archive' && (
+          <div className="flex justify-center pb-3 px-4">
+            <label className="flex items-center gap-2 text-sm text-ink-soft">
+              Archive period
+              <select className="control w-auto text-sm" value={archivePeriod}
+                onChange={e => setArchivePeriod(e.target.value as ArchivePeriod)}>
+                <option value="month">Past month</option>
+                <option value="year">Past 1 year</option>
+                <option value="all">All time</option>
+              </select>
+            </label>
+          </div>
+        )}
       </div>
 
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6 flex-1">
@@ -791,15 +541,9 @@ export default function WillDoIt() {
                           <div key={status} className="status-column h-full">
                             <DroppableCell id={cellId} isEmpty={cellCards.length === 0}>
                               <div className="space-y-2">
-                                {cellCards.map((card) => (
-                                  <CardComponent 
-                                    key={card.id} 
-                                    card={card} 
-                                    onClick={() => setEditingCard(card)} 
-                                     onComplete={handleCompleteCard}
-                                     onAdvance={handleAdvanceCard}
-                                  />
-                                ))}
+                                {view === 'archive'
+                                  ? <ArchiveCards cards={cellCards} renderCard={renderCard} />
+                                  : cellCards.map(renderCard)}
                               </div>
                             </DroppableCell>
                           </div>
@@ -858,7 +602,6 @@ export default function WillDoIt() {
             onClose={() => setEditingStream(null)}
             onStreamUpdated={handleStreamUpdated}
             onStreamDeleted={handleStreamDeleted}
-            onStateChange={handleStreamStateChange}
           />
         )}
       </div>

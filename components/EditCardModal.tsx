@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Card, CardStatus, STATUS_LABELS, streamsForSelect, UNCATEGORIZED_TITLE } from '@/lib/types';
 import { toast } from 'sonner';
+import { dateTimeLocal, dateTimeInstant } from '@/lib/dates';
+import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
 
@@ -20,19 +22,19 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
   // the card's current stream selectable, even if it's complete/canceled.
   const selectableStreams = React.useMemo(() => {
     const active = streamsForSelect(streams);
-    const current = streams.find((s) => s.id === card.stream_id);
+    const current = streams.find((s) => s.id === (card.recurrence_stream_id || card.stream_id));
     if (!current || active.some((s) => s.id === current.id)) return active;
 
     const uncIndex = active.findIndex((s) => s.title === UNCATEGORIZED_TITLE);
     if (uncIndex === -1) return [...active, current];
     return [...active.slice(0, uncIndex), current, ...active.slice(uncIndex)];
-  }, [streams, card.stream_id]);
+  }, [streams, card.stream_id, card.recurrence_stream_id]);
 
   const [title, setTitle] = useState(card.title);
-  const [streamId, setStreamId] = useState(card.stream_id);
+  const [streamId, setStreamId] = useState(card.recurrence_stream_id || card.stream_id);
   const [status, setStatus] = useState<CardStatus>(card.status);
-  const [dueAt, setDueAt] = useState(card.due_at ? card.due_at.slice(0, 16) : '');
-  const [remindAt, setRemindAt] = useState(card.remind_at ? card.remind_at.slice(0, 16) : '');
+  const [dueAt, setDueAt] = useState(dateTimeLocal(card.due_at));
+  const [remindAt, setRemindAt] = useState(dateTimeLocal(card.remind_at));
   const [notes, setNotes] = useState(card.notes || '');
   const [loading, setLoading] = useState(false);
 
@@ -42,38 +44,28 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
     setLoading(true);
 
     try {
-      const updates: any = {
+      const updates = {
         title: title.trim(),
         stream_id: streamId,
         status,
-        due_at: dueAt ? new Date(dueAt).toISOString() : null,
-        remind_at: remindAt ? new Date(remindAt).toISOString() : null,
+        due_at: dateTimeInstant(dueAt, card.due_at),
+        remind_at: dateTimeInstant(remindAt, card.remind_at),
         notes: notes.trim() || null,
       };
 
-      const { data: updatedCard, error } = await supabase
-        .from('cards')
-        .update(updates)
-        .eq('id', card.id)
-        .select()
-        .single();
-
+      const { data: updatedCard, error } = await supabase.rpc('save_card', {
+        p_card_id: card.id,
+        p_expected_status: card.status,
+        p_changes: updates,
+      }).single<Card>();
       if (error) throw error;
-
-      // If stream changed and this is recurring, update the source
-      if (streamId !== card.stream_id && card.is_recurring && card.recurrence_source_id) {
-        await supabase
-          .from('recurrence_sources')
-          .update({ stream_id: streamId })
-          .eq('id', card.recurrence_source_id);
-      }
 
       onCardUpdated(updatedCard);
       toast.success('Card updated');
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Failed to update card');
+      toast.error(errorMessage(err, 'Failed to update card'));
     } finally {
       setLoading(false);
     }
@@ -90,8 +82,8 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
       onCardDeleted(card.id);
       toast.success('Card deleted');
       onClose();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to delete'));
     } finally {
       setLoading(false);
     }
@@ -99,10 +91,6 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
 
   const handleStatusChange = (newStatus: CardStatus) => {
     setStatus(newStatus);
-    // Auto set completed_at if moving to complete/canceled
-    if ((newStatus === 'complete' || newStatus === 'canceled') && !card.completed_at) {
-      // We don't set it here, the backend or a trigger could, but for now we can leave it
-    }
   };
 
   return (
