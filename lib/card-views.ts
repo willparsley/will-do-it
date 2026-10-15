@@ -19,9 +19,9 @@ export function hydrateRecurringCards(cards: Card[], sources: RecurrenceSource[]
   const byId = new Map(sources.map(source => [source.id, source]));
   return cards.map(card => {
     const source = card.recurrence_source_id ? byId.get(card.recurrence_source_id) : undefined;
-    return { ...card, last_completed_at: source?.last_completed_at,
-      recurrence_timezone: source?.recurrence_timezone,
-      recurrence_stream_id: source?.stream_id,
+    return { ...card, last_completed_at: source?.last_completed_at || undefined,
+      recurrence_timezone: source?.recurrence_timezone || undefined,
+      recurrence_stream_id: source?.stream_id || undefined,
       recurrence_title: source?.base_title };
   });
 }

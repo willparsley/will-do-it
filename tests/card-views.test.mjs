@@ -119,3 +119,11 @@ test('datetime-local round trips preserve unchanged instants, seconds, and DST r
     if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
   }
 });
+
+test('legacy stopped sources with null timezone metadata render pending cards without crashing', () => {
+  const [card] = hydrateRecurringCards([base],[{...source,stopped_at:now.toISOString(),recurrence_timezone:null,last_completed_at:null}]);
+  assert.equal(card.recurrence_timezone,undefined);
+  assert.equal(card.last_completed_at,undefined);
+  assert.doesNotThrow(()=>dueBadge(card,now));
+  assert.doesNotThrow(()=>renderToStaticMarkup(React.createElement(CardView,{card})));
+});
