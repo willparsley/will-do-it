@@ -73,6 +73,7 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
  await assertValueCentered(trigger);
  await page.screenshot({ path: testInfo.outputPath('selected-value.png'), scale: 'css' });
  await trigger.click();await page.keyboard.press('Escape');assert.equal(await page.getByRole('listbox').count(),0);
+ page.once('dialog',dialog=>dialog.accept());
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await page.getByRole('button',{name:'New Stream',exact:true}).evaluate(el=>el.click());
  await assertValueCentered(page.getByRole('button',{name:/Area/}));
@@ -91,3 +92,104 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
  assert.deepEqual(errors,[]);
 });
 
+
+// Card forms exercise the same production bundle, with all writes intercepted.
+for (const theme of ['light', 'dark']) test(`card forms protect drafts and support optional details in ${theme} mode`, async ({ page }, testInfo) => {
+ page.setDefaultTimeout(8000);
+ const card = {id:'card',user_id:user.id,stream_id:'1',title:'Walk the dog',status:'waiting',position:0,is_recurring:true,recurrence_source_id:'source',notes:'Bring water',due_at:'2026-10-15T14:00:42.123Z',remind_at:null};
+ const source = {id:'source',user_id:user.id,stream_id:'1',base_title:'Dog walks',frequency:'weekly',interval:1,weekdays:[1],stack_missed:false,recurrence_timezone:'America/New_York'};
+ const calls=[];
+ let failSave=true;
+ await page.addInitScript(({storageKey,session,theme})=>{
+   document.cookie=storageKey+'=base64-'+btoa(JSON.stringify(session)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')+'; path=/';
+   localStorage.setItem('theme',theme);
+ },{storageKey,session,theme});
+ await page.route('**/*',async route=>{
+   const url=new URL(route.request().url());
+   if(url.origin===new URL(supabaseUrl).origin){
+     let data=url.pathname.endsWith('/user')?user:url.pathname.endsWith('/streams')?streams:url.pathname.endsWith('/cards')?[card]:url.pathname.endsWith('/recurrence_sources')?[source]:0;
+     if(route.request().method()==='POST') {
+       const body=route.request().postDataJSON();calls.push({path:url.pathname,body});
+       if(url.pathname.endsWith('/save_card') && failSave) {
+         await route.fulfill({status:400,json:{message:'This card changed. Try again.'}});return;
+       }
+       if(url.pathname.endsWith('/save_card')) data={...card,...body.p_changes};
+       if(url.pathname.endsWith('/create_recurring_card_with_notes')) data={...card,title:body.p_title,notes:body.p_notes};
+       if(url.pathname.endsWith('/cards')) data={...card,...body};
+     }
+     await route.fulfill({json:data,headers:{'access-control-allow-origin':'*'}});return;
+   }
+   if(url.hostname==='app.test'){
+     const asset=url.pathname.startsWith('/_next/static/')?'/'+url.pathname.slice('/_next/'.length):'/server/app/index.html';
+     const contentType=url.pathname.endsWith('.css')?'text/css':url.pathname.endsWith('.js')?'application/javascript':url.pathname.endsWith('.woff2')?'font/woff2':'text/html';
+     await route.fulfill({body:await readFile(root+'/.next'+asset),contentType});return;
+   }
+   await route.abort();
+ });
+ await page.goto('http://app.test');
+ const quickAdd=page.getByRole('button',{name:'Quick Add',exact:true});
+ await quickAdd.click();
+ let dialog=page.getByRole('dialog',{name:'Add New Card'});
+ await dialog.waitFor();
+ await page.getByLabel('Title',{exact:true}).fill('A recurring walk');
+ assert.equal(await dialog.locator('#card-due').isVisible(),false);
+ assert.equal(await dialog.locator('#card-notes').isVisible(),false);
+ await dialog.getByText('Dates & reminder',{exact:false}).click();
+ await page.getByLabel('Due date & time',{exact:true}).fill('2026-10-20T10:30');
+ const dateBox=await page.getByLabel('Due date & time',{exact:true}).boundingBox();
+ assert.ok(dateBox.width>=230,'Date control must have enough width for date and time');
+ await dialog.locator('summary').filter({hasText:'Notes'}).click();
+ await page.getByLabel('Notes',{exact:true}).fill('First occurrence notes');
+ await dialog.locator('summary').filter({hasText:'Repeat'}).click();
+ await page.getByLabel('Recurring task',{exact:true}).check();
+ await page.locator('#card-frequency').click();
+ await page.getByRole('option',{name:'Weekly',exact:true}).click();
+ await page.getByLabel('Every N weeks',{exact:true}).fill('2');
+ const monday=page.getByRole('checkbox',{name:'Monday',exact:true});
+ await monday.focus();await page.keyboard.press('Space');assert.equal(await monday.isChecked(),true);
+ const weekday=await monday.locator('..').boundingBox();assert.ok(weekday.height>=44);
+ await page.screenshot({path:testInfo.outputPath('card-create-expanded.png'),scale:'css'});
+ // Tab and Shift+Tab remain within the dialog; a portaled menu consumes Escape first.
+ await page.getByRole('button',{name:'Create Card',exact:true}).focus();
+ await page.keyboard.press('Tab');assert.equal(await page.getByRole('button',{name:'Close card form'}).evaluate(el=>el===document.activeElement),true);
+ await page.keyboard.press('Shift+Tab');assert.equal(await page.getByRole('button',{name:'Create Card',exact:true}).evaluate(el=>el===document.activeElement),true);
+ await page.locator('#card-stream').click();await page.keyboard.press('Escape');assert.equal(await dialog.count(),1);
+ await page.locator('#card-stream').focus();
+ async function rejectDiscard(action) {
+   const prompted=page.waitForEvent('dialog',{timeout:8000});
+   const result=action();
+   const prompt=await prompted;assert.match(prompt.message(),/Discard unsaved/);await prompt.dismiss();await result;
+   assert.equal(await page.getByLabel('Title',{exact:true}).inputValue(),'A recurring walk');
+ }
+ await rejectDiscard(()=>page.keyboard.press('Escape'));
+ await rejectDiscard(()=>page.getByRole('button',{name:'Cancel',exact:true}).click());
+ await rejectDiscard(()=>page.getByRole('button',{name:'Close card form'}).click());
+ await rejectDiscard(()=>page.mouse.click(2,2));
+ await page.getByRole('button',{name:'Create Card',exact:true}).click();
+ await dialog.waitFor({state:'hidden'});
+ const created=calls.find(call=>call.path.endsWith('/create_recurring_card_with_notes'));
+ assert.equal(created.body.p_notes,'First occurrence notes');assert.equal(created.body.p_interval,2);assert.deepEqual(created.body.p_weekdays,[1]);
+ assert.equal(await quickAdd.evaluate(el=>el===document.activeElement),true);
+ // Edit is a real form: Enter saves, errors remain visible without losing the draft.
+ await page.getByText('Walk the dog',{exact:true}).click();
+ dialog=page.getByRole('dialog',{name:'Edit Card'});await dialog.waitFor();
+ assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Bring water');
+ assert.ok(await dialog.getByText(/also moves pending occurrences/).isVisible());
+ assert.ok(await dialog.getByText(/edits apply to this occurrence/).isVisible());
+ await page.getByLabel('Title',{exact:true}).fill('Updated walk');await page.keyboard.press('Enter');
+ await dialog.getByRole('alert').waitFor();assert.match(await dialog.getByRole('alert').textContent(),/This card changed/);
+ assert.equal(await page.getByLabel('Title',{exact:true}).inputValue(),'Updated walk');
+ const saved=calls.find(call=>call.path.endsWith('/save_card'));
+ assert.equal(saved.body.p_changes.due_at,card.due_at,'Unchanged dates preserve seconds and the original instant');
+ const prompted=page.waitForEvent('dialog',{timeout:8000});const navigation=dialog.getByRole('button',{name:'Edit recurrence',exact:true}).click();
+ const prompt=await prompted;await prompt.dismiss();await navigation;assert.equal(await dialog.count(),1);
+ await page.screenshot({path:testInfo.outputPath('card-edit.png'),scale:'css'});
+ failSave=false;await page.getByRole('button',{name:'Save Changes',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ // Ordinary creation also includes notes, using the existing insert path.
+ await quickAdd.click();
+ await page.getByLabel('Title',{exact:true}).fill('One-off task');
+ await page.getByRole('dialog').locator('summary').filter({hasText:'Notes'}).click();await page.getByLabel('Notes',{exact:true}).fill('One-off notes');
+ await page.getByLabel('Title',{exact:true}).focus();await page.keyboard.press('Enter');
+ await page.getByRole('dialog',{name:'Add New Card'}).waitFor({state:'hidden'});
+ assert.equal(calls.find(call=>call.path.endsWith('/cards')).body.notes,'One-off notes');
+});
