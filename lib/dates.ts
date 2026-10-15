@@ -12,3 +12,8 @@ export function dateTimeInstant(input: string, original?: string | null): string
   if (input === dateTimeLocal(original)) return original || null;
   return input ? new Date(input).toISOString() : null;
 }
+
+/** Replace calendar fields without UTC parsing; preserve any explicitly chosen time. */
+export function withCalendarDay(value: string, day: string, fallbackTime = '00:00'): string {
+  return `${day}T${value.slice(11, 16) || fallbackTime}`;
+}

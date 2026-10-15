@@ -1,10 +1,11 @@
 'use client';
 
+import { CardFormDialog, CardFormCancel, cardFields, cardFormStyles as styles } from './CardForm';
 import { AppSelect } from '@/components/AppSelect';
 
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, Card, CardStatus, STATUS_LABELS, streamsForSelect, uncategorizedId, MONTH_DAY_OPTIONS, monthDayLabel } from '@/lib/types';
+import { Stream, Card, CardStatus, streamsForSelect, uncategorizedId, MONTH_DAY_OPTIONS, monthDayLabel } from '@/lib/types';
 import { toast } from 'sonner';
 import { errorMessage } from '@/lib/errors';
 
@@ -34,13 +35,16 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
   const [recInterval, setRecInterval] = useState(1);
   const [weekdays, setWeekdays] = useState<number[]>([]); // 0=Sun, 1=Mon, ..., 6=Sat
   const [monthDay, setMonthDay] = useState(1); // 1..31, or -1 for the last day
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !streamId) return;
+    if (loading || !title.trim() || !streamId) return;
 
     setLoading(true);
+    setError('');
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -49,8 +53,8 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
       const due = dueAt ? new Date(dueAt).toISOString() : null;
       const reminder = remindAt ? new Date(remindAt).toISOString() : null;
       const result = isRecurring
-        ? await supabase.rpc('create_recurring_card', {
-            p_title: title.trim(), p_stream_id: streamId, p_status: status,
+        ? await supabase.rpc('create_recurring_card_with_notes', {
+            p_notes: notes.trim() || null, p_title: title.trim(), p_stream_id: streamId, p_status: status,
             p_due_at: due, p_remind_at: reminder,
             p_frequency: frequency, p_interval: frequency === 'daily' ? 1 : recInterval,
             p_weekdays: frequency === 'weekly' ? weekdays : null,
@@ -60,7 +64,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
           }).single<Card>()
         : await supabase.from('cards').insert({
             user_id: user.id, stream_id: streamId, title: title.trim(), status,
-            due_at: due, remind_at: reminder, is_recurring: false, position: 0,
+            notes: notes.trim() || null, due_at: due, remind_at: reminder, is_recurring: false, position: 0,
           }).select().single<Card>();
       const { data: card, error } = result;
       if (error) throw error;
@@ -70,184 +74,68 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
       onClose();
     } catch (err: unknown) {
       console.error(err);
-      toast.error(errorMessage(err, 'Failed to create card'));
+      setError(errorMessage(err, 'Failed to create card'));
     } finally {
       setLoading(false);
     }
   };
 
+  const initialStreamId = defaultStreamId || uncategorizedId(selectableStreams) || selectableStreams[0]?.id || '';
+  const dirty = !!(title || notes || dueAt || remindAt || isRecurring || stackMissed || frequency !== 'daily' || recInterval !== 1 || weekdays.length || monthDay !== 1 || streamId !== initialStreamId || status !== 'backlog');
+
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div 
-        className="modal-panel max-w-md p-6" 
-        onClick={e => e.stopPropagation()}
-      >
-        <h2 className="text-xl font-semibold mb-4 text-ink">Add New Card</h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="field-label">Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="control"
-              placeholder="What needs to be done?"
-              required
-              autoFocus
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="field-label">Stream</label>
-              <AppSelect
-                value={streamId}
-                onValueChange={value => setStreamId(value)}
-                className="w-full"
-                aria-label="Stream"
-                disabled={loading}
-                options={selectableStreams.map(s => ({ value: s.id, label: s.title }))}
-              />
-            </div>
-
-            <div>
-              <label className="field-label">Status</label>
-              <AppSelect
-                value={status}
-                onValueChange={value => setStatus(value as CardStatus)}
-                className="w-full"
-                aria-label="Status"
-                disabled={loading}
-                options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="field-label">Due Date</label>
-              <input 
-                type="datetime-local" 
-                value={dueAt} 
-                onChange={(e) => setDueAt(e.target.value)}
-                className="control"
-              />
-            </div>
-            <div>
-              <label className="field-label">Remind Me At</label>
-              <input 
-                type="datetime-local" 
-                value={remindAt} 
-                onChange={(e) => setRemindAt(e.target.value)}
-                className="control"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-ink-soft">
-              <input 
-                type="checkbox" 
-                checked={isRecurring} 
-                onChange={(e) => setIsRecurring(e.target.checked)} 
-              />
-              Recurring task
-            </label>
-
-            {isRecurring && (
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <label className="flex items-center gap-2 text-ink-soft">
-                  <input 
-                    type="checkbox" 
-                    checked={stackMissed} 
-                    onChange={(e) => setStackMissed(e.target.checked)} 
-                  />
-                  Stack
-                </label>
-
-                <AppSelect
-                  value={frequency}
-                  onValueChange={value => setFrequency(value as typeof frequency)}
-                  className="w-auto"
-                  size="compact"
-                  aria-label="Repeat"
-                  disabled={loading}
-                  options={[{ value: 'daily', label: 'Daily' }, { value: 'every_n_days', label: 'Every N days' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Every N months' }]}
-                />
-
-                {(frequency === 'every_n_days' || frequency === 'weekly' || frequency === 'monthly') && (
-                  <label className="flex items-center gap-1 text-xs text-ink-soft">
-                    every
-                    <input 
-                      type="number" 
-                      min={1} 
-                      value={recInterval} 
-                      onChange={(e) => setRecInterval(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-12 px-1 py-0.5 text-xs bg-surface border border-line rounded text-ink"
-                    />
-                    {frequency === 'every_n_days'
-                      ? (recInterval === 1 ? 'day' : 'days')
-                      : frequency === 'weekly' ? (recInterval === 1 ? 'week' : 'weeks')
-                      : (recInterval === 1 ? 'month' : 'months')}
-                  </label>
-                )}
-
-                {frequency === 'monthly' && (
-                  <div className="flex items-center gap-1 text-xs text-ink-soft">
-                    <span>on</span>
-                    <AppSelect
-                      value={String(monthDay)}
-                      onValueChange={value => setMonthDay(parseInt(value, 10))}
-                      className="w-auto"
-                      size="compact"
-                      aria-label="Day of month"
-                      disabled={loading}
-                      options={MONTH_DAY_OPTIONS.map(d => ({ value: String(d), label: monthDayLabel(d) }))}
-                    />
+    <CardFormDialog title="Add New Card" dirty={dirty} saving={loading} onClose={onClose}>
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <div className={styles.body}>
+          <fieldset disabled={loading} className={styles.fields}>
+            {cardFields({ title, setTitle, streamId, setStreamId, status, setStatus, streams: selectableStreams, saving: loading, dueAt, setDueAt, remindAt, setRemindAt, notes, setNotes })}
+            <details className={styles.section} open={isRecurring}>
+              <summary className="focus-ring" aria-disabled={loading} onClick={event => {
+                event.preventDefault();
+                if (!loading) setIsRecurring(previous => !previous);
+              }}>Repeat <span className={styles.optional}>{isRecurring ? 'Recurring' : 'Does not repeat'}</span></summary>
+              <div className={styles.sectionBody}>
+                {isRecurring && <>
+                  <div>
+                    <label htmlFor="card-frequency" className="field-label">Repeat</label>
+                    <AppSelect id="card-frequency" value={frequency} onValueChange={value => setFrequency(value as typeof frequency)} aria-label="Repeat" disabled={loading}
+                      options={[{ value: 'daily', label: 'Daily' }, { value: 'every_n_days', label: 'Every N days' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
                   </div>
-                )}
-
-                {frequency === 'weekly' && (
-                  <div className="flex gap-1 text-[10px]">
-                    {['S','M','T','W','T','F','S'].map((d, i) => (
-                      <label key={i} className={`px-1 py-0.5 border rounded cursor-pointer ${weekdays.includes(i) ? 'bg-accent text-accent-ink border-accent' : 'border-line text-ink-soft'}`}>
-                        <input 
-                          type="checkbox" 
-                          checked={weekdays.includes(i)} 
-                          onChange={(e) => {
-                            if (e.target.checked) setWeekdays([...weekdays, i].sort());
-                            else setWeekdays(weekdays.filter(w => w !== i));
-                          }} 
-                          className="hidden" 
-                        />
-                        {d}
-                      </label>
-                    ))}
+                  {frequency !== 'daily' && <div>
+                    <label htmlFor="card-interval" className="field-label">Every {frequency === 'weekly' ? 'N weeks' : frequency === 'monthly' ? 'N months' : 'N days'}</label>
+                    <input id="card-interval" type="number" min={1} step={1} required value={recInterval} onChange={e => setRecInterval(Math.max(1, parseInt(e.target.value, 10) || 1))} className="control" />
+                  </div>}
+                  {frequency === 'weekly' && <fieldset>
+                    <legend className="field-label">On weekdays</legend>
+                    <div className={styles.weekdays}>
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => <label key={day} className={styles.weekday}>
+                        <input type="checkbox" aria-label={['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][index]} checked={weekdays.includes(index)}
+                          onChange={e => setWeekdays(previous => e.target.checked ? [...previous, index].sort() : previous.filter(value => value !== index))} />{day}
+                      </label>)}
+                    </div>
+                    {!weekdays.length && <p className={styles.help}>With no days selected, repeats on today’s weekday.</p>}
+                  </fieldset>}
+                  {frequency === 'monthly' && <div>
+                    <label htmlFor="card-month-day" className="field-label">Day of month</label>
+                    <AppSelect id="card-month-day" value={String(monthDay)} onValueChange={value => setMonthDay(Number(value))} aria-label="Day of month" disabled={loading}
+                      options={MONTH_DAY_OPTIONS.map(day => ({ value: String(day), label: monthDayLabel(day) }))} />
+                  </div>}
+                  <div>
+                    <label className={styles.check}><input type="checkbox" checked={stackMissed} onChange={e => setStackMissed(e.target.checked)} aria-describedby="card-stack-help" />Keep missed occurrences</label>
+                    <p id="card-stack-help" className={styles.help}>{stackMissed ? 'Each missed occurrence stays as a separate card.' : 'Keep just one pending occurrence until you complete or cancel it.'}</p>
                   </div>
-                )}
+                  <p className={styles.help}>Close Repeat to make this a one-off card. Without a due date, the first occurrence starts on the next matching day, including today. Notes apply to this first card. You can change the schedule or set an end date after creation.</p>
+                </>}
               </div>
-            )}
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button 
-              type="button" 
-              onClick={onClose}
-              className="btn btn-secondary flex-1 py-2.5"
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              disabled={loading || !title.trim()}
-              className="btn btn-primary flex-1 py-2.5"
-            >
-              {loading ? 'Creating...' : 'Create Card'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+            </details>
+          </fieldset>
+        </div>
+        {error && <p role="alert" className={styles.error}>{error}</p>}
+        <footer className={styles.footer}>
+          <CardFormCancel disabled={loading} />
+          <button type="submit" disabled={loading || !title.trim() || !streamId} className="btn btn-primary focus-ring px-5 py-2.5">{loading ? 'Creating...' : 'Create Card'}</button>
+        </footer>
+      </form>
+    </CardFormDialog>
   );
 }

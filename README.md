@@ -101,3 +101,7 @@ Core CRUD, authentication, recurrence generation, and archive history persist in
 After installing dependencies, install test browsers with `npx playwright install chromium firefox`.
 Run `npm run build` followed by `npm run test:dropdowns` (or build with `npm run build -- --webpack` to verify that pipeline).
 The checks serve the actual production HTML, JavaScript, and CSS from `.next`, mock all Supabase requests, and verify dropdown sizes, surfaces, fonts, viewport bounds, touch targets, and selection in desktop/mobile layouts and both themes. Use the same public Supabase environment values for the build and browser tests; `.env.local` is loaded when needed. Screenshots are saved under `test-results/`.
+
+### Card form redesign migration
+
+Apply `supabase/migrations/202610150002_card_creation_notes.sql` before deploying the card form redesign. It adds `create_recurring_card_with_notes` for atomic creation with notes and preserves the original creation RPC for existing clients. Notes belong to the initial occurrence; future occurrences do not inherit them.
