@@ -43,8 +43,22 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
  assert.ok(modal.y >= 16 && modal.y + modal.height <= page.viewportSize().height - 16);
  assert.equal(triggerBox.height,42);assert.equal(triggerBox.height,inputBox.height);
  assert.equal(await trigger.evaluate(el=>getComputedStyle(el).display),'flex');
- const children=await trigger.evaluate(el=>Array.from(el.children).map(c=>{const r=c.getBoundingClientRect();return {top:r.top,bottom:r.bottom}}));
- assert.ok(Math.abs((children[0].top+children[0].bottom)/2-(children[1].top+children[1].bottom)/2)<1);
+ async function assertValueCentered(control) {
+   const alignment = await control.evaluate(el => {
+     const value = el.firstElementChild;
+     const range = document.createRange();
+     range.selectNodeContents(value);
+     const text = range.getBoundingClientRect();
+     const box = el.getBoundingClientRect();
+     return {
+       offset: Math.abs((text.top + text.bottom) / 2 - (box.top + box.bottom) / 2),
+       valueIcons: value.querySelectorAll('svg').length,
+     };
+   });
+   assert.ok(alignment.offset <= 1, `Selected text is ${alignment.offset}px from the control's vertical center`);
+   assert.equal(alignment.valueIcons, 0, 'Closed value must not copy menu checkmark markup');
+ }
+ await assertValueCentered(trigger);
  await trigger.click();await page.getByRole('listbox').waitFor();
  const menu=page.locator('[data-trigger="Select"]');
  const menuStyle=await menu.evaluate(el=>{const s=getComputedStyle(el);return {background:s.backgroundColor,border:s.borderWidth,shadow:s.boxShadow,font:s.fontFamily}});
@@ -56,9 +70,12 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
  assert.ok(row.height>= (isMobile?44:36));
  const filename=testInfo.outputPath('dropdown.png');await page.screenshot({path:filename, scale:'css'});
  await page.getByRole('option',{name:'Exercise',exact:true}).click();assert.match(await trigger.textContent(),/Exercise/);
+ await assertValueCentered(trigger);
+ await page.screenshot({ path: testInfo.outputPath('selected-value.png'), scale: 'css' });
  await trigger.click();await page.keyboard.press('Escape');assert.equal(await page.getByRole('listbox').count(),0);
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await page.getByRole('button',{name:'New Stream',exact:true}).evaluate(el=>el.click());
+ await assertValueCentered(page.getByRole('button',{name:/Area/}));
  await page.getByRole('button',{name:/Area/}).click();
  assert.equal(await page.getByRole('option').count(),3);
  assert.equal(await page.locator('[data-trigger="Select"]').evaluate(el=>getComputedStyle(el).backgroundColor),menuStyle.background);

@@ -51,7 +51,9 @@ export function AppSelect({ value, onValueChange, options, placeholder = 'Choose
       }}
     >
       <Button ref={triggerRef} id={id} type="button" className={styles.trigger}>
-        <SelectValue className={styles.value} />
+        <SelectValue className={styles.value}>
+          {({ selectedText, isPlaceholder }) => isPlaceholder ? placeholder : selectedText}
+        </SelectValue>
         <ChevronDown size={14} aria-hidden="true" className={`${styles.icon} ${styles.chevron}`} />
       </Button>
       <Popover

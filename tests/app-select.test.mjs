@@ -48,3 +48,10 @@ test('disabling an open dropdown closes it and does not reopen after a failed sa
   ui.inputs.disabled = false;
   assert.equal(ui.render().props.isOpen, false);
 });
+
+test('closed dropdown renders only the selected label or placeholder, without menu decorations', () => {
+  const ui = dropdown({ placeholder: 'Choose an action' });
+  const value = nodes(ui.render(), node => node.props?.className === 'value')[0];
+  assert.equal(value.props.children({ selectedText: 'Move', isPlaceholder: false }), 'Move');
+  assert.equal(value.props.children({ selectedText: '', isPlaceholder: true }), 'Choose an action');
+});
