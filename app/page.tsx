@@ -20,6 +20,7 @@ import { Card as CardComponent } from '@/components/Card';
 import { DroppableCell } from '@/components/DroppableCell';
 import { StatusHeader } from '@/components/StatusHeader';
 import { EditCardModal } from '@/components/EditCardModal';
+import { EditRecurrenceModal } from '@/components/EditRecurrenceModal';
 import { AddStreamModal } from '@/components/AddStreamModal';
 import { EditStreamModal } from '@/components/EditStreamModal';
 import { Plus, LogOut } from 'lucide-react';
@@ -47,10 +48,11 @@ export default function WillDoIt() {
   const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('month');
   const loadSequence = useRef(0);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
-  const [view, setView] = useState<View>('all');
-  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<View>('activated');
+  const [initialLoading, setInitialLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [editingRecurrenceId, setEditingRecurrenceId] = useState<string | null>(null);
   const [showStreamModal, setShowStreamModal] = useState(false);
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
   const [activeDragCard, setActiveDragCard] = useState<Card | null>(null);
@@ -68,7 +70,8 @@ export default function WillDoIt() {
 
   const loadData = useCallback(async (userId: string) => {
     const sequence = ++loadSequence.current;
-    setLoading(true);
+    // Keep the workspace mounted during mutation-triggered refreshes. Only the
+    // first load needs a full-screen placeholder; later loads update it in place.
     try {
       const { data: streamsData, error: streamsError } = await supabase
         .from('streams').select('*').eq('user_id', userId).order('position', { ascending: true });
@@ -115,7 +118,7 @@ export default function WillDoIt() {
     } catch (error) {
       if (sequence === loadSequence.current) toast.error(errorMessage(error, 'Could not load your workspace'));
     } finally {
-      if (sequence === loadSequence.current) setLoading(false);
+      if (sequence === loadSequence.current) setInitialLoading(false);
     }
   }, []);
 
@@ -126,11 +129,31 @@ export default function WillDoIt() {
         window.location.replace('/login');
         return;
       }
+      try {
+        const preferences = JSON.parse(localStorage.getItem(`will-do-it:workspace:${user.id}`) || 'null');
+        if (preferences && typeof preferences === 'object') {
+          const savedView = VIEWS.find(option => option.id === preferences.view);
+          if (savedView) setView(savedView.id);
+          if (['all', 'work', 'personal'].includes(preferences.area)) setActiveFilter(preferences.area);
+          if (['month', 'year', 'all'].includes(preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
+        }
+      } catch {
+        // Unavailable storage or invalid saved settings must not prevent loading.
+      }
       setUser(user);
       await loadData(user.id);
     };
     void init();
   }, [loadData]);
+
+  const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod }>) => {
+    if (!user) return;
+    try {
+      localStorage.setItem(`will-do-it:workspace:${user.id}`, JSON.stringify({ view, area: activeFilter, archivePeriod, ...changes }));
+    } catch {
+      // The selected view still works when browser storage is unavailable.
+    }
+  };
 
   const filteredStreams = streamsForDisplay(
     streams.filter((stream) => {
@@ -401,12 +424,17 @@ export default function WillDoIt() {
     window.location.replace('/login');
   };
 
+  const openRecurrenceEditor = (sourceId: string) => {
+    setEditingCard(null);
+    setEditingRecurrenceId(sourceId);
+  };
+
   const renderCard = (card: Card) => (
     <CardComponent key={card.id} card={card} onClick={() => setEditingCard(card)}
-      onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} />
+      onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />
   );
 
-  if (loading || !user) {
+  if (initialLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-canvas text-ink-soft">
         <div>Loading your workspace...</div>
@@ -423,7 +451,7 @@ export default function WillDoIt() {
           </div>
 
           <div className="flex items-center gap-4">
-            <AreaFilter value={activeFilter} onChange={setActiveFilter} />
+            <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />
 
             <button
               onClick={() => setShowAddModal(true)}
@@ -456,7 +484,8 @@ export default function WillDoIt() {
             {VIEWS.map((v) => (
               <button
                 key={v.id}
-                onClick={() => setView(v.id)}
+                onClick={() => { setView(v.id); savePreferences({ view: v.id }); }}
+                aria-pressed={view === v.id}
                 className={`px-4 sm:px-6 py-2 text-base transition-colors whitespace-nowrap ${
                   view === v.id
                     ? 'bg-accent text-accent-ink'
@@ -473,7 +502,11 @@ export default function WillDoIt() {
             <label className="flex items-center gap-2 text-sm text-ink-soft">
               Archive period
               <select className="control w-auto text-sm" value={archivePeriod}
-                onChange={e => setArchivePeriod(e.target.value as ArchivePeriod)}>
+                onChange={e => {
+                  const archivePeriod = e.target.value as ArchivePeriod;
+                  setArchivePeriod(archivePeriod);
+                  savePreferences({ archivePeriod });
+                }}>
                 <option value="month">Past month</option>
                 <option value="year">Past 1 year</option>
                 <option value="all">All time</option>
@@ -584,6 +617,16 @@ export default function WillDoIt() {
             onClose={() => setEditingCard(null)}
             onCardUpdated={handleCardUpdated}
             onCardDeleted={handleCardDeleted}
+            onEditRecurrence={openRecurrenceEditor}
+          />
+        )}
+
+        {editingRecurrenceId && (
+          <EditRecurrenceModal
+            sourceId={editingRecurrenceId}
+            streams={streams}
+            onClose={() => setEditingRecurrenceId(null)}
+            onRecurrenceUpdated={() => { if (user) void loadData(user.id); }}
           />
         )}
 

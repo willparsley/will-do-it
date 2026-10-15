@@ -10,13 +10,14 @@ interface CardViewProps {
   onClick?: () => void;
   onComplete?: (id: string) => void;
   onAdvance?: (id: string) => void;
+  onEditRecurrence?: (sourceId: string) => void;
 }
 
 /**
  * Presentational card. Used both for the real, draggable card and for the
  * DragOverlay preview (so the preview doesn't register a duplicate draggable).
  */
-export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps) {
+export function CardView({ card, onClick, onComplete, onAdvance, onEditRecurrence }: CardViewProps) {
   const isFinished = isTerminal(card);
   const hasReminder = !isFinished && !!card.remind_at;
   const badge = dueBadge(card);
@@ -31,7 +32,7 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
   const canComplete = !!onComplete;
   const canPromote = !!(onAdvance && next);
   const showActions = !isFinished && (canComplete || canPromote);
-  const promoteColor = next ? `var(--status-${next})` : undefined;
+  const promoteColor = next ? `var(--card-action-${next}, var(--status-${next}))` : undefined;
   const hasStatusBar = !isFinished;
 
   const handleAdvance = (e: React.MouseEvent) => {
@@ -68,7 +69,16 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
         <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
           {badge && <span className={`badge badge-${badge.kind}`}>{badge.label}</span>}
           {card.is_recurring && (
-            <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted" />
+            card.recurrence_source_id && onEditRecurrence ? (
+              <button type="button" aria-label="Edit recurrence" title="Edit recurrence"
+                className="inline-flex items-center justify-center rounded p-1 -m-1 text-ink-soft hover:text-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent"
+                onPointerDown={e => e.stopPropagation()}
+                onMouseDown={e => e.stopPropagation()}
+                onTouchStart={e => e.stopPropagation()}
+                onClick={e => { e.stopPropagation(); onEditRecurrence(card.recurrence_source_id!); }}>
+                <Repeat className="h-3 w-3 flex-shrink-0" />
+              </button>
+            ) : <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted" />
           )}
           {hasReminder && (
             <span title="Has reminder" style={{ color: 'var(--status-priority_backlog)' }}>
@@ -167,7 +177,7 @@ interface CardProps extends CardViewProps {
   overlay?: boolean;
 }
 
-export function Card({ card, onClick, onComplete, onAdvance, overlay = false }: CardProps) {
+export function Card({ card, onClick, onComplete, onAdvance, onEditRecurrence, overlay = false }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     disabled: overlay,
@@ -188,7 +198,7 @@ export function Card({ card, onClick, onComplete, onAdvance, overlay = false }: 
       {...listeners}
       className={isDragging ? 'opacity-40' : ''}
     >
-      <CardView card={card} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} />
+      <CardView card={card} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} />
     </div>
   );
 }

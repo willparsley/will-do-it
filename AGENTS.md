@@ -19,7 +19,7 @@ Will Do It is a calm, visual personal productivity app for managing to-dos as ca
 - **Framework**: Next.js (App Router, TypeScript)
 - **Hosting**: Vercel
 - **Backend/DB/Auth**: Supabase (Postgres + RLS + Auth)
-- **Styling**: Tailwind CSS + shadcn/ui (calm, easy-on-the-eyes design with light/dark mode)
+- **Styling**: Tailwind CSS + custom React components (calm, easy-on-the-eyes design with light/dark mode)
 - **Drag & Drop**: @dnd-kit (for custom matrix grid)
 - **Dates**: date-fns or native
 - **Forms**: React Hook Form + Zod (future)
@@ -48,6 +48,8 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - position (within cell)
 - is_recurring
 - recurrence_source_id, recurrence_date (immutable scheduled occurrence identity)
+- recurrence_revision (immutable schedule revision for that occurrence), scheduled_date (current scheduled slot)
+- auto_promoted_from (Backlog/Priority Backlog origin while automatically Waiting; null for manual/unknown origin)
 - completed_at (for archive filtering)
 
 ### recurrence_sources
@@ -57,6 +59,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - end_date, stopped_at
 - last_completed_at
 - recurrence_timezone, generated_through (calendar generation cursor)
+- schedule_revision (incremented when the recurrence pattern changes)
 
 **Important Behaviors:**
 - Dragging a recurring card updates the recurrence source's stream (future instances follow).
@@ -102,6 +105,8 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 
 ### Recurring Tasks
 - Configurable per source: frequency patterns (daily, every N days, specific weekdays, monthly 1st/last, etc.).
+- Edit a recurrence via the recurrence icon on any occurrence (including archived cards), or the Edit recurrence button in the card editor. The editor supports title, stream, pattern, stacking, end date, and stopping/resuming generation.
+- Source title and pattern changes update pending occurrences. Completed/canceled storage stays unchanged. Rescheduled automatic Waiting cards return to their prior backlog status only if neither their new due nor reminder day has arrived; manual/unknown Waiting and other active statuses are retained.
 - `stack_missed`: true = accumulate missed periods; false = only one active.
 - Auto-generate titles based on pattern when appropriate.
 - Generation + auto-promotion runs on app load/refresh and after card creation, edits, and drag/status changes (no manual button). Users can force via pull-to-refresh or F5.
@@ -119,6 +124,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Future: Push notifications (undecided on full strategy: push/email/etc.).
 
 ### Views & Filters
+- Active is the default view. The selected view, area filter, and archive period are remembered per user in browser storage and restored on refresh; invalid or unavailable storage falls back to the defaults.
 - Global: All / Work Area / Personal Area.
 - Streams with cards only shown.
 - No global "due soon" filter (badges + auto-promotion surface them).
@@ -160,7 +166,10 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Terminology: Streams (not epics/areas/projects)
 - Grouping by recurrence source (survives stream changes)
 - Auto-promotion conservative for time-sensitive items
-- Recurrence generation runs through the Supabase `generate_recurring_instances` RPC with per-source row locks, immutable `cards.recurrence_date` occurrence keys, and a persisted `generated_through` cursor. Apply SQL migrations before deploying dependent UI changes.
+- Recurrence generation runs through the Supabase `generate_recurring_instances` RPC with per-source row locks, immutable `(recurrence_source_id, recurrence_revision, recurrence_date)` occurrence keys, and a persisted `generated_through` cursor. Apply SQL migrations before deploying dependent UI changes.
+- Recurrence edits use the transactional `save_recurrence` RPC with settings-version checks. Pattern edits increment the source revision, reschedule pending cards in order, and move the generation cursor to the revised horizon. Monthly changes retain the pending occurrence's month when the interval allows; weekly changes retain its week when possible; every-N-day changes adjust by the interval difference. Other pattern changes start on the next match from the old scheduled day. Multiple pending cards are retained and assigned distinct dates under the new pattern. Reminder day offsets and local times follow the new due dates. Existing occurrence identities remain immutable and `scheduled_date` reserves their new slots against generation. Turning off stacking is blocked until at most one pending card remains. End dates and stopping limit new generation without deleting pending cards.
+- Automatic promotion stores the originating backlog status in `auto_promoted_from`, including initial/generated recurring occurrences. Manual status changes clear that provenance. Legacy Waiting origins remain unknown and are never inferred. Opening the source editor fetches current settings; jumping from a dirty card form requires discarding its unsaved edits explicitly.
+- Pattern edits without pending cards preserve the existing generation boundary. Completion/history cursors are not rescheduled as pending slots, so the new interval is applied only once on generation, including when resuming a stopped recurrence.
 - Archive filters use `completed_at` (calendar month/year lookback); legacy records with no completion date are retained in All time. Recurrence groups follow the current source stream and area without rewriting completed-card storage. Due badges compare calendar days in the source timezone; terminal cards hide due/reminder and last-completed metadata.
 - datetime-local controls display local calendar fields and preserve unchanged stored instants, including seconds and DST repeated hours. Weekly recurrence intervals are explicitly visible.
 - Initial recurring cards receive a scheduled date when none is supplied: daily/every-N-days starts today; weekly/monthly starts on the next matching day, including today. Explicit initial due dates are retained. Recurring creation is atomic.
@@ -169,6 +178,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Non-stacking recurrence reopening is blocked while another occurrence is pending. Refresh promotion updates current database rows conditionally; both recurring and ordinary overdue due/reminder days catch up. Creation, edits, and drag/status changes run the same refresh/promotion path for all cards. Stream deletion must atomically rehome cards and sources; foreign keys prevent cascading history loss.
 - A database trigger stamps/clears `completed_at`, clears terminal-card reminders, and updates recurrence completion bookkeeping for all status-change paths.
 - No manual "process recurrences" button
+- Full-screen workspace loading is only for initial load. Refreshes after mutations keep the board and open editors mounted while updating data in place.
 - Uncategorized is special but participates in normal visibility/movement
 - Streams have no "backlog" state — only active (in_progress), complete, canceled. Legacy `backlog` rows auto-migrate to active on load.
 - Stream status is edited inside the stream edit modal (with area/rename/delete), not inline on the row. Rows show a subtle badge only when complete/canceled.
