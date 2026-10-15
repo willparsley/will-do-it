@@ -48,6 +48,12 @@ export function CardDateField({ id, label, value, onChange, disabled, dueAt }: C
           </Button>
           <Popover className={styles.popover} placement="bottom start" offset={6} onClick={event => event.stopPropagation()}>
             <Dialog aria-label={`Choose ${label.toLowerCase()}`} className={styles.dialog}>
+              <div onKeyDownCapture={event => {
+                if (event.key === 'Escape') {
+                  event.preventDefault(); event.stopPropagation();
+                  setOpen(false); triggerRef.current?.focus();
+                }
+              }}>
               <Calendar autoFocus aria-label={label} value={day} onChange={date => choose(date.toString())} isDisabled={disabled}>
                 <header className={styles.calendarHeader}>
                   <Button slot="previous" className={`${styles.iconButton} focus-ring`} aria-label="Previous month"><ChevronLeft size={20} /></Button>
@@ -59,6 +65,7 @@ export function CardDateField({ id, label, value, onChange, disabled, dueAt }: C
                 </CalendarGrid>
               </Calendar>
               <Button className={`${styles.done} focus-ring`} onPress={() => setOpen(false)}>Done</Button>
+              </div>
             </Dialog>
           </Popover>
         </DialogTrigger>

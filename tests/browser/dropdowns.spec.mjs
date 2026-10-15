@@ -93,8 +93,9 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
 
 
 // Card forms exercise the same production bundle, with all writes intercepted.
-for (const theme of ['light', 'dark']) test(`card forms protect drafts and support optional details in ${theme} mode`, async ({ page }, testInfo) => {
+for (const theme of ['light', 'dark']) test(`card forms protect drafts and support optional details in ${theme} mode`, async ({ page, isMobile }, testInfo) => {
  page.setDefaultTimeout(8000);
+ await page.clock.setFixedTime(new Date('2026-10-15T12:00:00Z'));
  const card = {id:'card',user_id:user.id,stream_id:'1',title:'Walk the dog',status:'waiting',position:0,is_recurring:true,recurrence_source_id:'source',notes:'Bring water',due_at:'2026-10-15T14:00:42.123Z',remind_at:null};
  const source = {id:'source',user_id:user.id,stream_id:'1',base_title:'Dog walks',frequency:'weekly',interval:1,weekdays:[1],stack_missed:false,recurrence_timezone:'America/New_York'};
  const calls=[];
@@ -147,9 +148,41 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  assert.equal(await dialog.locator('#card-due').isVisible(),false);
  assert.equal(await dialog.locator('#card-notes').isVisible(),false);
  await dialog.getByText('Dates & reminder',{exact:false}).click();
- await page.getByLabel('Due date & time',{exact:true}).fill('2026-10-20T10:30');
- const dateBox=await page.getByLabel('Due date & time',{exact:true}).boundingBox();
- assert.ok(dateBox.width>=230,'Date control must have enough width for date and time');
+ const due=dialog.locator('#card-due-field');
+ const reminder=dialog.locator('#card-reminder-field');
+ await due.getByRole('button',{name:'Today',exact:true}).click();
+ assert.equal(await due.locator('input[type="time"]').count(),0,'Time is optional');
+ await due.getByRole('button',{name:'Tomorrow',exact:true}).click();
+ assert.match(await due.locator('#card-due').textContent(),/16/);
+ await due.locator('#card-due').click();
+ let calendar=page.getByRole('dialog',{name:'Choose due date',exact:true});
+ await calendar.waitFor();
+ await page.keyboard.press('Escape');await calendar.waitFor({state:'hidden'});
+ await expect(due.locator('#card-due')).toBeFocused();
+ assert.equal(await dialog.count(),1,'Escape closes the calendar before the card form');
+ await due.locator('#card-due').click();
+ calendar=page.getByRole('dialog',{name:'Choose due date',exact:true});
+ await calendar.waitFor();
+ await page.screenshot({path:testInfo.outputPath('date-calendar.png'),scale:'css'});
+ const calendarBox=await calendar.boundingBox();
+ assert.ok(calendarBox.x>=0 && calendarBox.x+calendarBox.width<=page.viewportSize().width && calendarBox.y>=0 && calendarBox.y+calendarBox.height<=page.viewportSize().height);
+ const day=calendar.getByRole('gridcell').filter({has:page.getByText('20',{exact:true})});
+ const dayBox=await day.boundingBox();assert.ok(dayBox.width>=44 && dayBox.height>=44);
+ if (isMobile) await day.click();
+ else { await day.getByRole('button').focus();await page.keyboard.press('ArrowRight');await page.keyboard.press('ArrowLeft');await page.keyboard.press('Enter'); }
+ await calendar.waitFor({state:'hidden'});
+ assert.match(await due.locator('#card-due').textContent(),/20/);
+ await due.getByRole('button',{name:'Add time',exact:true}).click();
+ await expect(page.getByLabel('Due date time',{exact:true})).toBeFocused();
+ await page.getByLabel('Due date time',{exact:true}).fill('10:30');
+ await reminder.getByRole('button',{name:'Day before due',exact:true}).click();
+ assert.match(await reminder.locator('#card-reminder').textContent(),/19/);
+ assert.equal(await page.getByLabel('Reminder time',{exact:true}).inputValue(),'10:30');
+ await reminder.getByRole('button',{name:'Remove reminder time',exact:true}).click();
+ assert.equal(await reminder.locator('input[type="time"]').count(),0);
+ await reminder.getByRole('button',{name:'Clear reminder',exact:true}).click();
+ assert.match(await reminder.locator('#card-reminder').textContent(),/Pick a date/);
+ await reminder.getByRole('button',{name:'Day before due',exact:true}).click();
  await dialog.locator('summary').filter({hasText:'Notes'}).click();
  await page.getByLabel('Notes',{exact:true}).fill('First occurrence notes');
  await dialog.locator('summary').filter({hasText:'Repeat'}).click();
@@ -183,6 +216,8 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  await page.getByRole('button',{name:'Create Card',exact:true}).click();
  await dialog.waitFor({state:'hidden'});
  const created=calls.find(call=>call.path.endsWith('/create_recurring_card_with_notes'));
+ assert.equal(created.body.p_due_at,await page.evaluate(()=>new Date(2026,9,20,10,30).toISOString()));
+ assert.equal(created.body.p_remind_at,await page.evaluate(()=>new Date(2026,9,19,10,30).toISOString()));
  assert.equal(created.body.p_notes,'First occurrence notes');assert.equal(created.body.p_interval,2);assert.deepEqual(created.body.p_weekdays,[1]);
  await expect(quickAdd).toBeFocused();
  // Edit is a real form: Enter saves, errors remain visible without losing the draft.

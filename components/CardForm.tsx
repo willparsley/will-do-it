@@ -28,9 +28,9 @@ export function CardFormDialog({ title, dirty, saving, onClose, children }: {
       <Modal className={`modal-panel ${styles.panel}`}>
         <Dialog aria-labelledby={titleId} className="outline-none">
         <div className={styles.dialog} onKeyDownCapture={event => {
-          // Select triggers consume Escape even when closed. An open menu gets
-          // the first Escape; otherwise use the dialog's protected dismissal.
-          if (event.key === 'Escape' && !event.currentTarget.querySelector('[aria-haspopup][aria-expanded="true"]')) {
+          // An open menu or calendar gets the first Escape; otherwise use
+          // the dialog's protected dismissal, even from a closed select.
+          if (event.key === 'Escape' && !event.currentTarget.querySelector('[aria-expanded="true"]')) {
             event.preventDefault();
             event.stopPropagation();
             close();
