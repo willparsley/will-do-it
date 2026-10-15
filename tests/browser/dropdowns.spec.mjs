@@ -73,7 +73,6 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
  await assertValueCentered(trigger);
  await page.screenshot({ path: testInfo.outputPath('selected-value.png'), scale: 'css' });
  await trigger.click();await page.keyboard.press('Escape');assert.equal(await page.getByRole('listbox').count(),0);
- page.once('dialog',dialog=>dialog.accept());
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await page.getByRole('button',{name:'New Stream',exact:true}).evaluate(el=>el.click());
  await assertValueCentered(page.getByRole('button',{name:/Area/}));
@@ -128,6 +127,19 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  });
  await page.goto('http://app.test');
  const quickAdd=page.getByRole('button',{name:'Quick Add',exact:true});
+ async function cancelWithoutWarning(dialog) {
+   let confirmations=0;
+   const unexpectedConfirmation=async prompt=>{confirmations++;await prompt.dismiss();};
+   page.on('dialog',unexpectedConfirmation);
+   try {
+     await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+     await dialog.waitFor({state:'hidden'});
+     assert.equal(confirmations,0,'Cancel must discard a dirty draft without confirmation');
+   } finally { page.off('dialog',unexpectedConfirmation); }
+ }
+ await quickAdd.click();
+ await page.getByLabel('Title',{exact:true}).fill('Discard this draft');
+ await cancelWithoutWarning(page.getByRole('dialog',{name:'Add New Card'}));
  await quickAdd.click();
  let dialog=page.getByRole('dialog',{name:'Add New Card'});
  await dialog.waitFor();
@@ -166,7 +178,6 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
    assert.equal(await page.getByLabel('Title',{exact:true}).inputValue(),'A recurring walk');
  }
  await rejectDiscard(()=>page.keyboard.press('Escape'));
- await rejectDiscard(()=>page.getByRole('button',{name:'Cancel',exact:true}).click());
  await rejectDiscard(()=>page.getByRole('button',{name:'Close card form'}).click());
  await rejectDiscard(()=>page.mouse.click(2,2));
  await page.getByRole('button',{name:'Create Card',exact:true}).click();
@@ -189,6 +200,11 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  const prompt=await prompted;await prompt.dismiss();await navigation;assert.equal(await dialog.count(),1);
  await page.screenshot({path:testInfo.outputPath('card-edit.png'),scale:'css'});
  failSave=false;await page.getByRole('button',{name:'Save Changes',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ await page.getByText('Walk the dog',{exact:true}).click();
+ await page.getByLabel('Title',{exact:true}).fill('Discard this edit');
+ const writesBeforeCancel=calls.length;
+ await cancelWithoutWarning(page.getByRole('dialog',{name:'Edit Card'}));
+ assert.equal(calls.length,writesBeforeCancel,'Cancel must not save the draft');
  // Ordinary creation also includes notes, using the existing insert path.
  await quickAdd.click();
  await page.getByLabel('Title',{exact:true}).fill('One-off task');

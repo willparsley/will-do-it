@@ -7,7 +7,7 @@ import { AppSelect } from './AppSelect';
 import { type CardStatus, type Stream, STATUS_LABELS } from '@/lib/types';
 import styles from './CardForm.module.css';
 
-/** One dismissal path for backdrop, Escape, Cancel, and the close button. */
+/** Protect incidental dismissal; explicit Cancel discards the draft immediately. */
 export function CardFormDialog({ title, dirty, saving, onClose, children }: {
   title: string; dirty: boolean; saving: boolean; onClose: () => void; children: ReactNode;
 }) {
@@ -39,8 +39,8 @@ export function CardFormDialog({ title, dirty, saving, onClose, children }: {
             <h2 id={titleId} className="text-xl font-semibold text-ink">{title}</h2>
             <button type="button" onClick={close} disabled={saving} aria-label="Close card form" className="btn btn-ghost focus-ring h-11 w-11"><X size={20} /></button>
           </header>
-          {/* Cancel shares the same protected dismissal as Escape and the backdrop. */}
-          <CardCloseContext.Provider value={close}>{children}</CardCloseContext.Provider>
+          {/* Explicit cancellation still waits for an in-flight save to finish. */}
+          <CardCancelContext.Provider value={() => { if (!saving) onClose(); }}>{children}</CardCancelContext.Provider>
         </div>
         </Dialog>
       </Modal>
@@ -48,9 +48,9 @@ export function CardFormDialog({ title, dirty, saving, onClose, children }: {
   );
 }
 
-const CardCloseContext = createContext<() => void>(() => {});
+const CardCancelContext = createContext<() => void>(() => {});
 export function CardFormCancel({ disabled }: { disabled: boolean }) {
-  const close = useContext(CardCloseContext);
+  const close = useContext(CardCancelContext);
   return <button type="button" onClick={close} disabled={disabled} className="btn btn-secondary focus-ring px-5 py-2.5">Cancel</button>;
 }
 
