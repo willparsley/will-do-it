@@ -137,6 +137,7 @@ test('workspace refresh calls conditional promotion and hydrates cards before di
   await new Promise(resolve=>setTimeout(resolve,0));
   let tree=ui.render();
   assert.deepEqual(calls,['generate_recurring_instances','promote_due_cards']);
+  button(tree,'All').props.onClick();tree=ui.render();
   const displayed=nodes(tree,n=>n.props.card?.id==='card')[0].props.card;
   assert.equal(displayed.last_completed_at,source.last_completed_at);
   assert.equal(displayed.recurrence_stream_id,'new-stream');
@@ -202,6 +203,7 @@ for(const action of ['complete','advance','drag']) test(`failed stale ${action} 
     '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},closestCenter(){}},
   });
   ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
+  button(ui.render(),'All').props.onClick();
   const tree=ui.render();
   const log=console.error;console.error=()=>{};
   try {
@@ -253,6 +255,7 @@ for (const operation of ['create', 'edit', 'drag']) {
         });
         ui.render(); ui.effects[0](); await new Promise(resolve => setTimeout(resolve, 0));
         let tree = ui.render();
+        button(tree,'All').props.onClick(); tree=ui.render();
         const callsBefore = calls.length;
         const saved = { ...card, [field]: past.toISOString() };
         persisted = [saved];

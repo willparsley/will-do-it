@@ -124,6 +124,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Future: Push notifications (undecided on full strategy: push/email/etc.).
 
 ### Views & Filters
+- Active is the default view. The selected view, area filter, and archive period are remembered per user in browser storage and restored on refresh; invalid or unavailable storage falls back to the defaults.
 - Global: All / Work Area / Personal Area.
 - Streams with cards only shown.
 - No global "due soon" filter (badges + auto-promotion surface them).

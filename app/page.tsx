@@ -48,7 +48,7 @@ export default function WillDoIt() {
   const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('month');
   const loadSequence = useRef(0);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
-  const [view, setView] = useState<View>('all');
+  const [view, setView] = useState<View>('activated');
   const [initialLoading, setInitialLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
@@ -129,11 +129,31 @@ export default function WillDoIt() {
         window.location.replace('/login');
         return;
       }
+      try {
+        const preferences = JSON.parse(localStorage.getItem(`will-do-it:workspace:${user.id}`) || 'null');
+        if (preferences && typeof preferences === 'object') {
+          const savedView = VIEWS.find(option => option.id === preferences.view);
+          if (savedView) setView(savedView.id);
+          if (['all', 'work', 'personal'].includes(preferences.area)) setActiveFilter(preferences.area);
+          if (['month', 'year', 'all'].includes(preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
+        }
+      } catch {
+        // Unavailable storage or invalid saved settings must not prevent loading.
+      }
       setUser(user);
       await loadData(user.id);
     };
     void init();
   }, [loadData]);
+
+  const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod }>) => {
+    if (!user) return;
+    try {
+      localStorage.setItem(`will-do-it:workspace:${user.id}`, JSON.stringify({ view, area: activeFilter, archivePeriod, ...changes }));
+    } catch {
+      // The selected view still works when browser storage is unavailable.
+    }
+  };
 
   const filteredStreams = streamsForDisplay(
     streams.filter((stream) => {
@@ -431,7 +451,7 @@ export default function WillDoIt() {
           </div>
 
           <div className="flex items-center gap-4">
-            <AreaFilter value={activeFilter} onChange={setActiveFilter} />
+            <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />
 
             <button
               onClick={() => setShowAddModal(true)}
@@ -464,7 +484,8 @@ export default function WillDoIt() {
             {VIEWS.map((v) => (
               <button
                 key={v.id}
-                onClick={() => setView(v.id)}
+                onClick={() => { setView(v.id); savePreferences({ view: v.id }); }}
+                aria-pressed={view === v.id}
                 className={`px-4 sm:px-6 py-2 text-base transition-colors whitespace-nowrap ${
                   view === v.id
                     ? 'bg-accent text-accent-ink'
@@ -481,7 +502,11 @@ export default function WillDoIt() {
             <label className="flex items-center gap-2 text-sm text-ink-soft">
               Archive period
               <select className="control w-auto text-sm" value={archivePeriod}
-                onChange={e => setArchivePeriod(e.target.value as ArchivePeriod)}>
+                onChange={e => {
+                  const archivePeriod = e.target.value as ArchivePeriod;
+                  setArchivePeriod(archivePeriod);
+                  savePreferences({ archivePeriod });
+                }}>
                 <option value="month">Past month</option>
                 <option value="year">Past 1 year</option>
                 <option value="all">All time</option>
