@@ -1,7 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL) process.loadEnvFile(root + '/.env.local');
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -141,7 +141,11 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  await dialog.locator('summary').filter({hasText:'Notes'}).click();
  await page.getByLabel('Notes',{exact:true}).fill('First occurrence notes');
  await dialog.locator('summary').filter({hasText:'Repeat'}).click();
- await page.getByLabel('Recurring task',{exact:true}).check();
+ assert.equal(await page.getByLabel('Recurring task',{exact:true}).count(),0);
+ await page.locator('#card-frequency').waitFor();
+ await dialog.locator('summary').filter({hasText:'Repeat'}).click();
+ assert.equal(await page.locator('#card-frequency').isVisible(),false);
+ await dialog.locator('summary').filter({hasText:'Repeat'}).click();
  await page.locator('#card-frequency').click();
  await page.getByRole('option',{name:'Weekly',exact:true}).click();
  await page.getByLabel('Every N weeks',{exact:true}).fill('2');
@@ -169,7 +173,7 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  await dialog.waitFor({state:'hidden'});
  const created=calls.find(call=>call.path.endsWith('/create_recurring_card_with_notes'));
  assert.equal(created.body.p_notes,'First occurrence notes');assert.equal(created.body.p_interval,2);assert.deepEqual(created.body.p_weekdays,[1]);
- assert.equal(await quickAdd.evaluate(el=>el===document.activeElement),true);
+ await expect(quickAdd).toBeFocused();
  // Edit is a real form: Enter saves, errors remain visible without losing the draft.
  await page.getByText('Walk the dog',{exact:true}).click();
  dialog=page.getByRole('dialog',{name:'Edit Card'});await dialog.waitFor();
@@ -188,6 +192,8 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  // Ordinary creation also includes notes, using the existing insert path.
  await quickAdd.click();
  await page.getByLabel('Title',{exact:true}).fill('One-off task');
+ await page.getByRole('dialog').locator('summary').filter({hasText:'Repeat'}).click();
+ await page.getByRole('dialog').locator('summary').filter({hasText:'Repeat'}).click();
  await page.getByRole('dialog').locator('summary').filter({hasText:'Notes'}).click();await page.getByLabel('Notes',{exact:true}).fill('One-off notes');
  await page.getByLabel('Title',{exact:true}).focus();await page.keyboard.press('Enter');
  await page.getByRole('dialog',{name:'Add New Card'}).waitFor({state:'hidden'});

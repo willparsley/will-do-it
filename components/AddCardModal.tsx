@@ -89,13 +89,12 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
         <div className={styles.body}>
           <fieldset disabled={loading} className={styles.fields}>
             {cardFields({ title, setTitle, streamId, setStreamId, status, setStatus, streams: selectableStreams, saving: loading, dueAt, setDueAt, remindAt, setRemindAt, notes, setNotes })}
-            <details className={styles.section}>
-              <summary className="focus-ring">Repeat <span className={styles.optional}>{isRecurring ? 'Recurring' : 'Does not repeat'}</span></summary>
+            <details className={styles.section} open={isRecurring}>
+              <summary className="focus-ring" aria-disabled={loading} onClick={event => {
+                event.preventDefault();
+                if (!loading) setIsRecurring(previous => !previous);
+              }}>Repeat <span className={styles.optional}>{isRecurring ? 'Recurring' : 'Does not repeat'}</span></summary>
               <div className={styles.sectionBody}>
-                <label className={styles.check}>
-                  <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} />
-                  Recurring task
-                </label>
                 {isRecurring && <>
                   <div>
                     <label htmlFor="card-frequency" className="field-label">Repeat</label>
@@ -125,7 +124,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
                     <label className={styles.check}><input type="checkbox" checked={stackMissed} onChange={e => setStackMissed(e.target.checked)} aria-describedby="card-stack-help" />Keep missed occurrences</label>
                     <p id="card-stack-help" className={styles.help}>{stackMissed ? 'Each missed occurrence stays as a separate card.' : 'Keep just one pending occurrence until you complete or cancel it.'}</p>
                   </div>
-                  <p className={styles.help}>Without a due date, the first occurrence starts on the next matching day, including today. Notes apply to this first card. You can change the schedule or set an end date after creation.</p>
+                  <p className={styles.help}>Close Repeat to make this a one-off card. Without a due date, the first occurrence starts on the next matching day, including today. Notes apply to this first card. You can change the schedule or set an end date after creation.</p>
                 </>}
               </div>
             </details>

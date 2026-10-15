@@ -107,7 +107,7 @@ test('weekly intervals remain visible after switching from every-N-days and recu
     {'@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module});
   let tree=ui.render();
   nodes(tree,n=>n.type==='input' && n.props.type==='text')[0].props.onChange({target:{value:'Weekly walk'}});
-  nodes(tree,n=>n.type==='input' && n.props.type==='checkbox')[0].props.onChange({target:{checked:true}});
+  nodes(tree,n=>n.type==='summary' && text(n).includes('Repeat'))[0].props.onClick({preventDefault(){}});
   tree=ui.render();
   nodes(tree,n=>n.props?.onValueChange && n.props.value==='daily')[0].props.onValueChange('every_n_days');
   tree=ui.render();
