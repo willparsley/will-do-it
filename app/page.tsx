@@ -20,6 +20,7 @@ import { Card as CardComponent } from '@/components/Card';
 import { DroppableCell } from '@/components/DroppableCell';
 import { StatusHeader } from '@/components/StatusHeader';
 import { EditCardModal } from '@/components/EditCardModal';
+import { EditRecurrenceModal } from '@/components/EditRecurrenceModal';
 import { AddStreamModal } from '@/components/AddStreamModal';
 import { EditStreamModal } from '@/components/EditStreamModal';
 import { Plus, LogOut } from 'lucide-react';
@@ -51,6 +52,7 @@ export default function WillDoIt() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [editingRecurrenceId, setEditingRecurrenceId] = useState<string | null>(null);
   const [showStreamModal, setShowStreamModal] = useState(false);
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
   const [activeDragCard, setActiveDragCard] = useState<Card | null>(null);
@@ -401,9 +403,14 @@ export default function WillDoIt() {
     window.location.replace('/login');
   };
 
+  const openRecurrenceEditor = (sourceId: string) => {
+    setEditingCard(null);
+    setEditingRecurrenceId(sourceId);
+  };
+
   const renderCard = (card: Card) => (
     <CardComponent key={card.id} card={card} onClick={() => setEditingCard(card)}
-      onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} />
+      onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />
   );
 
   if (loading || !user) {
@@ -584,6 +591,16 @@ export default function WillDoIt() {
             onClose={() => setEditingCard(null)}
             onCardUpdated={handleCardUpdated}
             onCardDeleted={handleCardDeleted}
+            onEditRecurrence={openRecurrenceEditor}
+          />
+        )}
+
+        {editingRecurrenceId && (
+          <EditRecurrenceModal
+            sourceId={editingRecurrenceId}
+            streams={streams}
+            onClose={() => setEditingRecurrenceId(null)}
+            onRecurrenceUpdated={() => { if (user) void loadData(user.id); }}
           />
         )}
 

@@ -34,13 +34,14 @@ migrations that have not yet been run.
 
 1. `202610140002_recurrence_safety.sql` — safe promotion, reopening guards, and atomic stream deletion/rehome.
 2. `202610140003_recurrence_lifecycle.sql` — atomic card/stream edits, per-source closure choices, source movement, and calendar scheduling.
-3. `202610140004_ordinary_card_promotion.sql` — overdue catch-up for ordinary due dates and reminders. If 001–003 are already applied, only run 004.
+3. `202610140004_ordinary_card_promotion.sql` — overdue catch-up for ordinary due dates and reminders.
+4. `202610140005_edit_recurrence.sql` — recurrence editing, pending-card rescheduling, schedule revisions, and automatic-promotion provenance. If 001–004 are already applied, only run 005.
 
 Migrations preserve existing cards, including duplicate history.
 `supabase/audit_recurrence_duplicates.sql` provides read-only queries for reviewing
 existing copies. Refresh older open app tabs after deploying the matching UI.
 
-Generation is serialized per source and keyed by an immutable scheduled date.
+Generation is serialized per source and keyed by an immutable schedule revision and occurrence date.
 Non-stacking sources keep one pending instance; stacking sources catch up distinct
 missed dates and keep one future instance (at most 1000 dates per refresh).
 New sources use their creator's timezone; legacy sources pin it on first
@@ -63,6 +64,20 @@ still generate. Moving a recurrence also moves all pending siblings. Archived
 occurrences retain their stored history but display under the current source
 stream, grouped by source ID. Archive defaults to Past month, with Past 1 year and
 All time available; legacy records without completion dates remain in All time.
+
+Click a card's recurrence icon, or **Edit recurrence** in its card editor, to edit
+the source title, stream, frequency, interval, weekdays/monthly day, stacking,
+end date, and whether generation is enabled. Source settings are loaded fresh
+and stale saves are rejected. Saving refreshes generation and promotion.
+Title and pattern edits update pending cards while preserving completed/canceled
+rows and occurrence identities. Monthly date changes reschedule within each
+pending month when allowed by the interval; other pattern changes assign pending
+cards distinct dates in order. Reminder offsets and local times follow the new
+due dates. Automatically promoted Waiting cards return to their original backlog
+status when both new dates are in the future; manual or legacy/unknown Waiting
+cards retain their status, as do Research, In Progress, and Review cards.
+Turning off stacking requires completing/canceling extra pending occurrences.
+Stopping or setting an end date retains existing cards and limits new generation.
 
 Run `npm test` for isolated PostgreSQL, component, and handler regression tests. These use PGlite and do
 not connect to Supabase or modify application data. PGlite serializes submitted

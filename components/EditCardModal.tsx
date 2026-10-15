@@ -15,9 +15,10 @@ interface EditCardModalProps {
   onClose: () => void;
   onCardUpdated: (updatedCard: Card) => void;
   onCardDeleted: (cardId: string) => void;
+  onEditRecurrence?: (sourceId: string) => void;
 }
 
-export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDeleted }: EditCardModalProps) {
+export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDeleted, onEditRecurrence }: EditCardModalProps) {
   // Active streams only, alphabetical, "Uncategorized" last — but always keep
   // the card's current stream selectable, even if it's complete/canceled.
   const selectableStreams = React.useMemo(() => {
@@ -93,6 +94,15 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
     setStatus(newStatus);
   };
 
+  const editRecurrence = () => {
+    if (!card.recurrence_source_id || !onEditRecurrence) return;
+    const hasChanges = title !== card.title || streamId !== (card.recurrence_stream_id || card.stream_id)
+      || status !== card.status || dueAt !== dateTimeLocal(card.due_at)
+      || remindAt !== dateTimeLocal(card.remind_at) || notes !== (card.notes || '');
+    if (hasChanges && !confirm('Discard unsaved card changes and edit the recurrence?')) return;
+    onEditRecurrence(card.recurrence_source_id);
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div 
@@ -100,6 +110,10 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
         onClick={e => e.stopPropagation()}
       >
         <h2 className="text-xl font-semibold mb-4 text-ink">Edit Card</h2>
+
+        {card.recurrence_source_id && onEditRecurrence && (
+          <button type="button" className="btn btn-secondary w-full py-2 mb-4" disabled={loading} onClick={editRecurrence}>Edit recurrence</button>
+        )}
 
         <div className="space-y-4">
           <div>

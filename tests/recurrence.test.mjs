@@ -269,7 +269,7 @@ test('moving a pending monthly backlog to an arrived date promotes it and future
   assert.equal(await generate(), 0);
 });
 
-test('new schedule revisions permit previously used identity dates without changing old identities', async () => {
+test('repeated schedule edits preserve occurrence identities and assign distinct pending dates', async () => {
   await fixture({ stack: true, daysAgo: 4 });
   await generate();
   const identities = await query('select id, recurrence_date, recurrence_revision from cards order by id');
