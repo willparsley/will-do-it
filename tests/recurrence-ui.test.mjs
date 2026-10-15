@@ -28,7 +28,7 @@ test('editing only a title preserves exact date instants and uses the source cur
   let tree = ui.render();
   nodes(tree,n=>n.type==='input' && n.props.type==='text')[0].props.onChange({target:{value:'New title'}});
   tree=ui.render();
-  await button(tree,'Save Changes').props.onClick();
+  await nodes(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
   assert.equal(calls[0].name,'save_card');
   assert.equal(calls[0].args.p_changes.due_at,base.due_at);
   assert.equal(calls[0].args.p_changes.remind_at,base.remind_at);
@@ -49,9 +49,10 @@ test('reopening errors from Supabase are visible and never reported as success',
   tree=ui.render();
   // Expected error is logged by the component; keep test output focused.
   const log=console.error;console.error=()=>{};
-  try {await button(tree,'Save Changes').props.onClick();} finally {console.error=log;}
+  try {await nodes(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});} finally {console.error=log;}
   assert.equal(closed,false);assert.equal(updated,false);
-  assert.deepEqual(notices.errors,['This recurrence already has a pending card']);
+  assert.ok(text(ui.render()).includes('This recurrence already has a pending card'));
+  assert.equal(nodes(ui.render(),n=>n.props?.role==='alert').length,1);
   assert.equal(notices.successes.length,0);
 });
 
@@ -118,7 +119,7 @@ test('weekly intervals remain visible after switching from every-N-days and recu
   assert.ok(text(tree).includes('weeks'));
   await nodes(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
   assert.equal(calls.length,1);
-  assert.equal(calls[0].name,'create_recurring_card');
+  assert.equal(calls[0].name,'create_recurring_card_with_notes');
   assert.equal(calls[0].args.p_frequency,'weekly');
   assert.equal(calls[0].args.p_interval,3);
   assert.equal(calls[0].args.p_due_at,null);

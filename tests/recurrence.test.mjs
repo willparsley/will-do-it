@@ -905,3 +905,32 @@ test('Undo rejects a now-closed original stream without partial changes',async()
   await assert.rejects(undoAction(action.undo_id),/changed since then|no longer active/);
   assert.equal((await query('select status from cards where id=$1',[original]))[0].status,'complete');
 });
+
+test('recurring creation saves notes on the first occurrence and keeps successor notes independent', async () => {
+  const [{card}] = await query(`select row_to_json(public.create_recurring_card_with_notes(
+    'New task',$1,'backlog',null,null,'daily',1,null,null,false,'America/New_York','  First card notes  ')) as card`, [stream]);
+  assert.equal(card.notes, 'First card notes');
+  assert.ok(card.recurrence_source_id);
+  assert.equal((await query('select notes from cards where id=$1',[card.id]))[0].notes,'First card notes');
+  await saveCard(card.id, card.status, {status:'complete'});
+  await generate();
+  const successors=await query('select notes from cards where recurrence_source_id=$1 and id<>$2',[card.recurrence_source_id,card.id]);
+  assert.equal(successors.length,1);
+  assert.equal(successors[0].notes,null);
+});
+
+test('a notes write failure rolls back both the new card and recurrence source', async () => {
+  await db.exec(`reset role;
+    create function public.reject_test_notes() returns trigger language plpgsql as $$
+    begin if new.notes = 'reject test notes' then raise exception 'Notes write failed'; end if; return new; end $$;
+    create trigger reject_test_notes before update on cards for each row execute function public.reject_test_notes();
+    set role authenticated;`);
+  try {
+    await assert.rejects(query(`select public.create_recurring_card_with_notes(
+      'Must roll back',$1,'backlog',null,null,'daily',1,null,null,false,'America/New_York','reject test notes')`,[stream]), /Notes write failed/);
+    assert.equal((await query('select * from cards')).length,0);
+    assert.equal((await query('select * from recurrence_sources')).length,0);
+  } finally {
+    await db.exec('reset role; drop trigger reject_test_notes on cards; drop function public.reject_test_notes(); set role authenticated;');
+  }
+});
