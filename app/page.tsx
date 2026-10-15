@@ -268,7 +268,7 @@ export default function WillDoIt() {
         );
       }
 
-      if (activeCard.is_recurring) await loadData(user.id);
+      await loadData(user.id);
 
       toast.success('Moved');
     } catch (err) {
@@ -281,14 +281,14 @@ export default function WillDoIt() {
 
   const handleCardCreated = async (newCard: Card) => {
     setCards((prev) => [...prev, newCard]);
-    if (newCard.is_recurring && user) await loadData(user.id);
+    if (user) await loadData(user.id);
   };
 
   const handleCardUpdated = async (updatedCard: Card) => {
     setCards((prev) =>
       prev.map((c) => (c.id === updatedCard.id ? hydrateRecurringCards([updatedCard], recurrenceSources)[0] : c))
     );
-    if (updatedCard.is_recurring && user) {
+    if (user) {
       await loadData(user.id);
     }
   };

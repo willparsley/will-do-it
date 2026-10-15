@@ -29,11 +29,12 @@ For a fresh database, run `supabase/schema.sql`, then apply the SQL files in
 `supabase/migrations/` in filename order. For an existing database, apply only
 migrations that have not yet been run.
 
-**Apply all pending migrations before deploying this app version.** If you
-already applied `202610140001_recurrence_idempotency.sql`, run these next in order:
+**Apply all pending migrations before deploying this app version.** After
+`202610140001_recurrence_idempotency.sql`, the migrations are:
 
 1. `202610140002_recurrence_safety.sql` — safe promotion, reopening guards, and atomic stream deletion/rehome.
 2. `202610140003_recurrence_lifecycle.sql` — atomic card/stream edits, per-source closure choices, source movement, and calendar scheduling.
+3. `202610140004_ordinary_card_promotion.sql` — overdue catch-up for ordinary due dates and reminders. If 001–003 are already applied, only run 004.
 
 Migrations preserve existing cards, including duplicate history.
 `supabase/audit_recurrence_duplicates.sql` provides read-only queries for reviewing
@@ -50,9 +51,12 @@ Future instances enter Backlog; occurrences due today or earlier enter Waiting.
 Undated initial daily/every-N-days occurrences start today; weekly/monthly ones
 start on the next matching day, including today. Explicit initial due dates are
 preserved. Existing undated pending occurrences are scheduled from source creation.
-Missed recurring due days catch up on refresh; ordinary reminders promote only on
-their due/reminder day. Reopening an old non-stacking occurrence is blocked while
-another is pending.
+Both recurring and ordinary backlog cards promote to Waiting when either their
+due day or reminder day is today or earlier. Processing runs on load/refresh and
+after card creation, edits, and drag/status changes. Future and undated cards stay
+put, as do cards outside Backlog and Priority Backlog. Promotion is day-based,
+not scheduled to an exact clock time. Reopening an old non-stacking occurrence is
+blocked while another is pending.
 
 Closing a stream offers a separate move-or-stop choice for every source that can
 still generate. Moving a recurrence also moves all pending siblings. Archived

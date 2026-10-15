@@ -104,7 +104,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Configurable per source: frequency patterns (daily, every N days, specific weekdays, monthly 1st/last, etc.).
 - `stack_missed`: true = accumulate missed periods; false = only one active.
 - Auto-generate titles based on pattern when appropriate.
-- Generation + auto-promotion runs on app load/refresh (no manual button). Users can force via pull-to-refresh or F5.
+- Generation + auto-promotion runs on app load/refresh and after card creation, edits, and drag/status changes (no manual button). Users can force via pull-to-refresh or F5.
 - Auto-promote generated cards to Waiting on their due day.
 - "Last completed on X date" shown on active recurring cards after first completion.
 - When moving a recurring card via drag: updates recurrence source (seamless, no prompt).
@@ -113,7 +113,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 ### Reminders / Time-Sensitive
 - due_at + optional separate remind_at.
 - Visuals: Badges with color coding (Overdue=red, Due today=orange, etc.) + bell icon for cards with reminder set.
-- Auto-promote to Waiting if due/reminder is "today" (only from backlogs).
+- Auto-promote to Waiting if either due/reminder day is today or earlier (only from Backlog and Priority Backlog), for both recurring and ordinary cards. Promotion is calendar-day based, not an exact-time scheduler.
 - In Completed view: due info not shown on card; reminders cleared on complete/cancel.
 - Works in PWA (visuals + auto-promotion).
 - Future: Push notifications (undecided on full strategy: push/email/etc.).
@@ -166,7 +166,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Initial recurring cards receive a scheduled date when none is supplied: daily/every-N-days starts today; weekly/monthly starts on the next matching day, including today. Explicit initial due dates are retained. Recurring creation is atomic.
 - Stream closure queries live recurrence sources and requires a separate move-or-stop choice for every source that could still generate. Card/source moves and stream edits are atomic; pending siblings follow the source and completed storage stays intact. Stale card status actions are rejected.
 - Recurrence timezone is pinned at creation (legacy sources on first generation). Stacking catches up distinct missed dates and keeps one future instance (1000-period cap per refresh); non-stacking keeps one pending instance and schedules late completions from their completion day. Existing duplicate history is preserved for manual review.
-- Non-stacking recurrence reopening is blocked while another occurrence is pending. Refresh promotion updates current database rows conditionally; overdue recurring cards catch up, while ordinary reminders retain their today-only policy. Stream deletion must atomically rehome cards and sources; foreign keys prevent cascading history loss.
+- Non-stacking recurrence reopening is blocked while another occurrence is pending. Refresh promotion updates current database rows conditionally; both recurring and ordinary overdue due/reminder days catch up. Creation, edits, and drag/status changes run the same refresh/promotion path for all cards. Stream deletion must atomically rehome cards and sources; foreign keys prevent cascading history loss.
 - A database trigger stamps/clears `completed_at`, clears terminal-card reminders, and updates recurrence completion bookkeeping for all status-change paths.
 - No manual "process recurrences" button
 - Uncategorized is special but participates in normal visibility/movement
