@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useId, type ReactNode } from 'rea
 import { Dialog, Modal, ModalOverlay } from 'react-aria-components';
 import { X } from 'lucide-react';
 import { AppSelect } from './AppSelect';
+import { CardDateField } from './CardDateField';
 import { type CardStatus, type Stream, STATUS_LABELS } from '@/lib/types';
 import styles from './CardForm.module.css';
 
@@ -29,7 +30,7 @@ export function CardFormDialog({ title, dirty, saving, onClose, children }: {
         <div className={styles.dialog} onKeyDownCapture={event => {
           // Select triggers consume Escape even when closed. An open menu gets
           // the first Escape; otherwise use the dialog's protected dismissal.
-          if (event.key === 'Escape' && !event.currentTarget.querySelector('[aria-haspopup="listbox"][aria-expanded="true"]')) {
+          if (event.key === 'Escape' && !event.currentTarget.querySelector('[aria-haspopup][aria-expanded="true"]')) {
             event.preventDefault();
             event.stopPropagation();
             close();
@@ -88,14 +89,8 @@ export function cardFields({ title, setTitle, streamId, setStreamId, status, set
       <summary className="focus-ring">Dates &amp; reminder <span className={styles.optional}>Optional</span></summary>
       <div className={styles.sectionBody}>
         <p id="card-date-help" className={styles.help}>Dates use your local time. Due and reminder days bring backlog cards into Waiting. Reminders appear in the app; no notification is sent.</p>
-        <div>
-          <label htmlFor="card-due" className="field-label">Due date &amp; time</label>
-          <input id="card-due" type="datetime-local" value={dueAt} onChange={e => setDueAt(e.target.value)} className="control" aria-describedby="card-date-help" />
-        </div>
-        <div>
-          <label htmlFor="card-reminder" className="field-label">Reminder date &amp; time</label>
-          <input id="card-reminder" type="datetime-local" value={remindAt} onChange={e => setRemindAt(e.target.value)} className="control" aria-describedby="card-date-help" />
-        </div>
+        <CardDateField id="card-due" label="Due date" value={dueAt} onChange={setDueAt} disabled={saving} />
+        <CardDateField id="card-reminder" label="Reminder" value={remindAt} onChange={setRemindAt} disabled={saving} dueAt={dueAt} />
         {(status === 'complete' || status === 'canceled') && <p className={styles.help}>Completed and canceled cards don’t show date badges. Their reminders are cleared when saved.</p>}
       </div>
     </details>

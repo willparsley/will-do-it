@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { loadTypeScript } from './helpers/load-typescript.mjs';
 
 const { hydrateRecurringCards, displayStreamId, cardsForStream, archiveGroups, dueBadge, statusesForView } = loadTypeScript('lib/card-views.ts');
-const { dateTimeLocal, dateTimeInstant } = loadTypeScript('lib/dates.ts');
+const { dateTimeLocal, dateTimeInstant, withCalendarDay } = loadTypeScript('lib/dates.ts');
 const { CardView } = loadTypeScript('components/Card.tsx');
 const { ArchiveCards } = loadTypeScript('components/ArchiveCards.tsx');
 const source = { id:'source',stream_id:'new-stream',base_title:'Take a walk',last_completed_at:'2026-10-14T12:00:00Z',recurrence_timezone:'America/New_York' };
@@ -126,4 +126,22 @@ test('legacy stopped sources with null timezone metadata render pending cards wi
   assert.equal(card.last_completed_at,undefined);
   assert.doesNotThrow(()=>dueBadge(card,now));
   assert.doesNotThrow(()=>renderToStaticMarkup(React.createElement(CardView,{card})));
+});
+
+test('calendar day changes use local midnight by default and preserve explicit or relative reminder times', () => {
+  const previous = process.env.TZ;
+  try {
+    for (const timezone of ['America/New_York', 'America/Los_Angeles', 'Asia/Kolkata', 'Pacific/Auckland']) {
+      process.env.TZ = timezone;
+      const value = withCalendarDay('', '2026-03-08');
+      assert.equal(value, '2026-03-08T00:00');
+      const stored = dateTimeInstant(value);
+      assert.equal(dateTimeLocal(stored), value, timezone);
+      assert.equal(withCalendarDay('2026-03-07T10:30', '2026-03-08'), '2026-03-08T10:30');
+      assert.equal(withCalendarDay('', '2026-03-08', '10:30'), '2026-03-08T10:30');
+      assert.equal(withCalendarDay('2026-03-07T14:15', '2026-03-08', '10:30'), '2026-03-08T14:15');
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+  }
 });
