@@ -31,7 +31,7 @@ export function CardView({ card, onClick, onComplete, onAdvance }: CardViewProps
   const canComplete = !!onComplete;
   const canPromote = !!(onAdvance && next);
   const showActions = !isFinished && (canComplete || canPromote);
-  const promoteColor = next ? `var(--status-${next})` : undefined;
+  const promoteColor = next ? `var(--card-action-${next})` : undefined;
   const hasStatusBar = !isFinished;
 
   const handleAdvance = (e: React.MouseEvent) => {
