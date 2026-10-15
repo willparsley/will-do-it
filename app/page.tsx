@@ -49,7 +49,7 @@ export default function WillDoIt() {
   const loadSequence = useRef(0);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
   const [view, setView] = useState<View>('all');
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [editingRecurrenceId, setEditingRecurrenceId] = useState<string | null>(null);
@@ -70,7 +70,8 @@ export default function WillDoIt() {
 
   const loadData = useCallback(async (userId: string) => {
     const sequence = ++loadSequence.current;
-    setLoading(true);
+    // Keep the workspace mounted during mutation-triggered refreshes. Only the
+    // first load needs a full-screen placeholder; later loads update it in place.
     try {
       const { data: streamsData, error: streamsError } = await supabase
         .from('streams').select('*').eq('user_id', userId).order('position', { ascending: true });
@@ -117,7 +118,7 @@ export default function WillDoIt() {
     } catch (error) {
       if (sequence === loadSequence.current) toast.error(errorMessage(error, 'Could not load your workspace'));
     } finally {
-      if (sequence === loadSequence.current) setLoading(false);
+      if (sequence === loadSequence.current) setInitialLoading(false);
     }
   }, []);
 
@@ -413,7 +414,7 @@ export default function WillDoIt() {
       onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />
   );
 
-  if (loading || !user) {
+  if (initialLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-canvas text-ink-soft">
         <div>Loading your workspace...</div>

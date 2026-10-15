@@ -149,6 +149,43 @@ test('workspace refresh calls conditional promotion and hydrates cards before di
   assert.ok(nodes(tree,n=>n.type==='select' && n.props.value==='all').length);
 });
 
+for (const refreshFails of [false,true]) test(`workspace stays visible during a delayed refresh, including when refresh ${refreshFails ? 'fails' : 'succeeds'}`, async () => {
+  const notices=notifications();
+  let reads=0,releaseInitial,releaseRefresh;
+  let storedCard={...base};
+  const supabase={
+    auth:{async getUser(){return {data:{user}};}},
+    async rpc(){return {data:0};},
+    from(table){return {
+      select(){return this;},
+      eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[storedCard]:[]});},
+      order(){return new Promise(resolve=>{if(++reads===1)releaseInitial=resolve;else releaseRefresh=resolve;});},
+    };},
+  };
+  const ui=driver('app/page.tsx','default',{}, {
+    '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module,
+    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},closestCenter(){}},
+  });
+  assert.ok(text(ui.render()).includes('Loading your workspace'));
+  ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
+  assert.ok(text(ui.render()).includes('Loading your workspace'));
+  releaseInitial({data:streams});await new Promise(resolve=>setTimeout(resolve,0));
+  let tree=ui.render();
+  nodes(tree,n=>n.props.card?.id==='card')[0].props.onClick();tree=ui.render();
+  storedCard={...base,title:'Edited card'};
+  const refresh=nodes(tree,n=>n.props.onCardUpdated)[0].props.onCardUpdated(storedCard);
+  tree=ui.render();
+  assert.ok(!text(tree).includes('Loading your workspace'));
+  assert.equal(nodes(tree,n=>n.type==='header').length,1);
+  assert.equal(nodes(tree,n=>n.props.card?.id==='card')[0].props.card.title,'Edited card');
+  assert.equal(nodes(tree,n=>n.props.onCardUpdated).length,1); // The editor also stays mounted.
+  releaseRefresh(refreshFails?{error:{message:'Refresh failed'}}:{data:streams});
+  await refresh;tree=ui.render();
+  assert.ok(!text(tree).includes('Loading your workspace'));
+  assert.equal(nodes(tree,n=>n.type==='header').length,1);
+  assert.deepEqual(notices.errors,refreshFails?['Refresh failed']:[]);
+});
+
 for(const action of ['complete','advance','drag']) test(`failed stale ${action} action reloads persisted state instead of leaving a reopened card on screen`, async () => {
   const notices=notifications();
   let persisted={...base};

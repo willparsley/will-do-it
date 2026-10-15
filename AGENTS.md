@@ -176,6 +176,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Non-stacking recurrence reopening is blocked while another occurrence is pending. Refresh promotion updates current database rows conditionally; both recurring and ordinary overdue due/reminder days catch up. Creation, edits, and drag/status changes run the same refresh/promotion path for all cards. Stream deletion must atomically rehome cards and sources; foreign keys prevent cascading history loss.
 - A database trigger stamps/clears `completed_at`, clears terminal-card reminders, and updates recurrence completion bookkeeping for all status-change paths.
 - No manual "process recurrences" button
+- Full-screen workspace loading is only for initial load. Refreshes after mutations keep the board and open editors mounted while updating data in place.
 - Uncategorized is special but participates in normal visibility/movement
 - Streams have no "backlog" state — only active (in_progress), complete, canceled. Legacy `backlog` rows auto-migrate to active on load.
 - Stream status is edited inside the stream edit modal (with area/rename/delete), not inline on the row. Rows show a subtle badge only when complete/canceled.
