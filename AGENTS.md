@@ -126,6 +126,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 ### Views & Filters
 - Active is the default view. The selected view, area filter, and archive period are remembered per user in browser storage and restored on refresh; invalid or unavailable storage falls back to the defaults.
 - Global: All / Work Area / Personal Area.
+- Hide recurring is a labeled switch beside the view tabs (below on mobile), remembered per user. It applies across all views alongside area/archive filters, hides cards marked recurring or linked to a recurrence source, and hides streams left empty. An empty filtered board offers Show recurring. This is display-only; generation continues.
 - Streams with cards only shown.
 - No global "due soon" filter (badges + auto-promotion surface them).
 

@@ -49,7 +49,7 @@ test('refresh restores the selected area and archive period with the view; prefe
     let tree=ui.render();
     nodes(tree,node=>node.props?.onValueChange && node.props.value==='month')[0].props.onValueChange('year');
     tree=ui.render();areaFilter(tree).props.onChange('work');
-    assert.deepEqual(JSON.parse(storage.getItem('will-do-it:workspace:user')),{view:'archive',area:'work',archivePeriod:'year'});
+    assert.deepEqual(JSON.parse(storage.getItem('will-do-it:workspace:user')),{view:'archive',area:'work',archivePeriod:'year',hideRecurring:false});
     ui=await workspace();tree=ui.render();
     assert.equal(selected(tree),button(tree,'Archive'));
     assert.equal(areaFilter(tree).props.value,'work');
