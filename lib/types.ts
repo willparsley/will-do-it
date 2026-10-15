@@ -84,6 +84,9 @@ export interface Card {
   is_recurring: boolean;
   recurrence_source_id?: string;
   recurrence_date?: string;
+  scheduled_date?: string;
+  recurrence_revision?: number;
+  auto_promoted_from?: 'backlog' | 'priority_backlog';
   recurrence_timezone?: string;
   recurrence_stream_id?: string;
   recurrence_title?: string;
@@ -104,6 +107,8 @@ export interface RecurrenceSource {
   month_day?: number;
   stack_missed: boolean;
   created_at?: string;
+  updated_at?: string;
+  schedule_revision?: number;
   recurrence_timezone?: string;
   generated_through?: string;
   end_date?: string;

@@ -14,7 +14,7 @@ having count(*) > 1;
 -- Repeated scheduled dates, including legacy cards without occurrence keys.
 -- Before a source's timezone is pinned, UTC is only an audit approximation.
 select s.id as recurrence_source_id, s.base_title,
-  coalesce(c.recurrence_date,
+  coalesce(c.scheduled_date, c.recurrence_date,
     (c.due_at at time zone coalesce(s.recurrence_timezone, 'UTC'))::date) as scheduled_date,
   jsonb_agg(jsonb_build_object(
     'id', c.id, 'status', c.status, 'due_at', c.due_at,
@@ -23,5 +23,6 @@ select s.id as recurrence_source_id, s.base_title,
 from public.recurrence_sources s
 join public.cards c on c.recurrence_source_id = s.id and c.user_id = s.user_id
 where c.recurrence_date is not null or c.due_at is not null
-group by s.id, scheduled_date
+group by s.id, coalesce(c.scheduled_date, c.recurrence_date,
+  (c.due_at at time zone coalesce(s.recurrence_timezone, 'UTC'))::date)
 having count(*) > 1;

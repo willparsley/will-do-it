@@ -13,6 +13,12 @@ const query = async (sql, args = []) => (await db.query(sql, args)).rows;
 const generate = async (timezone = 'America/New_York') =>
   (await query('select public.generate_recurring_instances($1) as count', [timezone]))[0].count;
 const instances = () => query('select *, recurrence_date::text as day from cards where recurrence_date is not null order by recurrence_date');
+const recurrenceSettings = async () => (await query('select * from recurrence_sources where id = $1', [source]))[0];
+async function editRecurrence(changes, expected) {
+  const settings = expected || await recurrenceSettings();
+  return (await query('select * from public.save_recurrence($1,$2,$3::jsonb,$4)',
+    [source, settings.updated_at, JSON.stringify(changes), 'America/New_York']))[0];
+}
 
 before(async () => {
   db = new PGlite();
@@ -68,6 +74,212 @@ test('daily completion produces one tomorrow backlog card; repeated and overlapp
   assert.equal(card.status, 'backlog');
   assert.equal(card.day, (await query("select ((now() at time zone 'America/New_York')::date + 1)::text as day"))[0].day);
   assert.equal((await query('select count(*)::integer as count from cards'))[0].count, 2);
+});
+
+test('recurrence edits update pending cards while preserving occurrence identity and future generation uses the new title and interval', async () => {
+  await fixture({ active: true });
+  await generate();
+  const before = await query('select * from cards order by id');
+  const settings = await recurrenceSettings();
+  const edited = await editRecurrence({ base_title: 'Long walk', frequency: 'every_n_days', interval: 3 });
+  assert.equal(edited.base_title, 'Long walk');
+  assert.equal(edited.schedule_revision, settings.schedule_revision + 1);
+  const [pending] = await query('select * from cards order by id');
+  assert.equal(pending.id, before[0].id);
+  assert.deepEqual(pending.recurrence_date, before[0].recurrence_date);
+  assert.equal(pending.status, 'in_progress');
+  assert.ok(pending.title.startsWith('Long walk - '));
+  assert.ok(pending.due_at > before[0].due_at);
+  await saveCard(original, 'in_progress', { status: 'complete' });
+  assert.equal(await generate(), 1);
+  const [next] = await instances();
+  assert.ok(next.title.startsWith('Long walk - '));
+  assert.equal(next.day, (await query("select ((now() at time zone 'America/New_York')::date + 5)::text as day"))[0].day);
+});
+
+test('editing the source stream moves pending siblings while completed history stays intact', async () => {
+  await fixture({ stack: true, daysAgo: 3 });
+  await generate();
+  await addTarget();
+  const history = await query('select * from cards where id = $1', [original]);
+  await editRecurrence({ stream_id: target, base_title: 'Moved walk' });
+  assert.ok((await query("select stream_id from cards where status not in ('complete','canceled')")).every(c => c.stream_id === target));
+  assert.deepEqual(await query('select * from cards where id = $1', [original]), history);
+});
+
+test('recurrence editor rejects invalid schedules and disabling stacking never deletes extra pending cards', async () => {
+  await fixture({ stack: true, daysAgo: 3 });
+  await generate();
+  const before = await query('select * from cards order by id');
+  for (const changes of [{ interval: 0 }, { frequency: 'yearly' }, { weekdays: [7] }, { month_day: 32 }, { base_title: ' ' }, { enabled: null }, { generated_through: '2099-01-01' }]) {
+    await assert.rejects(editRecurrence(changes));
+  }
+  await assert.rejects(editRecurrence({ stack_missed: false }), /extra pending occurrences/);
+  assert.deepEqual(await query('select * from cards order by id'), before);
+  await query("update cards set status = 'canceled' where status not in ('complete','canceled')");
+  assert.equal((await editRecurrence({ stack_missed: false })).stack_missed, false);
+});
+
+test('stopping and resuming a recurrence preserves pending cards and the editor uses source-local end dates', async () => {
+  await fixture();
+  await generate();
+  const before = await query('select * from cards order by id');
+  await editRecurrence({ enabled: false, end_date: '2026-11-01' });
+  assert.equal(await generate(), 0);
+  assert.deepEqual(await query('select * from cards order by id'), before);
+  assert.equal((await query("select (end_date at time zone recurrence_timezone)::date::text as day from recurrence_sources"))[0].day, '2026-11-01');
+  assert.equal((await editRecurrence({ enabled: true, end_date: null })).stopped_at, null);
+  assert.equal((await recurrenceSettings()).end_date, null);
+});
+
+test('stale recurrence editors cannot overwrite newer edits or source moves; generation does not invalidate an editor', async () => {
+  await fixture({ active: true });
+  const stale = await recurrenceSettings();
+  await generate();
+  await editRecurrence({ base_title: 'First edit' }, stale);
+  await assert.rejects(editRecurrence({ base_title: 'Stale edit' }, stale), /changed elsewhere/);
+  const beforeMove = await recurrenceSettings();
+  await addTarget();
+  await saveCard(original, 'in_progress', { stream_id: target });
+  await assert.rejects(editRecurrence({ stream_id: stream }, beforeMove), /changed elsewhere/);
+  assert.equal((await recurrenceSettings()).stream_id, target);
+});
+
+test('recurrence editor rejects other-user and inactive targets and requires an active stream to resume', async () => {
+  await fixture();
+  const settings = await recurrenceSettings();
+  await query("select set_config('request.jwt.claim.sub', $1, false)", [other]);
+  await assert.rejects(editRecurrence({ base_title: 'Not mine' }, settings), /not found/);
+  await query("select set_config('request.jwt.claim.sub', $1, false)", [user]);
+  await saveStream('complete', [{ source_id: source, action: 'stop' }]);
+  await assert.rejects(editRecurrence({ enabled: true }), /active stream/);
+  assert.equal((await editRecurrence({ base_title: 'Stopped walk', enabled: false })).base_title, 'Stopped walk');
+  await addTarget();
+  assert.equal((await editRecurrence({ enabled: true, stream_id: target })).stopped_at, null);
+});
+
+test('moving a monthly date reschedules auto-promoted Waiting, restores priority backlog, and reserves the new month slot', async () => {
+  await fixture({ active: true, frequency: 'monthly' });
+  const [{ day, last, due }] = await query(`select extract(day from now() at time zone 'America/New_York')::integer as day,
+    extract(day from date_trunc('month', now() at time zone 'America/New_York') + interval '1 month - 1 day')::integer as last,
+    ((now() at time zone 'America/New_York')::date + time '09:00') at time zone 'America/New_York' as due`);
+  await query('update recurrence_sources set month_day = $1, created_at = now(), recurrence_timezone = $2', [day, 'America/New_York']);
+  await query("update cards set status = 'priority_backlog', due_at = $1, remind_at = null where id = $2", [due, original]);
+  await query("select promote_due_cards('America/New_York')");
+  let [card] = await query('select * from cards where id = $1', [original]);
+  assert.equal(card.status, 'waiting');
+  assert.equal(card.auto_promoted_from, 'priority_backlog');
+  const identity = card.recurrence_date;
+  const edited = await editRecurrence({ month_day: day < last ? day + 1 : 1, interval: day < last ? 1 : 2 });
+  [card] = await query('select * from cards where id = $1', [original]);
+  assert.equal(card.status, 'priority_backlog');
+  assert.equal(card.auto_promoted_from, null);
+  assert.deepEqual(card.recurrence_date, identity);
+  assert.ok(card.due_at > due);
+  assert.equal(edited.schedule_revision, 2);
+  assert.equal(await generate(), 0);
+  assert.equal((await query('select count(*)::integer as count from cards'))[0].count, 1);
+  // Once that occurrence is completed, the next one belongs to a later month.
+  await saveCard(original, card.status, { status: 'complete' });
+  assert.equal(await generate(), 1);
+  const [{ old_month, new_month }] = await query(`select
+    date_trunc('month', a.scheduled_date)::date as old_month,
+    date_trunc('month', b.scheduled_date)::date as new_month
+    from cards a join cards b on b.id <> a.id where a.id = $1`, [original]);
+  assert.ok(new_month > old_month);
+});
+
+test('manual status changes clear promotion provenance and recurrence edits preserve manually chosen statuses', async () => {
+  await fixture({ active: true });
+  await query("update cards set status = 'backlog', remind_at = null where id = $1", [original]);
+  await query("select promote_due_cards('America/New_York')");
+  assert.equal((await query('select auto_promoted_from from cards'))[0].auto_promoted_from, 'backlog');
+  await saveCard(original, 'waiting', { status: 'research' });
+  await saveCard(original, 'research', { status: 'waiting' });
+  assert.equal((await query('select auto_promoted_from from cards'))[0].auto_promoted_from, null);
+  await editRecurrence({ frequency: 'every_n_days', interval: 5 });
+  assert.equal((await query('select status from cards'))[0].status, 'waiting');
+  await saveCard(original, 'waiting', { status: 'review' });
+  await editRecurrence({ interval: 10 });
+  assert.equal((await query('select status from cards'))[0].status, 'review');
+});
+
+test('initial and catch-up generated Waiting cards record automatic promotion without marking manual Waiting', async () => {
+  await db.exec('set role authenticated');
+  const auto = await createRecurring({ status: 'priority_backlog' });
+  assert.equal(auto.status, 'waiting');
+  assert.equal(auto.auto_promoted_from, 'priority_backlog');
+  const manual = await createRecurring({ status: 'waiting', title: 'Manual' });
+  assert.equal(manual.auto_promoted_from, null);
+  // A stacking source catches up missed dates with an automatic origin too.
+  await db.exec('reset role');
+  await fixture({ stack: true, daysAgo: 2 });
+  await generate();
+  const missed = await query("select auto_promoted_from from cards where recurrence_source_id = $1 and status = 'waiting'", [source]);
+  assert.ok(missed.length > 0);
+  assert.ok(missed.every(card => card.auto_promoted_from === 'backlog'));
+});
+
+test('pending rescheduling preserves reminder offsets and local times across daylight saving changes', async () => {
+  await fixture({ active: true, frequency: 'monthly', monthDay: 1 });
+  await query("update recurrence_sources set recurrence_timezone = 'America/New_York', generated_through = '2026-11-01'");
+  await query("update cards set due_at = '2026-11-01T14:00:00Z', remind_at = '2026-10-31T12:00:00Z' where id = $1", [original]);
+  await editRecurrence({ month_day: 5 });
+  const [card] = await query("select (due_at at time zone 'America/New_York')::text as due, (remind_at at time zone 'America/New_York')::text as reminder, status from cards");
+  assert.equal(card.due, '2026-11-05 09:00:00');
+  assert.equal(card.reminder, '2026-11-04 08:00:00');
+  assert.equal(card.status, 'in_progress');
+});
+
+test('schedule edits preserve complete and canceled rows byte for byte, including occurrence identities', async () => {
+  await fixture({ stack: true, daysAgo: 3 });
+  await generate();
+  const [pending] = await instances();
+  await saveCard(pending.id, pending.status, { status: 'canceled' });
+  const terminal = await query("select * from cards where status in ('complete','canceled') order by id");
+  await editRecurrence({ frequency: 'monthly', month_day: -1, base_title: 'Monthly walk' });
+  assert.deepEqual(await query("select * from cards where status in ('complete','canceled') order by id"), terminal);
+  assert.ok((await query("select scheduled_date from cards where status not in ('complete','canceled')")).every(c => c.scheduled_date));
+  assert.equal(await generate(), 0);
+});
+
+test('rescheduling an automatic Waiting card does not demote it while a reminder is still due', async () => {
+  await fixture({ active: true });
+  await query("update cards set status = 'backlog', remind_at = now() - interval '20 days'");
+  await query("select promote_due_cards('America/New_York')");
+  await editRecurrence({ frequency: 'every_n_days', interval: 5 });
+  const [card] = await query('select status, auto_promoted_from from cards');
+  assert.equal(card.status, 'waiting');
+  assert.equal(card.auto_promoted_from, 'backlog');
+});
+
+test('moving a pending monthly backlog to an arrived date promotes it and future generation never duplicates its new date', async () => {
+  await fixture({ active: true, frequency: 'monthly', monthDay: -1 });
+  await query("update recurrence_sources set recurrence_timezone = 'America/New_York'");
+  await query(`update cards set status = 'priority_backlog', remind_at = null,
+    due_at = (date_trunc('month', now() at time zone 'America/New_York') + interval '1 month - 1 day') at time zone 'America/New_York'`);
+  await editRecurrence({ month_day: 1 });
+  const [card] = await query('select * from cards');
+  assert.equal(card.status, 'waiting');
+  assert.equal(card.auto_promoted_from, 'priority_backlog');
+  assert.equal(await generate(), 0);
+  await saveCard(original, 'waiting', { status: 'complete' });
+  assert.equal((await query('select auto_promoted_from from cards'))[0].auto_promoted_from, null);
+  assert.equal(await generate(), 1);
+  assert.equal(await generate(), 0);
+});
+
+test('new schedule revisions permit previously used identity dates without changing old identities', async () => {
+  await fixture({ stack: true, daysAgo: 4 });
+  await generate();
+  const identities = await query('select id, recurrence_date, recurrence_revision from cards order by id');
+  await editRecurrence({ frequency: 'every_n_days', interval: 2 });
+  await editRecurrence({ frequency: 'daily', interval: 1 });
+  assert.deepEqual(await query('select id, recurrence_date, recurrence_revision from cards order by id'), identities);
+  const dates = await query("select scheduled_date from cards where status not in ('complete','canceled') order by scheduled_date");
+  assert.equal(new Set(dates.map(c=>String(c.scheduled_date))).size, dates.length);
+  assert.equal(await generate(), 0);
+  await assert.rejects(query('update cards set recurrence_revision = recurrence_revision + 1 where id = $1', [identities[0].id]), /cannot change its recurrence identity/);
 });
 
 test('an active original blocks non-stacking generation, then status-only completion immediately permits generation', async () => {
