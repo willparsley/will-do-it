@@ -274,6 +274,7 @@ textarea::placeholder {
 }
 
 .control {
+  min-width: 0;
   width: 100%;
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
@@ -362,8 +363,11 @@ textarea::placeholder {
 /* Modals                                                              */
 /* ------------------------------------------------------------------ */
 .modal-backdrop {
+  padding: 1rem;
   position: fixed;
-  inset: 0;
+  inset: 0 auto auto 0;
+  width: 100dvw;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
@@ -373,6 +377,9 @@ textarea::placeholder {
 }
 
 .modal-panel {
+  min-width: 0;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border-subtle);
   border-radius: 1rem;
@@ -387,100 +394,4 @@ textarea::placeholder {
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-ring);
   border-color: var(--accent);
-}
-
-/* Custom dropdowns share Geist, including menus portaled outside the form. */
-.app-select,
-.app-select-trigger,
-.app-select-popover {
-  font-family: var(--font-geist-sans), sans-serif;
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1.5;
-}
-
-.app-select-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.app-select-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.app-select-trigger[data-focus-visible] {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
-}
-
-.app-select-trigger[data-disabled] {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.app-select-small,
-.app-select-small .app-select-trigger {
-  font-size: 0.875rem;
-}
-
-.app-select-compact,
-.app-select-compact .app-select-trigger {
-  font-size: 0.75rem;
-}
-
-.app-select-compact .app-select-trigger {
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
-}
-
-.app-select-popover {
-  z-index: 60;
-  width: var(--trigger-width);
-  max-width: calc(100vw - 1rem);
-  max-height: 20rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 1px solid var(--border-strong);
-  border-radius: 0.5rem;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-}
-
-.app-select-list {
-  padding: 0.25rem;
-  outline: none;
-}
-
-.app-select-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  outline: none;
-}
-
-.app-select-item[data-focused] {
-  background: var(--accent-soft);
-  color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.app-select-item[data-selected] {
-  color: var(--accent);
-}
-
-.app-select-item[data-disabled] {
-  color: var(--text-muted);
-  cursor: default;
 }

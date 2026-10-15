@@ -20,6 +20,8 @@ export function loadTypeScript(relativePath, overrides = {}) {
     }).outputText;
     const localRequire = name => {
       if (name in overrides) return overrides[name];
+      // Node handler tests do not render CSS; browser checks use Next's emitted styles.
+      if (name.endsWith('.module.css')) return { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) };
       if (name.startsWith('@/') || name.startsWith('.')) {
         const base = name.startsWith('@/') ? resolve(root, name.slice(2)) : resolve(dirname(filename), name);
         for (const suffix of ['.ts', '.tsx']) if (existsSync(base + suffix)) return load(base + suffix);

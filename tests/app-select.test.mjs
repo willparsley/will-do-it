@@ -28,7 +28,7 @@ for (const key of ['Escape', 'Tab']) test(`${key} closes the menu and restores t
   const tree = ui.render();
   assert.equal(tree.props.isOpen, true);
   let focused = false, stopped = false;
-  nodes(tree, node => node.props?.className === 'control app-select-trigger')[0].props.ref.current = {
+  nodes(tree, node => node.props?.className === 'trigger')[0].props.ref.current = {
     focus() { focused = true; },
   };
   nodes(tree, node => node.type === 'div' && node.props.onKeyDown)[0].props.onKeyDown({
