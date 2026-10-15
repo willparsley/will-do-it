@@ -19,7 +19,7 @@ Will Do It is a calm, visual personal productivity app for managing to-dos as ca
 - **Framework**: Next.js (App Router, TypeScript)
 - **Hosting**: Vercel
 - **Backend/DB/Auth**: Supabase (Postgres + RLS + Auth)
-- **Styling**: Tailwind CSS + shadcn/ui (calm, easy-on-the-eyes design with light/dark mode)
+- **Styling**: Tailwind CSS + custom React components (calm, easy-on-the-eyes design with light/dark mode)
 - **Drag & Drop**: @dnd-kit (for custom matrix grid)
 - **Dates**: date-fns or native
 - **Forms**: React Hook Form + Zod (future)
