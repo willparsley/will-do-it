@@ -418,7 +418,7 @@ export default function WillDoIt() {
   };
 
   const renderCard = (card: Card) => (
-    <CardComponent key={card.id} card={card} onClick={() => setEditingCard(card)}
+    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} onClick={() => setEditingCard(card)}
       onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />
   );
 
@@ -613,7 +613,7 @@ export default function WillDoIt() {
           <DragOverlay dropAnimation={null}>
             {activeDragCard ? (
               <div className="w-64 max-w-full">
-                <CardComponent card={activeDragCard} overlay />
+                <CardComponent card={activeDragCard} prerequisite={cards.find(other => other.id === activeDragCard.prerequisite_card_id)} overlay />
               </div>
             ) : null}
           </DragOverlay>
@@ -622,6 +622,7 @@ export default function WillDoIt() {
         {showAddModal && (
           <AddCardModal
             streams={streams}
+            cards={cards}
             onClose={() => setShowAddModal(false)}
             onCardCreated={handleCardCreated}
           />
@@ -630,6 +631,7 @@ export default function WillDoIt() {
         {editingCard && (
           <EditCardModal
             card={editingCard}
+            cards={cards}
             streams={streams}
             onClose={() => setEditingCard(null)}
             onCardUpdated={handleCardUpdated}

@@ -114,7 +114,7 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
          await route.fulfill({status:400,json:{message:'This card changed. Try again.'}});return;
        }
        if(url.pathname.endsWith('/save_card')) data={...card,...body.p_changes};
-       if(url.pathname.endsWith('/create_recurring_card_with_notes')) data={...card,title:body.p_title,notes:body.p_notes};
+       if(url.pathname.endsWith('/create_recurring_card_with_prerequisite')) data={...card,title:body.p_title,notes:body.p_notes};
        if(url.pathname.endsWith('/cards')) data={...card,...body};
      }
      await route.fulfill({json:data,headers:{'access-control-allow-origin':'*'}});return;
@@ -215,7 +215,7 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  await rejectDiscard(()=>page.mouse.click(2,2));
  await page.getByRole('button',{name:'Create Card',exact:true}).click();
  await dialog.waitFor({state:'hidden'});
- const created=calls.find(call=>call.path.endsWith('/create_recurring_card_with_notes'));
+ const created=calls.find(call=>call.path.endsWith('/create_recurring_card_with_prerequisite'));
  assert.equal(created.body.p_due_at,await page.evaluate(()=>new Date(2026,9,20,10,30).toISOString()));
  assert.equal(created.body.p_remind_at,await page.evaluate(()=>new Date(2026,9,19,10,30).toISOString()));
  assert.equal(created.body.p_notes,'First occurrence notes');assert.equal(created.body.p_interval,2);assert.deepEqual(created.body.p_weekdays,[1]);
@@ -318,4 +318,69 @@ for (const theme of ['light', 'dark']) test(`hide recurring filters the workspac
  await page.evaluate(key => localStorage.setItem(key, JSON.stringify({ hideRecurring: 'true' })), preferenceKey);
  await page.reload();
  await expect(toggle).not.toBeChecked();
+});
+
+for (const theme of ['light','dark']) test(`prerequisite links and orange blocking outline in ${theme} mode`, async ({page},testInfo)=>{
+ page.setDefaultTimeout(10000);
+ let cards=[
+   {id:'buy',user_id:user.id,stream_id:'1',title:'Buy domain name',status:'research',position:0,is_recurring:false},
+   {id:'dns',user_id:user.id,stream_id:'1',title:'Update DNS settings',status:'waiting',position:1,is_recurring:false,prerequisite_card_id:'buy'},
+   {id:'dependent',user_id:user.id,stream_id:'1',title:'Test DNS',status:'waiting',position:2,is_recurring:false,prerequisite_card_id:'dns'},
+ ];
+ const calls=[];
+ await page.addInitScript(({storageKey,session,theme})=>{
+   document.cookie=storageKey+'=base64-'+btoa(JSON.stringify(session)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')+'; path=/';
+   localStorage.setItem('theme',theme);
+ },{storageKey,session,theme});
+ await page.route('**/*',async route=>{
+   const url=new URL(route.request().url());
+   if(url.origin===new URL(supabaseUrl).origin){
+     let data=url.pathname.endsWith('/user')?user:url.pathname.endsWith('/streams')?streams:url.pathname.endsWith('/cards')?cards:url.pathname.endsWith('/recurrence_sources')?[]:0;
+     if(route.request().method()==='POST') {
+       const body=route.request().postDataJSON();calls.push({path:url.pathname,body});
+       if(url.pathname.endsWith('/save_card') || url.pathname.endsWith('/save_card_with_undo')) {
+         cards=cards.map(card=>card.id===body.p_card_id?{...card,...body.p_changes}:card);
+         const saved=cards.find(card=>card.id===body.p_card_id);
+         data=url.pathname.endsWith('/save_card')?saved:{card:saved,undo_id:'undo'};
+       }
+     }
+     await route.fulfill({json:data,headers:{'access-control-allow-origin':'*'}});return;
+   }
+   if(url.hostname==='app.test') {
+     const asset=url.pathname.startsWith('/_next/static/')?'/'+url.pathname.slice('/_next/'.length):'/server/app/index.html';
+     const type=url.pathname.endsWith('.css')?'text/css':url.pathname.endsWith('.js')?'application/javascript':url.pathname.endsWith('.woff2')?'font/woff2':'text/html';
+     await route.fulfill({body:await readFile(root+'/.next'+asset),contentType:type});return;
+   }
+   await route.abort();
+ });
+ await page.goto('http://app.test');
+ const dns=page.locator('.card').filter({has:page.getByText('Update DNS settings',{exact:true})});
+ await expect(dns).toHaveClass(/card-blocked/);
+ await expect(dns.getByText('Blocked by: Buy domain name',{exact:true})).toBeVisible();
+ assert.equal(await dns.evaluate(el=>getComputedStyle(el).outlineWidth),'2px');
+ assert.equal(await dns.evaluate(el=>getComputedStyle(el).outlineColor),theme==='dark'?'rgb(245, 160, 74)':'rgb(199, 106, 22)');
+ await dns.scrollIntoViewIfNeeded();
+ await page.screenshot({path:testInfo.outputPath(`blocked-${theme}.png`),scale:'css'});
+ await dns.click();
+ const prerequisite=page.getByRole('button',{name:'Prerequisite card',exact:true});
+ await prerequisite.scrollIntoViewIfNeeded();
+ await expect(prerequisite).toContainText('Buy domain name');
+ await prerequisite.click();
+ await expect(page.getByRole('option',{name:/Update DNS settings|Test DNS/})).toHaveCount(0);
+ await page.getByRole('option',{name:'No prerequisite',exact:true}).click();
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Edit Card',exact:true})).toHaveCount(0);
+ await expect(dns).not.toHaveClass(/card-blocked/);
+ assert.equal(calls.find(call=>call.path.endsWith('/save_card')).body.p_changes.prerequisite_card_id,null);
+ await dns.click();
+ await page.getByText('Prerequisite Optional',{exact:false}).click();
+ await page.getByRole('searchbox',{name:'Find a card'}).fill('domain');
+ await prerequisite.click();
+ await page.getByRole('option',{name:/Buy domain name/}).click();
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();
+ await expect(dns).toHaveClass(/card-blocked/);
+ const buy=page.locator('.card').filter({has:page.getByText('Buy domain name',{exact:true})});
+ await buy.getByTitle('Mark complete',{exact:true}).evaluate(el=>el.click());
+ await expect(dns).not.toHaveClass(/card-blocked/);
+ await expect(dns.getByText(/Blocked by/)).toHaveCount(0);
 });

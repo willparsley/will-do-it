@@ -82,6 +82,7 @@ export interface Card {
   remind_at?: string;
   position: number;
   is_recurring: boolean;
+  prerequisite_card_id?: string | null;
   recurrence_source_id?: string;
   recurrence_date?: string;
   scheduled_date?: string;

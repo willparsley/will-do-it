@@ -4,6 +4,7 @@ import { CardFormDialog, CardFormCancel, cardFields, cardFormStyles as styles } 
 import { AppSelect } from '@/components/AppSelect';
 
 import React, { useState } from 'react';
+import { CardPrerequisiteField } from './CardPrerequisiteField';
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Card, CardStatus, streamsForSelect, uncategorizedId, MONTH_DAY_OPTIONS, monthDayLabel } from '@/lib/types';
 import { toast } from 'sonner';
@@ -13,12 +14,13 @@ const supabase = createClient();
 
 interface AddCardModalProps {
   streams: Stream[];
+  cards?: Card[];
   onClose: () => void;
   onCardCreated: (card: Card) => void;
   defaultStreamId?: string;
 }
 
-export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId }: AddCardModalProps) {
+export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defaultStreamId }: AddCardModalProps) {
   // Only active streams, alphabetical, "Uncategorized" last.
   const selectableStreams = React.useMemo(() => streamsForSelect(streams), [streams]);
 
@@ -35,6 +37,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
   const [recInterval, setRecInterval] = useState(1);
   const [weekdays, setWeekdays] = useState<number[]>([]); // 0=Sun, 1=Mon, ..., 6=Sat
   const [monthDay, setMonthDay] = useState(1); // 1..31, or -1 for the last day
+  const [prerequisiteId, setPrerequisiteId] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -53,7 +56,8 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
       const due = dueAt ? new Date(dueAt).toISOString() : null;
       const reminder = remindAt ? new Date(remindAt).toISOString() : null;
       const result = isRecurring
-        ? await supabase.rpc('create_recurring_card_with_notes', {
+        ? await supabase.rpc('create_recurring_card_with_prerequisite', {
+            p_prerequisite_card_id: prerequisiteId || null,
             p_notes: notes.trim() || null, p_title: title.trim(), p_stream_id: streamId, p_status: status,
             p_due_at: due, p_remind_at: reminder,
             p_frequency: frequency, p_interval: frequency === 'daily' ? 1 : recInterval,
@@ -63,6 +67,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
             p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }).single<Card>()
         : await supabase.from('cards').insert({
+            prerequisite_card_id: prerequisiteId || null,
             user_id: user.id, stream_id: streamId, title: title.trim(), status,
             notes: notes.trim() || null, due_at: due, remind_at: reminder, is_recurring: false, position: 0,
           }).select().single<Card>();
@@ -81,7 +86,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
   };
 
   const initialStreamId = defaultStreamId || uncategorizedId(selectableStreams) || selectableStreams[0]?.id || '';
-  const dirty = !!(title || notes || dueAt || remindAt || isRecurring || stackMissed || frequency !== 'daily' || recInterval !== 1 || weekdays.length || monthDay !== 1 || streamId !== initialStreamId || status !== 'backlog');
+  const dirty = !!(prerequisiteId || title || notes || dueAt || remindAt || isRecurring || stackMissed || frequency !== 'daily' || recInterval !== 1 || weekdays.length || monthDay !== 1 || streamId !== initialStreamId || status !== 'backlog');
 
   return (
     <CardFormDialog title="Add New Card" dirty={dirty} saving={loading} onClose={onClose}>
@@ -89,6 +94,7 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
         <div className={styles.body}>
           <fieldset disabled={loading} className={styles.fields}>
             {cardFields({ title, setTitle, streamId, setStreamId, status, setStatus, streams: selectableStreams, saving: loading, dueAt, setDueAt, remindAt, setRemindAt, notes, setNotes })}
+            <CardPrerequisiteField cards={cards} streams={streams} value={prerequisiteId} onChange={setPrerequisiteId} disabled={loading} />
             <details className={styles.section} open={isRecurring}>
               <summary className="focus-ring" aria-disabled={loading} onClick={event => {
                 event.preventDefault();

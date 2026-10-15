@@ -934,3 +934,54 @@ test('a notes write failure rolls back both the new card and recurrence source',
     await db.exec('reset role; drop trigger reject_test_notes on cards; drop function public.reject_test_notes(); set role authenticated;');
   }
 });
+
+async function prerequisiteFixture() {
+  const [prerequisite] = await query(`insert into cards(user_id,stream_id,title,status) values($1,$2,'Buy domain name','backlog') returning *`, [user,stream]);
+  const [dependent] = await query(`insert into cards(user_id,stream_id,title,status,prerequisite_card_id) values($1,$2,'Update DNS','research',$3) returning *`, [user,stream,prerequisite.id]);
+  await db.exec('set role authenticated');
+  return {prerequisite,dependent};
+}
+
+test('prerequisites save, survive movement and completion Undo, and can be removed', async () => {
+  const {prerequisite,dependent} = await prerequisiteFixture();
+  await saveCard(dependent.id,dependent.status,{title:'Configure DNS',prerequisite_card_id:prerequisite.id});
+  const action=await quickAction(dependent.id,dependent.status,{status:'complete'});
+  await undoAction(action.undo_id);
+  const [restored]=await query('select * from cards where id=$1',[dependent.id]);
+  assert.equal(restored.prerequisite_card_id,prerequisite.id);
+  assert.equal(restored.status,dependent.status);
+  await assert.rejects(query('delete from cards where id=$1',[prerequisite.id]),/foreign key/);
+  await saveCard(dependent.id,dependent.status,{prerequisite_card_id:null});
+  await query('delete from cards where id=$1',[prerequisite.id]);
+  assert.equal((await query('select prerequisite_card_id from cards where id=$1',[dependent.id]))[0].prerequisite_card_id,null);
+});
+
+test('database rejects self links, cycles, missing and cross-account prerequisites', async () => {
+  const {prerequisite,dependent} = await prerequisiteFixture();
+  await assert.rejects(saveCard(dependent.id,dependent.status,{prerequisite_card_id:dependent.id}),/cycle/);
+  await assert.rejects(saveCard(prerequisite.id,prerequisite.status,{prerequisite_card_id:dependent.id}),/cycle/);
+  const [third]=await query(`insert into cards(user_id,stream_id,title,status,prerequisite_card_id) values($1,$2,'Third','backlog',$3) returning *`,[user,stream,dependent.id]);
+  await assert.rejects(saveCard(prerequisite.id,prerequisite.status,{prerequisite_card_id:third.id}),/cycle/);
+  await assert.rejects(saveCard(dependent.id,dependent.status,{prerequisite_card_id:other}),/Choose one of your cards/);
+  await db.exec('reset role');
+  const [otherStream]=await query(`insert into streams(user_id,title,state,area) values($1,'Other','in_progress','neutral') returning *`,[other]);
+  const [otherCard]=await query(`insert into cards(user_id,stream_id,title,status) values($1,$2,'Private','research') returning *`,[other,otherStream.id]);
+  await db.exec('set role authenticated');
+  await assert.rejects(query('update cards set prerequisite_card_id=$1 where id=$2',[otherCard.id,dependent.id]),/Choose one of your cards/);
+});
+
+test('recurring creation links only the first occurrence and invalid links roll back creation', async () => {
+  const {prerequisite}=await prerequisiteFixture();
+  const create=id=>query(`select row_to_json(public.create_recurring_card_with_prerequisite(
+    'DNS check',$1,'backlog',null,null,'daily',1,null,null,false,'America/New_York','Notes',$2)) as card`,[stream,id]);
+  const [{card}]=await create(prerequisite.id);
+  assert.equal(card.prerequisite_card_id,prerequisite.id);
+  assert.equal(card.notes,'Notes');
+  await saveCard(card.id,card.status,{status:'complete'});
+  await generate();
+  const [successor]=await query('select * from cards where recurrence_source_id=$1 and id<>$2',[card.recurrence_source_id,card.id]);
+  assert.equal(successor.prerequisite_card_id,null);
+  const before=await query('select id from recurrence_sources');
+  await assert.rejects(create(other),/Choose one of your cards/);
+  assert.deepEqual(await query('select id from recurrence_sources'),before);
+});

@@ -1,12 +1,14 @@
 'use client';
 
 import { Card as CardType, nextStatus, STATUS_LABELS } from '@/lib/types';
-import { Repeat } from 'lucide-react';
+import { isCardBlocked } from '@/lib/card-prerequisites';
+import { Repeat, LockKeyhole } from 'lucide-react';
 import { dueBadge, isTerminal } from '@/lib/card-views';
 import { useDraggable } from '@dnd-kit/core';
 
 interface CardViewProps {
   card: CardType;
+  prerequisite?: CardType;
   onClick?: () => void;
   onComplete?: (id: string) => void;
   onAdvance?: (id: string) => void;
@@ -17,7 +19,8 @@ interface CardViewProps {
  * Presentational card. Used both for the real, draggable card and for the
  * DragOverlay preview (so the preview doesn't register a duplicate draggable).
  */
-export function CardView({ card, onClick, onComplete, onAdvance, onEditRecurrence }: CardViewProps) {
+export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence }: CardViewProps) {
+  const blocked = isCardBlocked(card, prerequisite);
   const isFinished = isTerminal(card);
   const hasReminder = !isFinished && !!card.remind_at;
   const badge = dueBadge(card);
@@ -43,9 +46,7 @@ export function CardView({ card, onClick, onComplete, onAdvance, onEditRecurrenc
   return (
     <div
       onClick={onClick}
-      className={`card rounded-lg text-sm cursor-grab active:cursor-grabbing group grid grid-cols-[minmax(0,1fr)_2.25rem] overflow-hidden ${
-        hasStatusBar ? 'status-bar' : ''
-      }`}
+      className={`card rounded-lg text-sm cursor-grab active:cursor-grabbing group grid grid-cols-[minmax(0,1fr)_2.25rem] overflow-hidden ${hasStatusBar ? 'status-bar' : ''} ${blocked ? 'card-blocked' : ''}`}
       style={hasStatusBar ? ({ '--status-color': `var(--status-${card.status})` } as React.CSSProperties) : undefined}
     >
       {/* Left content */}
@@ -53,6 +54,11 @@ export function CardView({ card, onClick, onComplete, onAdvance, onEditRecurrenc
         <div className="font-medium leading-tight text-ink min-w-0">
           <span className="break-words min-w-0">{card.title}</span>
         </div>
+
+        {blocked && <p className="card-blocked-label mt-2 flex items-start gap-1 text-xs">
+          <LockKeyhole className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="break-words min-w-0">Blocked by: {prerequisite?.title || 'unavailable prerequisite'}</span>
+        </p>}
 
         {!isFinished && card.is_recurring && card.last_completed_at && (
           <div className="text-[10px] text-ink-muted mt-1">
@@ -177,7 +183,7 @@ interface CardProps extends CardViewProps {
   overlay?: boolean;
 }
 
-export function Card({ card, onClick, onComplete, onAdvance, onEditRecurrence, overlay = false }: CardProps) {
+export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, overlay = false }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     disabled: overlay,
@@ -186,7 +192,7 @@ export function Card({ card, onClick, onComplete, onAdvance, onEditRecurrence, o
   if (overlay) {
     return (
       <div className="rotate-1 scale-[1.03] shadow-lg">
-        <CardView card={card} />
+        <CardView card={card} prerequisite={prerequisite} />
       </div>
     );
   }
@@ -198,7 +204,7 @@ export function Card({ card, onClick, onComplete, onAdvance, onEditRecurrence, o
       {...listeners}
       className={isDragging ? 'opacity-40' : ''}
     >
-      <CardView card={card} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} />
+      <CardView card={card} prerequisite={prerequisite} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} />
     </div>
   );
 }

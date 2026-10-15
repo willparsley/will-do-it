@@ -3,6 +3,7 @@
 import { CardFormDialog, CardFormCancel, cardFields, cardFormStyles as styles } from './CardForm';
 
 import React, { useState } from 'react';
+import { CardPrerequisiteField } from './CardPrerequisiteField';
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Card, CardStatus, streamsForSelect, UNCATEGORIZED_TITLE } from '@/lib/types';
 import { toast } from 'sonner';
@@ -14,13 +15,14 @@ const supabase = createClient();
 interface EditCardModalProps {
   card: Card;
   streams: Stream[];
+  cards?: Card[];
   onClose: () => void;
   onCardUpdated: (updatedCard: Card) => void;
   onCardDeleted: (cardId: string) => void;
   onEditRecurrence?: (sourceId: string) => void;
 }
 
-export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDeleted, onEditRecurrence }: EditCardModalProps) {
+export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdated, onCardDeleted, onEditRecurrence }: EditCardModalProps) {
   // Active streams only, alphabetical, "Uncategorized" last — but always keep
   // the card's current stream selectable, even if it's complete/canceled.
   const selectableStreams = React.useMemo(() => {
@@ -38,6 +40,7 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
   const [status, setStatus] = useState<CardStatus>(card.status);
   const [dueAt, setDueAt] = useState(dateTimeLocal(card.due_at));
   const [remindAt, setRemindAt] = useState(dateTimeLocal(card.remind_at));
+  const [prerequisiteId, setPrerequisiteId] = useState(card.prerequisite_card_id || '');
   const [notes, setNotes] = useState(card.notes || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -51,6 +54,7 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
 
     try {
       const updates = {
+        prerequisite_card_id: prerequisiteId || null,
         title: title.trim(),
         stream_id: streamId,
         status,
@@ -78,7 +82,12 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
   };
 
   const handleDelete = async () => {
-    if (loading || !confirm('Delete this card? This cannot be undone.')) return;
+    if (loading) return;
+    if (cards.some(other => other.prerequisite_card_id === card.id)) {
+      setError('Another card uses this as a prerequisite. Remove that link before deleting this card.');
+      return;
+    }
+    if (!confirm('Delete this card? This cannot be undone.')) return;
 
     setLoading(true);
     setError('');
@@ -96,7 +105,7 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
     }
   };
 
-  const dirty = title !== card.title || streamId !== (card.recurrence_stream_id || card.stream_id)
+  const dirty = prerequisiteId !== (card.prerequisite_card_id || '') || title !== card.title || streamId !== (card.recurrence_stream_id || card.stream_id)
     || status !== card.status || dueAt !== dateTimeLocal(card.due_at)
     || remindAt !== dateTimeLocal(card.remind_at) || notes !== (card.notes || '');
 
@@ -113,6 +122,7 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
           <fieldset disabled={loading} className={styles.fields}>
             {cardFields({ title, setTitle, streamId, setStreamId, status, setStatus, streams: selectableStreams, saving: loading, dueAt, setDueAt, remindAt, setRemindAt, notes, setNotes, recurring: !!card.recurrence_source_id,
               datesInitiallyOpen: !!(card.due_at || card.remind_at), notesInitiallyOpen: !!card.notes })}
+            <CardPrerequisiteField cards={cards} streams={streams} cardId={card.id} value={prerequisiteId} onChange={setPrerequisiteId} disabled={loading} />
             {card.recurrence_source_id && <section className={styles.section} aria-label="Recurrence">
               <div className="p-4 space-y-3">
                 <h3 className="text-sm font-medium text-ink">Part of a recurring task</h3>
