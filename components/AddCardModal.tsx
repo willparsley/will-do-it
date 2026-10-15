@@ -1,5 +1,7 @@
 'use client';
 
+import { AppSelect } from '@/components/AppSelect';
+
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Card, CardStatus, STATUS_LABELS, streamsForSelect, uncategorizedId, MONTH_DAY_OPTIONS, monthDayLabel } from '@/lib/types';
@@ -99,28 +101,26 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">Stream</label>
-              <select 
-                value={streamId} 
-                onChange={(e) => setStreamId(e.target.value)}
-                className="control"
-              >
-                {selectableStreams.map(s => (
-                  <option key={s.id} value={s.id}>{s.title}</option>
-                ))}
-              </select>
+              <AppSelect
+                value={streamId}
+                onValueChange={value => setStreamId(value)}
+                className="w-full"
+                aria-label="Stream"
+                disabled={loading}
+                options={selectableStreams.map(s => ({ value: s.id, label: s.title }))}
+              />
             </div>
 
             <div>
               <label className="field-label">Status</label>
-              <select 
-                value={status} 
-                onChange={(e) => setStatus(e.target.value as CardStatus)}
-                className="control"
-              >
-                {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
+              <AppSelect
+                value={status}
+                onValueChange={value => setStatus(value as CardStatus)}
+                className="w-full"
+                aria-label="Status"
+                disabled={loading}
+                options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+              />
             </div>
           </div>
 
@@ -166,16 +166,15 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
                   Stack
                 </label>
 
-                <select 
-                  value={frequency} 
-                  onChange={(e) => setFrequency(e.target.value as typeof frequency)}
-                  className="text-xs bg-surface border border-line rounded px-1 py-0.5 text-ink"
-                >
-                  <option value="daily">Daily</option>
-                  <option value="every_n_days">Every N days</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Every N months</option>
-                </select>
+                <AppSelect
+                  value={frequency}
+                  onValueChange={value => setFrequency(value as typeof frequency)}
+                  className="w-auto"
+                  size="compact"
+                  aria-label="Repeat"
+                  disabled={loading}
+                  options={[{ value: 'daily', label: 'Daily' }, { value: 'every_n_days', label: 'Every N days' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Every N months' }]}
+                />
 
                 {(frequency === 'every_n_days' || frequency === 'weekly' || frequency === 'monthly') && (
                   <label className="flex items-center gap-1 text-xs text-ink-soft">
@@ -195,18 +194,18 @@ export function AddCardModal({ streams, onClose, onCardCreated, defaultStreamId 
                 )}
 
                 {frequency === 'monthly' && (
-                  <label className="flex items-center gap-1 text-xs text-ink-soft">
-                    on
-                    <select
-                      value={monthDay}
-                      onChange={(e) => setMonthDay(parseInt(e.target.value, 10))}
-                      className="text-xs bg-surface border border-line rounded px-1 py-0.5 text-ink"
-                    >
-                      {MONTH_DAY_OPTIONS.map((d) => (
-                        <option key={d} value={d}>{monthDayLabel(d)}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="flex items-center gap-1 text-xs text-ink-soft">
+                    <span>on</span>
+                    <AppSelect
+                      value={String(monthDay)}
+                      onValueChange={value => setMonthDay(parseInt(value, 10))}
+                      className="w-auto"
+                      size="compact"
+                      aria-label="Day of month"
+                      disabled={loading}
+                      options={MONTH_DAY_OPTIONS.map(d => ({ value: String(d), label: monthDayLabel(d) }))}
+                    />
+                  </div>
                 )}
 
                 {frequency === 'weekly' && (

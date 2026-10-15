@@ -47,13 +47,13 @@ test('refresh restores the selected area and archive period with the view; prefe
     let ui=await workspace();
     button(ui.render(),'Archive').props.onClick();
     let tree=ui.render();
-    nodes(tree,node=>node.type==='select' && node.props.value==='month')[0].props.onChange({target:{value:'year'}});
+    nodes(tree,node=>node.props?.onValueChange && node.props.value==='month')[0].props.onValueChange('year');
     tree=ui.render();areaFilter(tree).props.onChange('work');
     assert.deepEqual(JSON.parse(storage.getItem('will-do-it:workspace:user')),{view:'archive',area:'work',archivePeriod:'year'});
     ui=await workspace();tree=ui.render();
     assert.equal(selected(tree),button(tree,'Archive'));
     assert.equal(areaFilter(tree).props.value,'work');
-    assert.equal(nodes(tree,node=>node.type==='select')[0].props.value,'year');
+    assert.equal(nodes(tree,node=>node.props?.onValueChange)[0].props.value,'year');
     const other=await workspace('other');tree=other.render();
     assert.equal(selected(tree),button(tree,'Active'));
     assert.equal(areaFilter(tree).props.value,'all');
@@ -69,7 +69,7 @@ test('malformed or unsupported saved settings fall back to defaults', async () =
       assert.equal(button(ui.render(),'Active').props['aria-pressed'],true);
       assert.equal(areaFilter(ui.render()).props.value,'all');
       button(ui.render(),'Archive').props.onClick();
-      assert.equal(nodes(ui.render(),node=>node.type==='select')[0].props.value,'month');
+      assert.equal(nodes(ui.render(),node=>node.props?.onValueChange)[0].props.value,'month');
     });
   }
 });

@@ -45,7 +45,7 @@ test('reopening errors from Supabase are visible and never reported as success',
   const ui=driver('components/EditCardModal.tsx','EditCardModal',{card:{...base,status:'complete'},streams,onClose(){closed=true;},onCardUpdated(){updated=true;},onCardDeleted(){}},
     {'@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module});
   let tree=ui.render();
-  nodes(tree,n=>n.type==='select' && n.props.value==='complete')[0].props.onChange({target:{value:'waiting'}});
+  nodes(tree,n=>n.props?.onValueChange && n.props.value==='complete')[0].props.onValueChange('waiting');
   tree=ui.render();
   // Expected error is logged by the component; keep test output focused.
   const log=console.error;console.error=()=>{};
@@ -67,16 +67,16 @@ test('closing a stream discovers sources without pending cards and requires sepa
     stream:streams[0],streams,onClose(){},onStreamUpdated:s=>{updated=s;},onStreamDeleted(){},
   },{'@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module});
   let tree=ui.render();
-  nodes(tree,n=>n.type==='select' && n.props.value==='in_progress')[0].props.onChange({target:{value:'complete'}});
+  nodes(tree,n=>n.props?.onValueChange && n.props.value==='in_progress')[0].props.onValueChange('complete');
   tree=ui.render();await button(tree,'Save Changes').props.onClick();
   assert.deepEqual(calls.map(c=>c.name),['recurrences_for_stream']);
   tree=ui.render();
   assert.ok(text(tree).includes('Choose what happens to each recurrence'));
-  nodes(tree,n=>n.props.id==='recurrence-one')[0].props.onChange({target:{value:'move'}});
+  nodes(tree,n=>n.props.id==='recurrence-one')[0].props.onValueChange('move');
   tree=ui.render();
-  nodes(tree,n=>n.props['aria-label']==='Move Walk to stream')[0].props.onChange({target:{value:'new-stream'}});
+  nodes(tree,n=>n.props['aria-label']==='Move Walk to stream')[0].props.onValueChange('new-stream');
   tree=ui.render();
-  nodes(tree,n=>n.props.id==='recurrence-two')[0].props.onChange({target:{value:'stop'}});
+  nodes(tree,n=>n.props.id==='recurrence-two')[0].props.onValueChange('stop');
   tree=ui.render();await button(tree,'Save Changes').props.onClick();
   assert.deepEqual(calls.at(-1).args.p_recurrences,[{source_id:'one',action:'move',stream_id:'new-stream'},{source_id:'two',action:'stop'}]);
   assert.equal(calls.at(-1).name,'save_stream');
@@ -108,11 +108,11 @@ test('weekly intervals remain visible after switching from every-N-days and recu
   nodes(tree,n=>n.type==='input' && n.props.type==='text')[0].props.onChange({target:{value:'Weekly walk'}});
   nodes(tree,n=>n.type==='input' && n.props.type==='checkbox')[0].props.onChange({target:{checked:true}});
   tree=ui.render();
-  nodes(tree,n=>n.type==='select' && n.props.value==='daily')[0].props.onChange({target:{value:'every_n_days'}});
+  nodes(tree,n=>n.props?.onValueChange && n.props.value==='daily')[0].props.onValueChange('every_n_days');
   tree=ui.render();
   nodes(tree,n=>n.type==='input' && n.props.type==='number')[0].props.onChange({target:{value:'3'}});
   tree=ui.render();
-  nodes(tree,n=>n.type==='select' && n.props.value==='every_n_days')[0].props.onChange({target:{value:'weekly'}});
+  nodes(tree,n=>n.props?.onValueChange && n.props.value==='every_n_days')[0].props.onValueChange('weekly');
   tree=ui.render();
   assert.equal(nodes(tree,n=>n.type==='input' && n.props.type==='number')[0].props.value,3);
   assert.ok(text(tree).includes('weeks'));
@@ -142,12 +142,12 @@ test('workspace refresh calls conditional promotion and hydrates cards before di
   assert.equal(displayed.last_completed_at,source.last_completed_at);
   assert.equal(displayed.recurrence_stream_id,'new-stream');
   button(tree,'Archive').props.onClick();tree=ui.render();
-  const period=nodes(tree,n=>n.type==='select' && n.props.value==='month')[0];
+  const period=nodes(tree,n=>n.props?.onValueChange && n.props.value==='month')[0];
   assert.ok(period);
   const groups=nodes(tree,n=>n.props.cards?.some(c=>c.id==='card'));
   assert.equal(groups.length,1);
-  period.props.onChange({target:{value:'all'}});tree=ui.render();
-  assert.ok(nodes(tree,n=>n.type==='select' && n.props.value==='all').length);
+  period.props.onValueChange('all');tree=ui.render();
+  assert.ok(nodes(tree,n=>n.props?.onValueChange && n.props.value==='all').length);
 });
 
 for (const refreshFails of [false,true]) test(`workspace stays visible during a delayed refresh, including when refresh ${refreshFails ? 'fails' : 'succeeds'}`, async () => {
