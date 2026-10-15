@@ -48,6 +48,7 @@ export default function WillDoIt() {
   const [cards, setCards] = useState<Card[]>([]);
   const [recurrenceSources, setRecurrenceSources] = useState<RecurrenceSource[]>([]);
   const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('month');
+  const [hideRecurring, setHideRecurring] = useState(false);
   const loadSequence = useRef(0);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
   const [view, setView] = useState<View>('activated');
@@ -140,6 +141,7 @@ export default function WillDoIt() {
           if (savedView) setView(savedView.id);
           if (['all', 'work', 'personal'].includes(preferences.area)) setActiveFilter(preferences.area);
           if (['month', 'year', 'all'].includes(preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
+          if (typeof preferences.hideRecurring === 'boolean') setHideRecurring(preferences.hideRecurring);
         }
       } catch {
         // Unavailable storage or invalid saved settings must not prevent loading.
@@ -150,14 +152,18 @@ export default function WillDoIt() {
     void init();
   }, [loadData]);
 
-  const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod }>) => {
+  const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod; hideRecurring: boolean }>) => {
     if (!user) return;
     try {
-      localStorage.setItem(`will-do-it:workspace:${user.id}`, JSON.stringify({ view, area: activeFilter, archivePeriod, ...changes }));
+      localStorage.setItem(`will-do-it:workspace:${user.id}`, JSON.stringify({ view, area: activeFilter, archivePeriod, hideRecurring, ...changes }));
     } catch {
       // The selected view still works when browser storage is unavailable.
     }
   };
+
+  const visibleCards = hideRecurring
+    ? cards.filter(card => !card.is_recurring && !card.recurrence_source_id)
+    : cards;
 
   const filteredStreams = streamsForDisplay(
     streams.filter((stream) => {
@@ -169,7 +175,7 @@ export default function WillDoIt() {
   );
 
   function getCardsForStream(streamId: string): Card[] {
-    return cardsForStream(cards, streamId, view, archivePeriod);
+    return cardsForStream(visibleCards, streamId, view, archivePeriod);
   }
 
   const columns = statusesForView(view);
@@ -461,7 +467,7 @@ export default function WillDoIt() {
       {/* View switcher lives in its own stable bar so it never shifts
           horizontally when the number of columns changes between views. */}
       <div className="sticky top-14 z-40 border-b border-line bg-surface/80 backdrop-blur">
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-center">
+        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 sm:flex-row sm:gap-6 items-center justify-center">
           <div className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
             {VIEWS.map((v) => (
               <button
@@ -478,6 +484,22 @@ export default function WillDoIt() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={hideRecurring}
+            onClick={() => {
+              const next = !hideRecurring;
+              setHideRecurring(next);
+              savePreferences({ hideRecurring: next });
+            }}
+            className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-ink-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <span aria-hidden="true" className={`relative h-5 w-9 rounded-full border transition-colors ${hideRecurring ? 'border-accent bg-accent' : 'border-line bg-sunken'}`}>
+              <span className={`absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full shadow-sm transition-transform ${hideRecurring ? 'translate-x-4 bg-accent-ink' : 'bg-ink-soft'}`} />
+            </span>
+            Hide recurring
+          </button>
         </div>
         {view === 'archive' && (
           <div className="flex justify-center pb-3 px-4">
@@ -572,7 +594,18 @@ export default function WillDoIt() {
               })
             ) : (
               <div className="text-center py-12 text-ink-soft">
-                No streams with cards in this view.
+                {hideRecurring ? (
+                  <>
+                    <p>No non-recurring tasks in this view.</p>
+                    <button
+                      type="button"
+                      className="btn btn-secondary mt-3 min-h-11"
+                      onClick={() => { setHideRecurring(false); savePreferences({ hideRecurring: false }); }}
+                    >
+                      Show recurring
+                    </button>
+                  </>
+                ) : 'No streams with cards in this view.'}
               </div>
             )}
           </div>

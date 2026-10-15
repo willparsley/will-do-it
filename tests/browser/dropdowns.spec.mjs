@@ -250,3 +250,72 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  await page.getByRole('dialog',{name:'Add New Card'}).waitFor({state:'hidden'});
  assert.equal(calls.find(call=>call.path.endsWith('/cards')).body.notes,'One-off notes');
 });
+
+for (const theme of ['light', 'dark']) test(`hide recurring filters the workspace and persists in ${theme} mode`, async ({ page }) => {
+ const preferenceKey = `will-do-it:workspace:${user.id}`;
+ const availableStreams = streams.map(stream => ({ ...stream, area: stream.id === '0' ? 'work' : stream.id === '1' ? 'personal' : 'neutral' }));
+ const fixtureCards = [
+  ...['waiting', 'backlog', 'complete'].flatMap((status, index) => [
+   { id: `ordinary-${status}`, stream_id: '0', title: `One-off ${status}`, status, is_recurring: false },
+   { id: `recurring-${status}`, stream_id: '1', title: `Routine ${status}`, status, is_recurring: true, recurrence_source_id: 'source' },
+   { id: `linked-${status}`, stream_id: '0', title: `Linked ${status}`, status, is_recurring: false, recurrence_source_id: 'source-2' },
+   { id: `flagged-${status}`, stream_id: '0', title: `Flagged ${status}`, status, is_recurring: true },
+  ].map(card => ({ ...card, user_id: user.id, position: index, completed_at: new Date().toISOString() }))),
+ ];
+ await page.addInitScript(({ storageKey, session, theme }) => {
+  document.cookie = storageKey+'=base64-'+btoa(JSON.stringify(session)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')+'; path=/';
+  localStorage.setItem('theme', theme);
+ }, { storageKey, session, theme });
+ await page.route('**/*', async route => {
+  const url = new URL(route.request().url());
+  if (url.origin === new URL(supabaseUrl).origin) {
+   const data = url.pathname.endsWith('/user') ? user : url.pathname.endsWith('/streams') ? availableStreams : url.pathname.endsWith('/cards') ? fixtureCards : url.pathname.includes('/rpc/') ? 0 : [];
+   await route.fulfill({ json: data, headers: { 'access-control-allow-origin': '*' } }); return;
+  }
+  if (url.hostname === 'app.test') {
+   const asset = url.pathname.startsWith('/_next/static/') ? '/' + url.pathname.slice('/_next/'.length) : '/server/app/index.html';
+   const type = url.pathname.endsWith('.css') ? 'text/css' : url.pathname.endsWith('.js') ? 'application/javascript' : url.pathname.endsWith('.woff2') ? 'font/woff2' : 'text/html';
+   await route.fulfill({ body: await readFile(root + '/.next' + asset), contentType: type }); return;
+  }
+  await route.abort();
+ });
+ await page.goto('http://app.test');
+ const toggle = page.getByRole('switch', { name: 'Hide recurring' });
+ await expect(toggle).not.toBeChecked();
+ await expect(page.getByText('Routine waiting', { exact: true })).toBeVisible();
+ const box = await toggle.boundingBox();
+ assert.ok(box.x >= 0 && box.x + box.width <= page.viewportSize().width);
+ assert.ok(box.height >= 44);
+ const tabs = await page.getByRole('button', { name: 'Archive', exact: true }).boundingBox();
+ if (page.viewportSize().width < 640) assert.ok(box.y >= tabs.y + tabs.height);
+ else assert.ok(Math.abs(box.y - tabs.y) < 10);
+ await toggle.focus();
+ await page.keyboard.press('Space');
+ await expect(toggle).toBeChecked();
+ for (const [view, status] of [['Active', 'waiting'], ['Backlog', 'backlog'], ['All', 'waiting'], ['Archive', 'complete']]) {
+  await page.getByRole('button', { name: view, exact: true }).and(page.locator('[aria-pressed]')).click();
+  await expect(page.getByText(`One-off ${status}`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`Routine ${status}`, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(`Linked ${status}`, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(`Flagged ${status}`, { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Exercise', { exact: true })).toHaveCount(0);
+ }
+ await page.getByRole('button', { name: 'Work', exact: true }).click();
+ await expect(page.getByText('One-off complete', { exact: true })).toBeVisible();
+ await page.reload();
+ await expect(toggle).toBeChecked();
+ await expect(page.getByText('One-off complete', { exact: true })).toBeVisible();
+ assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), preferenceKey), { view: 'archive', area: 'work', archivePeriod: 'month', hideRecurring: true });
+ await page.getByRole('button', { name: 'Personal', exact: true }).click();
+ await expect(page.getByText('No non-recurring tasks in this view.', { exact: true })).toBeVisible();
+ await page.getByRole('button', { name: 'Show recurring', exact: true }).click();
+ await expect(toggle).not.toBeChecked();
+ // Archived occurrences are restored inside their collapsed recurrence group.
+ await expect(page.getByText('Routine complete', { exact: true })).toBeAttached();
+ await page.reload();
+ await expect(toggle).not.toBeChecked();
+ // Invalid saved values must use the default, rather than treating a string as enabled.
+ await page.evaluate(key => localStorage.setItem(key, JSON.stringify({ hideRecurring: 'true' })), preferenceKey);
+ await page.reload();
+ await expect(toggle).not.toBeChecked();
+});
