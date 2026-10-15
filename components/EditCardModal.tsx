@@ -1,5 +1,7 @@
 'use client';
 
+import { AppSelect } from '@/components/AppSelect';
+
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Card, CardStatus, STATUS_LABELS, streamsForSelect, UNCATEGORIZED_TITLE } from '@/lib/types';
@@ -130,28 +132,26 @@ export function EditCardModal({ card, streams, onClose, onCardUpdated, onCardDel
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">Stream</label>
-              <select 
-                value={streamId} 
-                onChange={(e) => setStreamId(e.target.value)}
-                className="control"
-              >
-                {selectableStreams.map(s => (
-                  <option key={s.id} value={s.id}>{s.title}</option>
-                ))}
-              </select>
+              <AppSelect
+                value={streamId}
+                onValueChange={value => setStreamId(value)}
+                className="w-full"
+                aria-label="Stream"
+                disabled={loading}
+                options={selectableStreams.map(s => ({ value: s.id, label: s.title }))}
+              />
             </div>
 
             <div>
               <label className="field-label">Status</label>
-              <select 
-                value={status} 
-                onChange={(e) => handleStatusChange(e.target.value as CardStatus)}
-                className="control"
-              >
-                {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
+              <AppSelect
+                value={status}
+                onValueChange={value => handleStatusChange(value as CardStatus)}
+                className="w-full"
+                aria-label="Status"
+                disabled={loading}
+                options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+              />
             </div>
           </div>
 

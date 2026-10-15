@@ -1,5 +1,7 @@
 'use client';
 
+import { AppSelect } from '@/components/AppSelect';
+
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Area } from '@/lib/types';
@@ -101,15 +103,14 @@ export function AddStreamModal({ streams, onClose, onStreamCreated }: AddStreamM
             <label className="field-label">
               Area
             </label>
-            <select
+            <AppSelect
               value={area}
-              onChange={(e) => setArea(e.target.value as Area)}
-              className="control"
-            >
-              <option value="personal">Personal</option>
-              <option value="work">Work</option>
-              <option value="neutral">Neutral</option>
-            </select>
+              onValueChange={value => setArea(value as Area)}
+              className="w-full"
+              aria-label="Area"
+              disabled={loading}
+              options={[{ value: 'personal', label: 'Personal' }, { value: 'work', label: 'Work' }, { value: 'neutral', label: 'Neutral' }]}
+            />
             <p className="text-xs text-ink-muted mt-1">
               Used for Work / Personal filtering.
             </p>

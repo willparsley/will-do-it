@@ -1,5 +1,7 @@
 'use client';
 
+import { AppSelect } from '@/components/AppSelect';
+
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Area, RecurrenceSource, streamsForSelect } from '@/lib/types';
@@ -150,32 +152,28 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
             <label className="field-label">
               Area
             </label>
-            <select
+            <AppSelect
               value={area}
-              onChange={(e) => setArea(e.target.value as Area)}
-              disabled={isUncategorized}
-              className="control"
-            >
-              <option value="personal">Personal</option>
-              <option value="work">Work</option>
-              <option value="neutral">Neutral</option>
-            </select>
+              onValueChange={value => setArea(value as Area)}
+              disabled={isUncategorized || loading}
+              className="w-full"
+              aria-label="Area"
+              options={[{ value: 'personal', label: 'Personal' }, { value: 'work', label: 'Work' }, { value: 'neutral', label: 'Neutral' }]}
+            />
           </div>
 
           <div>
             <label className="field-label">
               Status
             </label>
-            <select
+            <AppSelect
               value={state}
-              onChange={(e) => { setState(e.target.value as Stream['state']); setClosingSources([]); setChoices({}); }}
-              disabled={isUncategorized}
-              className="control"
-            >
-              <option value="in_progress">Active</option>
-              <option value="complete">Complete</option>
-              <option value="canceled">Canceled</option>
-            </select>
+              onValueChange={value => { setState(value as Stream['state']); setClosingSources([]); setChoices({}); }}
+              disabled={isUncategorized || loading}
+              className="w-full"
+              aria-label="Status"
+              options={[{ value: 'in_progress', label: 'Active' }, { value: 'complete', label: 'Complete' }, { value: 'canceled', label: 'Canceled' }]}
+            />
           </div>
 
           {state !== 'in_progress' && closingSources.length > 0 && (
@@ -184,18 +182,26 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
               {closingSources.map(source => (
                 <div key={source.id} className="space-y-2">
                   <label className="field-label" htmlFor={`recurrence-${source.id}`}>{source.base_title}</label>
-                  <select id={`recurrence-${source.id}`} className="control" value={choices[source.id]?.action || ''}
-                    onChange={e => setChoices(prev => ({ ...prev, [source.id]: { action: e.target.value } }))}>
-                    <option value="">Choose an action</option>
-                    <option value="move" disabled={moveTargets.length === 0}>Move recurrence</option>
-                    <option value="stop">Stop future occurrences</option>
-                  </select>
+                  <AppSelect
+                    id={`recurrence-${source.id}`}
+                    className="w-full"
+                    value={choices[source.id]?.action || ''}
+                    onValueChange={value => setChoices(prev => ({ ...prev, [source.id]: { action: value } }))}
+                    aria-label={source.base_title}
+                    placeholder="Choose an action"
+                    disabled={loading}
+                    options={[{ value: 'move', label: 'Move recurrence', disabled: moveTargets.length === 0 }, { value: 'stop', label: 'Stop future occurrences' }]}
+                  />
                   {choices[source.id]?.action === 'move' && (
-                    <select aria-label={`Move ${source.base_title} to stream`} className="control" value={choices[source.id]?.stream_id || ''}
-                      onChange={e => setChoices(prev => ({ ...prev, [source.id]: { ...prev[source.id], stream_id: e.target.value } }))}>
-                      <option value="">Choose an active stream</option>
-                      {moveTargets.map(target => <option key={target.id} value={target.id}>{target.title}</option>)}
-                    </select>
+                    <AppSelect
+                      aria-label={`Move ${source.base_title} to stream`}
+                      className="w-full"
+                      value={choices[source.id]?.stream_id || ''}
+                      onValueChange={value => setChoices(prev => ({ ...prev, [source.id]: { ...prev[source.id], stream_id: value } }))}
+                      placeholder="Choose an active stream"
+                      disabled={loading}
+                      options={moveTargets.map(target => ({ value: target.id, label: target.title }))}
+                    />
                   )}
                 </div>
               ))}
@@ -256,20 +262,15 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
                 <label className="block text-xs font-medium mb-1 text-ink-soft">
                   Move cards to
                 </label>
-                <select
+                <AppSelect
                   value={deleteTargetId}
-                  onChange={(e) => setDeleteTargetId(e.target.value)}
-                  className="control text-sm"
+                  onValueChange={value => setDeleteTargetId(value)}
+                  className="w-full"
+                  size="small"
                   disabled={loading}
-                >
-                  {streamsForSelect(streams)
-                    .filter(s => s.id !== stream.id)
-                    .map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.title}{s.title === 'Uncategorized' ? ' (recommended)' : ''}
-                      </option>
-                    ))}
-                </select>
+                  aria-label="Move cards to"
+                  options={streamsForSelect(streams).filter(s => s.id !== stream.id).map(s => ({ value: s.id, label: s.title + (s.title === 'Uncategorized' ? ' (recommended)' : '') }))}
+                />
               </div>
 
               <div className="flex gap-3 pt-1">

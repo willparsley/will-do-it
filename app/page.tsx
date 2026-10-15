@@ -1,5 +1,7 @@
 'use client';
 
+import { AppSelect } from '@/components/AppSelect';
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
   DndContext, 
@@ -479,19 +481,21 @@ export default function WillDoIt() {
         </div>
         {view === 'archive' && (
           <div className="flex justify-center pb-3 px-4">
-            <label className="flex items-center gap-2 text-sm text-ink-soft">
-              Archive period
-              <select className="control w-auto text-sm" value={archivePeriod}
-                onChange={e => {
-                  const archivePeriod = e.target.value as ArchivePeriod;
+            <div className="flex items-center gap-2 text-sm text-ink-soft">
+              <span>Archive period</span>
+              <AppSelect
+                className="w-auto"
+                size="small"
+                value={archivePeriod}
+                onValueChange={value => {
+                  const archivePeriod = value as ArchivePeriod;
                   setArchivePeriod(archivePeriod);
                   savePreferences({ archivePeriod });
-                }}>
-                <option value="month">Past month</option>
-                <option value="year">Past 1 year</option>
-                <option value="all">All time</option>
-              </select>
-            </label>
+                }}
+                aria-label="Archive period"
+                options={[{ value: 'month', label: 'Past month' }, { value: 'year', label: 'Past 1 year' }, { value: 'all', label: 'All time' }]}
+              />
+            </div>
           </div>
         )}
       </div>

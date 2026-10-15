@@ -21,11 +21,11 @@ test('recurrence form loads source settings and submits exact source version and
     source,streams,onClose(){closed=true;},onRecurrenceUpdated:value=>{updated=value;},
   },{'@/lib/supabase/client':{createClient:()=>supabase},sonner:notices});
   let tree=ui.render();
-  assert.equal(field(tree,'recurrence-month-day').props.value,3);
+  assert.equal(field(tree,'recurrence-month-day').props.value,'3');
   assert.equal(field(tree,'recurrence-end-date').props.value,'2026-11-01');
-  field(tree,'recurrence-month-day').props.onChange({target:{value:'5'}});
+  field(tree,'recurrence-month-day').props.onValueChange('5');
   field(tree,'recurrence-base-title').props.onChange({target:{value:'Updated bill'}});
-  field(tree,'recurrence-stream').props.onChange({target:{value:'target'}});
+  field(tree,'recurrence-stream').props.onValueChange('target');
   tree=ui.render();await submit(tree);
   assert.equal(calls[0].name,'save_recurrence');
   assert.equal(calls[0].args.p_expected_updated_at,source.updated_at);

@@ -1,5 +1,7 @@
 'use client';
 
+import { AppSelect } from '@/components/AppSelect';
+
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { MONTH_DAY_OPTIONS, monthDayLabel, RecurrenceSource, Stream, streamsForDisplay } from '@/lib/types';
@@ -135,19 +137,28 @@ export function RecurrenceForm({ source, streams, onClose, onRecurrenceUpdated }
             </div>
             <div>
               <label htmlFor="recurrence-stream" className="field-label">Stream</label>
-              <select id="recurrence-stream" className="control" value={streamId} onChange={e => setStreamId(e.target.value)}>
-                {selectableStreams.map(stream => <option key={stream.id} value={stream.id}>{stream.title}{stream.state !== 'in_progress' ? ' (closed)' : ''}</option>)}
-              </select>
+              <AppSelect
+                id="recurrence-stream"
+                className="w-full"
+                value={streamId}
+                onValueChange={value => setStreamId(value)}
+                aria-label="Stream"
+                disabled={saving}
+                options={selectableStreams.map(stream => ({ value: stream.id, label: stream.title + (stream.state !== 'in_progress' ? ' (closed)' : '') }))}
+              />
               <p className="mt-1 text-xs text-ink-muted">Moving the recurrence also moves its pending cards.</p>
             </div>
             <div>
               <label htmlFor="recurrence-frequency" className="field-label">Repeat</label>
-              <select id="recurrence-frequency" className="control" value={frequency} onChange={e => setFrequency(e.target.value)}>
-                <option value="daily">Daily</option>
-                <option value="every_n_days">Every N days</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
+              <AppSelect
+                id="recurrence-frequency"
+                className="w-full"
+                value={frequency}
+                onValueChange={value => setFrequency(value)}
+                aria-label="Repeat"
+                disabled={saving}
+                options={[{ value: 'daily', label: 'Daily' }, { value: 'every_n_days', label: 'Every N days' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]}
+              />
             </div>
             {frequency !== 'daily' && (
               <div>
@@ -171,9 +182,15 @@ export function RecurrenceForm({ source, streams, onClose, onRecurrenceUpdated }
             {frequency === 'monthly' && (
               <div>
                 <label htmlFor="recurrence-month-day" className="field-label">Day of month</label>
-                <select id="recurrence-month-day" className="control" value={monthDay} onChange={e => setMonthDay(Number(e.target.value))}>
-                  {MONTH_DAY_OPTIONS.map(day => <option key={day} value={day}>{monthDayLabel(day)}</option>)}
-                </select>
+                <AppSelect
+                  id="recurrence-month-day"
+                  className="w-full"
+                  value={String(monthDay)}
+                  onValueChange={value => setMonthDay(Number(value))}
+                  aria-label="Day of month"
+                  disabled={saving}
+                  options={MONTH_DAY_OPTIONS.map(day => ({ value: String(day), label: monthDayLabel(day) }))}
+                />
               </div>
             )}
             <label className="flex items-center gap-2 text-sm text-ink-soft">

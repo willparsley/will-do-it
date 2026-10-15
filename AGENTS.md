@@ -163,6 +163,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Email/SMS for reminders
 
 ## Decisions Log
+- Dropdowns use the shared React Aria `AppSelect` with custom-rendered menus on desktop and mobile. Triggers and portaled options explicitly use Geist Sans and the app theme tokens. Pass disabled/saving state explicitly; open menus consume Escape before enclosing dialogs.
 - Terminology: Streams (not epics/areas/projects)
 - Grouping by recurrence source (survives stream changes)
 - Auto-promotion conservative for time-sensitive items
