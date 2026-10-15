@@ -35,7 +35,8 @@ migrations that have not yet been run.
 1. `202610140002_recurrence_safety.sql` — safe promotion, reopening guards, and atomic stream deletion/rehome.
 2. `202610140003_recurrence_lifecycle.sql` — atomic card/stream edits, per-source closure choices, source movement, and calendar scheduling.
 3. `202610140004_ordinary_card_promotion.sql` — overdue catch-up for ordinary due dates and reminders.
-4. `202610140005_edit_recurrence.sql` — recurrence editing, pending-card rescheduling, schedule revisions, and automatic-promotion provenance. If 001–004 are already applied, only run 005.
+4. `202610140005_edit_recurrence.sql` — recurrence editing, pending-card rescheduling, schedule revisions, and automatic-promotion provenance.
+5. `202610140006_recurrence_edit_cursor.sql` — preserve the generation boundary during pattern edits when no pending occurrence exists. If 001–005 are already applied, only run 006.
 
 Migrations preserve existing cards, including duplicate history.
 `supabase/audit_recurrence_duplicates.sql` provides read-only queries for reviewing

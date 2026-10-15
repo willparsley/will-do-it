@@ -97,6 +97,27 @@ test('recurrence edits update pending cards while preserving occurrence identity
   assert.equal(next.day, (await query("select ((now() at time zone 'America/New_York')::date + 5)::text as day"))[0].day);
 });
 
+for (const stack of [false, true]) for (const daysAgo of [0, 7]) {
+  test(`resuming a ${stack ? 'stacking' : 'non-stacking'} recurrence with no pending cards preserves its boundary after a pattern edit (${daysAgo} days old)`, async () => {
+    await fixture({ stack, daysAgo });
+    // Model a stopped source completed today, including a late completion of
+    // an older occurrence. There is no pending slot to shift to a new date.
+    await query('update cards set completed_at = now() where id = $1', [original]);
+    await editRecurrence({ enabled: false });
+    const [history] = await query('select * from cards where id = $1', [original]);
+    const [{ boundary, expected }] = await query(`select
+      public.recurrence_cursor(s)::text as boundary,
+      (public.recurrence_cursor(s) + 3)::text as expected
+      from recurrence_sources s where id = $1`, [source]);
+    await editRecurrence({ frequency: 'every_n_days', interval: 3, enabled: true });
+    assert.equal((await query('select generated_through::text as day from recurrence_sources where id = $1', [source]))[0].day, boundary);
+    assert.deepEqual((await query('select * from cards where id = $1', [original]))[0], history);
+    assert.ok(await generate() > 0);
+    assert.equal((await instances())[0].day, expected);
+    assert.equal(await generate(), 0);
+  });
+}
+
 test('editing the source stream moves pending siblings while completed history stays intact', async () => {
   await fixture({ stack: true, daysAgo: 3 });
   await generate();
