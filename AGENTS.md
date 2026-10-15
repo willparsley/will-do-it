@@ -163,7 +163,8 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Email/SMS for reminders
 
 ## Decisions Log
-- Dropdowns use the shared React Aria `AppSelect` with custom-rendered menus on desktop and mobile. Triggers and portaled options explicitly use Geist Sans and the app theme tokens. Pass disabled/saving state explicitly; open menus consume Escape before enclosing dialogs.
+- Tailwind uses the standard PostCSS integration for both Turbopack and Webpack. Dropdown browser regressions must exercise the actual Next production output (`npm run build` then `npm run test:dropdowns`), including light/dark surfaces and small mobile modal bounds.
+- Dropdowns use the shared React Aria `AppSelect` with custom-rendered menus on desktop and mobile. Triggers and portaled options explicitly use Geist Sans and the app theme tokens. The closed value explicitly renders `selectedText` or the placeholder, avoiding copied menu checkmark markup that creates an extra line and shifts labels upward. Dropdown layout/surface styles live in a CSS module imported by the component so its styling is an explicit bundle dependency; default triggers match 42px form controls and touch menu items are at least 44px. Pass disabled/saving state explicitly; open menus consume Escape before enclosing dialogs.
 - Terminology: Streams (not epics/areas/projects)
 - Grouping by recurrence source (survives stream changes)
 - Auto-promotion conservative for time-sensitive items

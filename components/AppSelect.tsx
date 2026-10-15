@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Button, ListBox, ListBoxItem, Popover, Select, SelectValue } from 'react-aria-components';
 import { Check, ChevronDown } from 'lucide-react';
+import styles from './AppSelect.module.css';
 
 export interface SelectOption {
   value: string;
@@ -40,7 +41,7 @@ export function AppSelect({ value, onValueChange, options, placeholder = 'Choose
       isOpen={open && !disabled}
       onOpenChange={setOpen}
       placeholder={placeholder}
-      className={`app-select app-select-${size} ${className}`}
+      className={`${styles.root} ${styles[size] || ''} ${className}`}
       onKeyDown={event => {
         // The enclosing recurrence dialog also handles Escape. Let the menu close first.
         if (open && event.key === 'Escape') {
@@ -49,12 +50,14 @@ export function AppSelect({ value, onValueChange, options, placeholder = 'Choose
         }
       }}
     >
-      <Button ref={triggerRef} id={id} type="button" className="control app-select-trigger">
-        <SelectValue className="app-select-value" />
-        <ChevronDown size={14} aria-hidden="true" className="shrink-0" />
+      <Button ref={triggerRef} id={id} type="button" className={styles.trigger}>
+        <SelectValue className={styles.value}>
+          {({ selectedText, isPlaceholder }) => isPlaceholder ? placeholder : selectedText}
+        </SelectValue>
+        <ChevronDown size={14} aria-hidden="true" className={`${styles.icon} ${styles.chevron}`} />
       </Button>
       <Popover
-        className={`app-select-popover app-select-${size}`}
+        className={`${styles.popover} ${styles[size] || ''}`}
         placement="bottom start"
         offset={4}
         maxHeight={320}
@@ -71,13 +74,13 @@ export function AppSelect({ value, onValueChange, options, placeholder = 'Choose
             triggerRef.current?.focus();
           }
         }}>
-          <ListBox items={options} className="app-select-list" aria-label={label}>
+          <ListBox items={options} className={styles.list} aria-label={label}>
             {option => (
-              <ListBoxItem id={option.value} textValue={option.label} isDisabled={option.disabled} className="app-select-item">
+              <ListBoxItem id={option.value} textValue={option.label} isDisabled={option.disabled} className={styles.item}>
                 {({ isSelected }) => (
                   <>
-                    <span className="min-w-0 break-words">{option.label}</span>
-                    <Check size={14} aria-hidden="true" className={`shrink-0 ${isSelected ? '' : 'invisible'}`} />
+                    <span className={styles.itemText}>{option.label}</span>
+                    <Check size={14} aria-hidden="true" className={`${styles.icon} ${isSelected ? '' : styles.checkHidden}`} />
                   </>
                 )}
               </ListBoxItem>

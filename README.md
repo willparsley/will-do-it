@@ -95,3 +95,9 @@ See `AGENTS.md` for full decisions, data model, and contribution guidelines.
 - @dnd-kit for the matrix
 
 Core CRUD, authentication, recurrence generation, and archive history persist in Supabase. PWA installation and push notifications remain future work.
+
+### Dropdown browser checks
+
+After installing dependencies, install test browsers with `npx playwright install chromium firefox`.
+Run `npm run build` followed by `npm run test:dropdowns` (or build with `npm run build -- --webpack` to verify that pipeline).
+The checks serve the actual production HTML, JavaScript, and CSS from `.next`, mock all Supabase requests, and verify dropdown sizes, surfaces, fonts, viewport bounds, touch targets, and selection in desktop/mobile layouts and both themes. Use the same public Supabase environment values for the build and browser tests; `.env.local` is loaded when needed. Screenshots are saved under `test-results/`.
