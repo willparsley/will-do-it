@@ -19,7 +19,7 @@ test('only Complete satisfies a prerequisite; terminal cards hide the blocked in
   for(const status of ['complete','canceled']) assert.equal(isCardBlocked({...card,status},prerequisite),false);
 });
 
-test('blocked cards render both an outline class and the prerequisite name',()=>{
+test('blocked cards render both the blocked styling class and the prerequisite name',()=>{
   const render=prereq=>renderToStaticMarkup(React.createElement(CardView,{card,prerequisite:prereq}));
   assert.match(render(prerequisite),/card-blocked/);
   assert.match(render(prerequisite),/Blocked by: Buy domain name/);

@@ -19,6 +19,8 @@
   --text: #18181b;
   --text-secondary: #52525b;
   --text-muted: #a1a1aa;
+  --card-blocked-title: #74747d;
+  --card-blocked-label: #a45454;
 
   --accent: #2563eb;
   --accent-ink: #ffffff;
@@ -56,6 +58,8 @@
   --text: #ededed;
   --text-secondary: #a1a1aa;
   --text-muted: #71717a;
+  --card-blocked-title: #9a9aa3;
+  --card-blocked-label: #ce9191;
 
   --accent: #7aa2f7;
   --accent-ink: #0b1220;
@@ -396,11 +400,6 @@ textarea::placeholder {
   border-color: var(--accent);
 }
 
-/* Prerequisites remain visible alongside the existing status stripe. */
-.card.card-blocked {
-  outline: 2px solid #c76a16;
-  outline-offset: -2px;
-}
-.card-blocked-label { color: #99480c; }
-.dark .card.card-blocked { outline-color: #f5a04a; }
-.dark .card-blocked-label { color: #f5b36e; }
+/* Quiet blocked titles, with a readable dusty-red prerequisite label. */
+.card-blocked .card-title { color: var(--card-blocked-title); }
+.card-blocked-label { color: var(--card-blocked-label); }
