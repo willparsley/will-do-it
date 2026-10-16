@@ -11,6 +11,7 @@ Cards live under **Streams** in a flexible matrix view (Streams as rows, statuse
 - Smart recurring tasks (with stacking control)
 - Time-sensitive reminders + auto-promotion
 - Full history in Archive
+- Install on a mobile home screen with a dedicated app icon and standalone window
 
 ## Getting Started
 
@@ -100,7 +101,36 @@ See `AGENTS.md` for full decisions, data model, and contribution guidelines.
 - Tailwind + calm design system
 - @dnd-kit for the matrix
 
-Core CRUD, authentication, recurrence generation, and archive history persist in Supabase. PWA installation and push notifications remain future work.
+Core CRUD, authentication, recurrence generation, and archive history persist in Supabase. Mobile installation is supported; push notifications and offline workspace editing remain future work.
+
+### Install on your phone
+
+Use the deployed HTTPS site (Vercel provides HTTPS):
+
+- **iPhone/iPad:** Open in Safari, tap **Share → Add to Home Screen**, keep **Open as Web App** enabled if offered, then tap **Add**.
+- **Android:** Open in Chrome and choose **Install app** or **Add to Home screen** from the browser menu. Wording varies by browser/device.
+
+Launch **Will Do It** from its home-screen icon to open it in its own window.
+The icon uses the same green artwork as the favicon, with separate PNG files for
+mobile installation and an Apple touch icon. To regenerate these files after
+changing `app/icon.svg`, run `node scripts/generate-pwa-icons.mjs`.
+
+Cards and saves still require internet access. After one online launch, offline
+navigation shows a reconnect screen with **Try again**. Only that public fallback
+is cached by the service worker; account pages and Supabase data are never cached
+by it. Service workers run only in production builds. Updates take effect after
+existing app windows close and the app is reopened, without reloading open edits.
+Installation does not enable background recurrence processing or push reminders;
+generation/promotion still runs when the workspace loads or after mutations.
+
+Run `npm run build` then `npm run test:pwa` for production-server checks of the
+manifest, icon sizes, Chromium installability, worker headers, offline fallback,
+and reconnect behavior. Localhost is allowed for these checks; a phone accessing
+a LAN IP needs trusted HTTPS. Also verify installation, launch, and magic-link
+sign-in on real iOS and Android devices: browser automation does not exercise the
+OS installation UI, and email links may open in the browser rather than the
+installed window. Signing in before adding the app to the home screen is a useful
+first check; session sharing depends on the platform.
 
 ### Dropdown browser checks
 

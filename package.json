@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test --test-isolation=none tests/*.test.mjs",
-    "test:dropdowns": "playwright test --config tests/browser/playwright.config.mjs"
+    "test:dropdowns": "playwright test --config tests/browser/playwright.config.mjs",
+    "test:pwa": "playwright test --config tests/pwa/playwright.config.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
