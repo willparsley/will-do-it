@@ -47,7 +47,7 @@ test('refresh restores the selected area and archive period with the view; prefe
     let ui=await workspace();
     button(ui.render(),'Archive').props.onClick();
     let tree=ui.render();
-    nodes(tree,node=>node.props?.onValueChange && node.props.value==='month')[0].props.onValueChange('year');
+    nodes(tree,node=>node.props?.onValueChange && node.props.value==='week')[0].props.onValueChange('year');
     tree=ui.render();areaFilter(tree).props.onChange('work');
     assert.deepEqual(JSON.parse(storage.getItem('will-do-it:workspace:user')),{view:'archive',area:'work',archivePeriod:'year',hideRecurring:false});
     ui=await workspace();tree=ui.render();
@@ -69,7 +69,7 @@ test('malformed or unsupported saved settings fall back to defaults', async () =
       assert.equal(button(ui.render(),'Active').props['aria-pressed'],true);
       assert.equal(areaFilter(ui.render()).props.value,'all');
       button(ui.render(),'Archive').props.onClick();
-      assert.equal(nodes(ui.render(),node=>node.props?.onValueChange)[0].props.value,'month');
+      assert.equal(nodes(ui.render(),node=>node.props?.onValueChange)[0].props.value,'week');
     });
   }
 });
@@ -80,5 +80,25 @@ test('blocked browser storage does not prevent loading or switching views', asyn
     assert.equal(button(ui.render(),'Active').props['aria-pressed'],true);
     button(ui.render(),'Backlog').props.onClick();
     assert.equal(button(ui.render(),'Backlog').props['aria-pressed'],true);
+  });
+});
+
+
+test('history control appears only in All and Archive and shares its saved selection', async () => {
+  await withStorage(memoryStorage(),async()=>{
+    let ui=await workspace();
+    const control=()=>nodes(ui.render(),node=>node.props?.['aria-label']==='Completed/canceled period');
+    for(const label of ['Active','Backlog']) {
+      button(ui.render(),label).props.onClick();
+      assert.equal(control().length,0);
+    }
+    button(ui.render(),'All').props.onClick();
+    assert.equal(control()[0].props.value,'week');
+    assert.deepEqual(control()[0].props.options.map(option=>option.value),['week','month','quarter','year','all']);
+    control()[0].props.onValueChange('quarter');
+    button(ui.render(),'Archive').props.onClick();
+    assert.equal(control()[0].props.value,'quarter');
+    ui=await workspace();
+    assert.equal(control()[0].props.value,'quarter');
   });
 });

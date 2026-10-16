@@ -31,7 +31,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { toast } from 'sonner';
 import type { User } from '@supabase/supabase-js';
 import { ArchiveCards } from '@/components/ArchiveCards';
-import { ArchivePeriod, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
+import { ArchivePeriod, HISTORY_PERIODS, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
 import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
@@ -48,7 +48,7 @@ export default function WillDoIt() {
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [recurrenceSources, setRecurrenceSources] = useState<RecurrenceSource[]>([]);
-  const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('month');
+  const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('week');
   const [hideRecurring, setHideRecurring] = useState(false);
   const loadSequence = useRef(0);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
@@ -141,7 +141,7 @@ export default function WillDoIt() {
           const savedView = VIEWS.find(option => option.id === preferences.view);
           if (savedView) setView(savedView.id);
           if (['all', 'work', 'personal'].includes(preferences.area)) setActiveFilter(preferences.area);
-          if (['month', 'year', 'all'].includes(preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
+          if (HISTORY_PERIODS.some(option => option.value === preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
           if (typeof preferences.hideRecurring === 'boolean') setHideRecurring(preferences.hideRecurring);
         }
       } catch {
@@ -468,7 +468,7 @@ export default function WillDoIt() {
       {/* View switcher lives in its own stable bar so it never shifts
           horizontally when the number of columns changes between views. */}
       <div className="sticky top-14 z-40 border-b border-line bg-surface/80 backdrop-blur">
-        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 sm:flex-row sm:gap-6 items-center justify-center">
+        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:gap-6 items-center justify-center">
           <div className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
             {VIEWS.map((v) => (
               <button
@@ -485,42 +485,43 @@ export default function WillDoIt() {
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={hideRecurring}
-            onClick={() => {
-              const next = !hideRecurring;
-              setHideRecurring(next);
-              savePreferences({ hideRecurring: next });
-            }}
-            className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-ink-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            <span aria-hidden="true" className={`relative h-5 w-9 rounded-full border transition-colors ${hideRecurring ? 'border-accent bg-accent' : 'border-line bg-sunken'}`}>
-              <span className={`absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full shadow-sm transition-transform ${hideRecurring ? 'translate-x-4 bg-accent-ink' : 'bg-ink-soft'}`} />
-            </span>
-            Hide recurring
-          </button>
-        </div>
-        {view === 'archive' && (
-          <div className="flex justify-center pb-3 px-4">
-            <div className="flex items-center gap-2 text-sm text-ink-soft">
-              <span>Archive period</span>
-              <AppSelect
-                className="w-auto"
-                size="small"
-                value={archivePeriod}
-                onValueChange={value => {
-                  const archivePeriod = value as ArchivePeriod;
-                  setArchivePeriod(archivePeriod);
-                  savePreferences({ archivePeriod });
-                }}
-                aria-label="Archive period"
-                options={[{ value: 'month', label: 'Past month' }, { value: 'year', label: 'Past 1 year' }, { value: 'all', label: 'All time' }]}
-              />
-            </div>
+          <div className="flex items-center justify-center gap-2 sm:gap-4 lg:min-w-[24rem] lg:justify-start">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={hideRecurring}
+              onClick={() => {
+                const next = !hideRecurring;
+                setHideRecurring(next);
+                savePreferences({ hideRecurring: next });
+              }}
+              className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-1 text-xs sm:text-sm font-medium text-ink-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <span aria-hidden="true" className={`relative h-5 w-9 rounded-full border transition-colors ${hideRecurring ? 'border-accent bg-accent' : 'border-line-strong bg-sunken'}`}>
+                <span className={`absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full shadow-sm transition-transform ${hideRecurring ? 'translate-x-4 bg-accent-ink' : 'bg-ink-soft'}`} />
+              </span>
+              Hide recurring
+            </button>
+            {columns.some(status => status === 'complete' || status === 'canceled') && (
+              <>
+                <span aria-hidden="true" className="h-6 w-px shrink-0 bg-line" />
+                <AppSelect
+                  className="w-[11rem] shrink-0 sm:w-[12.5rem]"
+                  size="small"
+                  valuePrefix="History"
+                  value={archivePeriod}
+                  onValueChange={value => {
+                    const archivePeriod = value as ArchivePeriod;
+                    setArchivePeriod(archivePeriod);
+                    savePreferences({ archivePeriod });
+                  }}
+                  aria-label="Completed/canceled period"
+                  options={[...HISTORY_PERIODS]}
+                />
+              </>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       <div className="w-full overflow-x-auto px-4 sm:px-6 lg:px-8 py-6 flex-1">

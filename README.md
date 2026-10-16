@@ -66,8 +66,11 @@ occurrences retain their stored history but display under the current source
 stream, grouped by source ID. In both All and Archive, recurring Complete and
 Canceled histories collapse into compact title-and-count rows. Expand a group to
 view and edit individual cards, newest completion first. This applies to both
-stacking modes; ordinary cards remain individual. Archive defaults to Past month, with Past 1 year and
-All time available; legacy records without completion dates remain in All time.
+stacking modes; ordinary cards remain individual. All and Archive share a **Completed/canceled** period dropdown that defaults to
+Past week, with Past month, Past 3 months, Past year, and All time available.
+It filters completion/cancellation dates while keeping active cards visible. The
+selection is remembered per user, including existing saved periods. Legacy records
+without completion dates remain available in All time.
 
 Click a card's recurrence icon, or **Edit recurrence** in its card editor, to edit
 the source title, stream, frequency, interval, weekdays/monthly day, stacking,

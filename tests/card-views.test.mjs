@@ -40,7 +40,7 @@ test('archive period uses completed_at, preserves unknown dates in All time, and
   assert.deepEqual(list('month'),['recent']);
   assert.deepEqual(list('year'),['recent','year']);
   assert.deepEqual(list('all'),['recent','year','old','unknown']);
-  assert.equal(cardsForStream(cards,'old-stream','all','month',now).length,5);
+  assert.deepEqual(cardsForStream(cards,'old-stream','all','month',now).map(c=>c.id),['recent','active']);
 });
 
 test('archive month cutoff clamps month ends and includes the exact cutoff instant', () => {
@@ -172,12 +172,36 @@ test('terminal history counts reflect view filters, keep statuses separate, and 
     cards:cardsForStream(cards,'new-stream',view,'month',now).filter(card=>card.status===status),status,
     renderCard:card=>React.createElement('article',{key:card.id},card.id),
   }));
-  for(const [view,status,count] of [['all','complete',2],['archive','complete',1],['all','canceled',1],['archive','canceled',1]]) {
+  for(const [view,status,count] of [['all','complete',1],['archive','complete',1],['all','canceled',1],['archive','canceled',1]]) {
     const html=render(view,status);
     assert.ok(html.includes(`${count} ${status==='complete'?'completed':'canceled'}`));
     assert.equal((html.match(/<details/g)||[]).length,1);
     assert.doesNotMatch(html,/<details[^>]*\sopen(?:[=>\s])/);
     assert.ok(!html.includes('pending'));
     if(status==='complete') assert.ok(html.includes('<article>ordinary</article>'));
+  }
+});
+
+
+test('history windows filter both terminal statuses in All and Archive and preserve active cards', () => {
+  const end = new Date(2026, 9, 16, 12);
+  for (const [period, boundary] of [
+    ['week', new Date(2026, 9, 9, 12)],
+    ['month', new Date(2026, 8, 16, 12)],
+    ['quarter', new Date(2026, 6, 16, 12)],
+    ['year', new Date(2025, 9, 16, 12)],
+  ]) {
+    const cards = ['complete', 'canceled'].flatMap(status => [
+      {...base, id:`${status}-boundary`, status, completed_at:boundary.toISOString()},
+      {...base, id:`${status}-before`, status, completed_at:new Date(boundary.getTime()-1).toISOString()},
+      {...base, id:`${status}-undated`, status, completed_at:null},
+    ]);
+    const active = {...base, id:'active', status:'waiting', completed_at:null};
+    for (const view of ['all','archive']) {
+      assert.deepEqual(cardsForStream([...cards,active],'old-stream',view,period,end).map(c=>c.id),
+        ['complete-boundary','canceled-boundary',...(view==='all'?['active']:[])]);
+      assert.equal(cardsForStream(cards,'old-stream',view,'all',end).length,6);
+    }
+    assert.equal(cardsForStream([active],'old-stream','activated',period,end).length,1);
   }
 });

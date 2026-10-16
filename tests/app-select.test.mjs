@@ -54,4 +54,8 @@ test('closed dropdown renders only the selected label or placeholder, without me
   const value = nodes(ui.render(), node => node.props?.className === 'value')[0];
   assert.equal(value.props.children({ selectedText: 'Move', isPlaceholder: false }), 'Move');
   assert.equal(value.props.children({ selectedText: '', isPlaceholder: true }), 'Choose an action');
+  ui.inputs.valuePrefix = 'History';
+  const prefixed = nodes(ui.render(), node => node.props?.className === 'value')[0];
+  assert.equal(prefixed.props.children({ selectedText: 'Past week', isPlaceholder: false }), 'History: Past week');
+  assert.equal(prefixed.props.children({ selectedText: '', isPlaceholder: true }), 'Choose an action');
 });

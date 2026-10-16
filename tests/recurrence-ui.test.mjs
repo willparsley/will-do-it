@@ -143,7 +143,7 @@ test('workspace refresh calls conditional promotion and hydrates cards before di
   assert.equal(displayed.last_completed_at,source.last_completed_at);
   assert.equal(displayed.recurrence_stream_id,'new-stream');
   button(tree,'Archive').props.onClick();tree=ui.render();
-  const period=nodes(tree,n=>n.props?.onValueChange && n.props.value==='month')[0];
+  const period=nodes(tree,n=>n.props?.onValueChange && n.props.value==='week')[0];
   assert.ok(period);
   const groups=nodes(tree,n=>n.props.cards?.some(c=>c.id==='card'));
   assert.equal(groups.length,1);
@@ -228,6 +228,7 @@ for (const operation of ['create', 'edit', 'drag']) {
         const future = new Date(); future.setDate(future.getDate() + 2);
         const past = new Date(); past.setDate(past.getDate() - 2);
         const card = { ...base, is_recurring: false, recurrence_source_id: null, status: initial,
+          completed_at: initial === 'complete' ? new Date().toISOString() : null,
           due_at: null, remind_at: null, [field]: future.toISOString() };
         let persisted = operation === 'create' ? [] : [card];
         const supabase = {
@@ -296,7 +297,7 @@ for (const action of ['complete','advance']) for (const fails of [false,true]) {
       async rpc(name,args){
         calls.push(name);
         if(name==='save_card_with_undo') {
-          before={...persisted};persisted={...persisted,...args.p_changes};
+          before={...persisted};persisted={...persisted,...args.p_changes,completed_at:args.p_changes.status==='complete'?new Date().toISOString():null};
           return {data:{card:persisted,undo_id:'token'}};
         }
         if(name==='undo_card_action') {

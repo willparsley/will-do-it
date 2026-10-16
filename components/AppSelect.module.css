@@ -77,6 +77,16 @@
   height: 2.375rem;
 }
 
+@media (max-width: 639px) {
+  .prefixed.small {
+    font-size: 0.75rem;
+  }
+
+  .prefixed.small .trigger {
+    padding-inline: 0.5rem;
+  }
+}
+
 .compact {
   font-size: 0.75rem;
 }
