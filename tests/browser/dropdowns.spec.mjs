@@ -338,6 +338,9 @@ for (const theme of ['light','dark']) test(`prerequisite links and orange blocki
      let data=url.pathname.endsWith('/user')?user:url.pathname.endsWith('/streams')?streams:url.pathname.endsWith('/cards')?cards:url.pathname.endsWith('/recurrence_sources')?[]:0;
      if(route.request().method()==='POST') {
        const body=route.request().postDataJSON();calls.push({path:url.pathname,body});
+       if(url.pathname.endsWith('/cards')) {
+         const created={...body,id:'new-card'};cards=[...cards,created];data=created;
+       }
        if(url.pathname.endsWith('/save_card') || url.pathname.endsWith('/save_card_with_undo')) {
          cards=cards.map(card=>card.id===body.p_card_id?{...card,...body.p_changes}:card);
          const saved=cards.find(card=>card.id===body.p_card_id);
@@ -361,8 +364,9 @@ for (const theme of ['light','dark']) test(`prerequisite links and orange blocki
  assert.equal(await dns.evaluate(el=>getComputedStyle(el).outlineColor),theme==='dark'?'rgb(245, 160, 74)':'rgb(199, 106, 22)');
  await dns.scrollIntoViewIfNeeded();
  await page.screenshot({path:testInfo.outputPath(`blocked-${theme}.png`),scale:'css'});
- await dns.click();
- const prerequisite=page.getByRole('button',{name:'Prerequisite card',exact:true});
+ await dns.getByText('Update DNS settings',{exact:true}).click();
+ await page.getByRole('heading',{name:'Edit Card',exact:true}).waitFor();
+ const prerequisite=page.locator('button[aria-label="Prerequisite card"]');
  await prerequisite.scrollIntoViewIfNeeded();
  await expect(prerequisite).toContainText('Buy domain name');
  await prerequisite.click();
@@ -372,8 +376,9 @@ for (const theme of ['light','dark']) test(`prerequisite links and orange blocki
  await expect(page.getByRole('heading',{name:'Edit Card',exact:true})).toHaveCount(0);
  await expect(dns).not.toHaveClass(/card-blocked/);
  assert.equal(calls.find(call=>call.path.endsWith('/save_card')).body.p_changes.prerequisite_card_id,null);
- await dns.click();
- await page.getByText('Prerequisite Optional',{exact:false}).click();
+ await dns.getByText('Update DNS settings',{exact:true}).click();
+ await page.getByRole('heading',{name:'Edit Card',exact:true}).waitFor();
+ await page.locator('summary').filter({hasText:'Prerequisite'}).click();
  await page.getByRole('searchbox',{name:'Find a card'}).fill('domain');
  await prerequisite.click();
  await page.getByRole('option',{name:/Buy domain name/}).click();
@@ -383,4 +388,17 @@ for (const theme of ['light','dark']) test(`prerequisite links and orange blocki
  await buy.getByTitle('Mark complete',{exact:true}).evaluate(el=>el.click());
  await expect(dns).not.toHaveClass(/card-blocked/);
  await expect(dns.getByText(/Blocked by/)).toHaveCount(0);
+ await page.getByRole('button',{name:'Quick Add',exact:true}).click();
+ await page.getByPlaceholder('What needs to be done?').fill('Check DNS records');
+ await page.locator('button[aria-label="Status"]').click();
+ await page.getByRole('option',{name:'Research',exact:true}).click();
+ await page.locator('summary').filter({hasText:'Prerequisite'}).click();
+ await page.getByRole('searchbox',{name:'Find a card'}).fill('Update DNS');
+ await prerequisite.click();
+ await page.getByRole('option',{name:/Update DNS settings/}).click();
+ await page.getByRole('button',{name:'Create Card',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Add New Card',exact:true})).toHaveCount(0);
+ const created=page.locator('.card').filter({has:page.getByText('Check DNS records',{exact:true})});
+ await expect(created).toHaveClass(/card-blocked/);
+ assert.equal(calls.find(call=>call.path.endsWith('/cards')).body.prerequisite_card_id,'dns');
 });
