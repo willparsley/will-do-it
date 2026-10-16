@@ -95,6 +95,15 @@ and the unique occurrence index.
 ## Project Context
 See `AGENTS.md` for full decisions, data model, and contribution guidelines.
 
+## Deployment workflow
+
+Vercel automatically deploys only `main` to production. Feature branches and PRs
+do not create preview deployments; `vercel.json` disables all branches with `**`
+and explicitly enables `main`. Keep using feature branches, local checks, and PRs
+before merging. Existing failed previews remain in Vercel history. Manual CLI
+deployments are unaffected. To restore automatic previews later, remove the
+`git.deploymentEnabled` restriction after configuring a separate test backend.
+
 ## Tech
 - Next.js (App Router)
 - Supabase (Auth + Postgres + RLS)
