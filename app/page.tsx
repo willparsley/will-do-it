@@ -16,7 +16,7 @@ import {
   DragOverlay,
 } from '@dnd-kit/core';
 import { createClient } from '@/lib/supabase/client';
-import { Stream, Card, RecurrenceSource, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
+import { Stream, Card, CardStatus, RecurrenceSource, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { AreaFilter } from '@/components/AreaFilter';
 import { AddCardModal } from '@/components/AddCardModal';
 import { Card as CardComponent } from '@/components/Card';
@@ -54,7 +54,7 @@ export default function WillDoIt() {
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
   const [view, setView] = useState<View>('activated');
   const [initialLoading, setInitialLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [creationContext, setCreationContext] = useState<{ streamId?: string; status: CardStatus } | null>(null);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [editingRecurrenceId, setEditingRecurrenceId] = useState<string | null>(null);
   const [showStreamModal, setShowStreamModal] = useState(false);
@@ -443,7 +443,7 @@ export default function WillDoIt() {
             <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />
 
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => setCreationContext({ status: 'backlog' })}
               className="btn btn-primary px-4 py-1.5 text-sm"
             >
               <Plus className="h-4 w-4" /> Quick Add
@@ -580,7 +580,9 @@ export default function WillDoIt() {
 
                         return (
                           <div key={status} className="status-column h-full">
-                            <DroppableCell id={cellId} isEmpty={cellCards.length === 0}>
+                            <DroppableCell id={cellId} isEmpty={cellCards.length === 0}
+                              onAdd={stream.state === 'in_progress' ? () => setCreationContext({ streamId: stream.id, status }) : undefined}
+                              addLabel={`Add card to ${stream.title} — ${STATUS_LABELS[status]}.`}>
                               <div className="space-y-2">
                                 {status === 'complete' || status === 'canceled'
                                   ? <ArchiveCards cards={cellCards} status={status} renderCard={renderCard} />
@@ -621,11 +623,13 @@ export default function WillDoIt() {
           </DragOverlay>
         </DndContext>
 
-        {showAddModal && (
+        {creationContext && (
           <AddCardModal
             streams={streams}
             cards={cards}
-            onClose={() => setShowAddModal(false)}
+            defaultStreamId={creationContext.streamId}
+            defaultStatus={creationContext.status}
+            onClose={() => setCreationContext(null)}
             onCardCreated={handleCardCreated}
           />
         )}

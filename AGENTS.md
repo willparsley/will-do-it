@@ -101,6 +101,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Every card must be in a stream.
 - Drag cards between streams (rows) and statuses (columns) with grid highlighting.
 - Quick-add allows choosing stream + status.
+- Each visible cell in an active stream has a compact dashed plus button below its cards, including Complete/Canceled. It opens Add Card with that stream/status prefilled and editable; Quick Add still defaults to Uncategorized/Backlog. Desktop cell hover or keyboard focus reveals the button, touch keeps it faintly visible, and dragging hides/disables it without removing its space. Dialog dismissal restores focus to the initiating button. Initial defaults are captured per opening so refreshes preserve drafts and untouched prefills are not dirty. Closed/hidden streams gain no creation controls.
 - On hover, a card shows two quick actions (stacked, top-right): a green check to complete it, and an arrow to advance it one step along `STATUS_FLOW` (backlog → priority_backlog → research → waiting → in_progress → review → complete). Advancing into Complete runs the full completion path (stamps `completed_at`, handles recurrence).
 
 ### Recurring Tasks

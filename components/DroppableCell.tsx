@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { useDroppable, useDndContext } from '@dnd-kit/core';
+import { Plus } from 'lucide-react';
+import styles from './DroppableCell.module.css';
 
 interface DroppableCellProps {
   id: string;
@@ -9,9 +11,11 @@ interface DroppableCellProps {
   className?: string;
   /** Show the "Drop here" hint when this empty cell is the active drop target during a drag. */
   isEmpty?: boolean;
+  onAdd?: () => void;
+  addLabel?: string;
 }
 
-export function DroppableCell({ id, children, className = '', isEmpty = false }: DroppableCellProps) {
+export function DroppableCell({ id, children, className = '', isEmpty = false, onAdd, addLabel }: DroppableCellProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const { active } = useDndContext();
   const isDragging = !!active;
@@ -26,7 +30,8 @@ export function DroppableCell({ id, children, className = '', isEmpty = false }:
   return (
     <div
       ref={setNodeRef}
-      className={`min-h-[110px] h-full rounded-lg p-2 border transition-colors ${stateClasses} ${className}`}
+      className={`${styles.cell} min-h-[110px] h-full rounded-lg p-2 border transition-colors ${stateClasses} ${className}`}
+      data-dragging={isDragging || undefined}
       style={isOver ? { borderStyle: 'dashed' } : undefined}
     >
       {isEmpty && isDragging && isOver && (
@@ -35,6 +40,22 @@ export function DroppableCell({ id, children, className = '', isEmpty = false }:
         </div>
       )}
       {children}
+      {onAdd && (
+        <button
+          type="button"
+          className={styles.add}
+          aria-label={addLabel}
+          title={addLabel}
+          disabled={isDragging}
+          onClick={event => {
+            // Also establish the restore target on browsers that don't focus clicks.
+            event.currentTarget.focus();
+            onAdd();
+          }}
+        >
+          <Plus size={18} aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
