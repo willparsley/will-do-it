@@ -1,5 +1,6 @@
 'use client';
 
+import { BrandLogo } from '@/components/BrandLogo';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -53,7 +54,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center p-6 bg-canvas">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight text-ink">Will Do It</h1>
+          <h1 className="flex justify-center"><BrandLogo size="login" /></h1>
           <p className="text-ink-muted mt-2">Sign in with a magic link</p>
         </div>
 
@@ -72,7 +73,7 @@ export default function Login() {
               autoFocus
             />
             <p className="text-xs text-ink-muted mt-1.5">
-              We'll send a magic link to this email. No password required.
+              We&apos;ll send a magic link to this email. No password required.
             </p>
           </div>
 

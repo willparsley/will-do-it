@@ -1,5 +1,6 @@
 'use client';
 
+import { BrandLogo } from '@/components/BrandLogo';
 import { AppSelect } from '@/components/AppSelect';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -433,12 +434,12 @@ export default function WillDoIt() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-line bg-surface/80 backdrop-blur sticky top-0 z-50">
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-3">
-            <h1 className="font-semibold text-xl tracking-tight text-ink">Will Do It</h1>
+            <h1 className="shrink-0"><BrandLogo /></h1>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />
 
             <button
