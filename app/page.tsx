@@ -581,8 +581,8 @@ export default function WillDoIt() {
                           <div key={status} className="status-column h-full">
                             <DroppableCell id={cellId} isEmpty={cellCards.length === 0}>
                               <div className="space-y-2">
-                                {view === 'archive'
-                                  ? <ArchiveCards cards={cellCards} renderCard={renderCard} />
+                                {status === 'complete' || status === 'canceled'
+                                  ? <ArchiveCards cards={cellCards} status={status} renderCard={renderCard} />
                                   : cellCards.map(renderCard)}
                               </div>
                             </DroppableCell>

@@ -28,7 +28,11 @@ export function driver(filename, exportName, props, overrides = {}) {
 export function nodes(tree, predicate) {
   if (tree == null || typeof tree !== 'object') return [];
   if (Array.isArray(tree)) return tree.flatMap(child => nodes(child, predicate));
-  return [...(predicate(tree) ? [tree] : []), ...nodes(tree.props?.children, predicate)];
+  // Terminal cells now pass cards through ArchiveCards' render callback.
+  // Inspect those card elements as well as ordinary JSX children.
+  const renderedCards = typeof tree.props?.renderCard === 'function' && Array.isArray(tree.props.cards)
+    ? tree.props.cards.map(tree.props.renderCard) : [];
+  return [...(predicate(tree) ? [tree] : []), ...nodes(tree.props?.children, predicate), ...nodes(renderedCards, predicate)];
 }
 export function text(tree) {
   if (tree == null || typeof tree === 'boolean') return '';

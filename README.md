@@ -63,7 +63,10 @@ blocked while another is pending.
 Closing a stream offers a separate move-or-stop choice for every source that can
 still generate. Moving a recurrence also moves all pending siblings. Archived
 occurrences retain their stored history but display under the current source
-stream, grouped by source ID. Archive defaults to Past month, with Past 1 year and
+stream, grouped by source ID. In both All and Archive, recurring Complete and
+Canceled histories collapse into compact title-and-count rows. Expand a group to
+view and edit individual cards, newest completion first. This applies to both
+stacking modes; ordinary cards remain individual. Archive defaults to Past month, with Past 1 year and
 All time available; legacy records without completion dates remain in All time.
 
 Click a card's recurrence icon, or **Edit recurrence** in its card editor, to edit
