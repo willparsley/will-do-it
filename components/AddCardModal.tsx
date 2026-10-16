@@ -18,17 +18,21 @@ interface AddCardModalProps {
   onClose: () => void;
   onCardCreated: (card: Card) => void;
   defaultStreamId?: string;
+  defaultStatus?: CardStatus;
 }
 
-export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defaultStreamId }: AddCardModalProps) {
+export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defaultStreamId, defaultStatus = 'backlog' }: AddCardModalProps) {
   // Only active streams, alphabetical, "Uncategorized" last.
   const selectableStreams = React.useMemo(() => streamsForSelect(streams), [streams]);
 
   const [title, setTitle] = useState('');
-  const [streamId, setStreamId] = useState(
-    () => defaultStreamId || uncategorizedId(selectableStreams) || selectableStreams[0]?.id || ''
-  );
-  const [status, setStatus] = useState<CardStatus>('backlog');
+  // Snapshot defaults for this opening; refreshed board data must not dirty/reset a draft.
+  const [initialValues] = useState(() => ({
+    streamId: defaultStreamId || uncategorizedId(selectableStreams) || selectableStreams[0]?.id || '',
+    status: defaultStatus,
+  }));
+  const [streamId, setStreamId] = useState(initialValues.streamId);
+  const [status, setStatus] = useState<CardStatus>(initialValues.status);
   const [dueAt, setDueAt] = useState('');
   const [remindAt, setRemindAt] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
@@ -85,8 +89,7 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
     }
   };
 
-  const initialStreamId = defaultStreamId || uncategorizedId(selectableStreams) || selectableStreams[0]?.id || '';
-  const dirty = !!(prerequisiteId || title || notes || dueAt || remindAt || isRecurring || stackMissed || frequency !== 'daily' || recInterval !== 1 || weekdays.length || monthDay !== 1 || streamId !== initialStreamId || status !== 'backlog');
+  const dirty = !!(prerequisiteId || title || notes || dueAt || remindAt || isRecurring || stackMissed || frequency !== 'daily' || recInterval !== 1 || weekdays.length || monthDay !== 1 || streamId !== initialValues.streamId || status !== initialValues.status);
 
   return (
     <CardFormDialog title="Add New Card" dirty={dirty} saving={loading} onClose={onClose}>
