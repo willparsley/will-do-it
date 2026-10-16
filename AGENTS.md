@@ -138,7 +138,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 ## Git Workflow
 - Feature branches (`feat/`, `fix/`, `chore/`, etc.)
 - Conventional Commits
-- PRs for changes (even solo) for previews + clean history
+- PRs for changes (even solo) for review + clean history. Vercel automatic deployments currently run only for `main`; preview deployments are disabled in `vercel.json`. Run local checks before merging.
 - Squash merge to main preferred for clean main history
 - **Commit early and often.** Commit each self-contained change as soon as it
   works (and type-checks) instead of batching. Don't let many features stack up
@@ -164,6 +164,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Email/SMS for reminders
 
 ## Decisions Log
+- Vercel preview deployments are disabled for now. `vercel.json` disables automatic Git deployments for all branches using `**`, then explicitly enables `main`; Vercel deploys branches matching any enabled rule. Production keeps its existing Supabase credentials. Re-enable previews by removing this branch restriction after a separate test backend is configured. This affects automatic Git deployments, not manual CLI deployments; old failed deployment records remain in Vercel history.
 - Mobile installation uses the root web manifest with a stable `/` identity/start URL and standalone display. PNG install icons and the Apple touch icon derive from the existing favicon SVG; Android has a separate maskable icon with safe padding. Regenerate with `node scripts/generate-pwa-icons.mjs`. The production-only service worker caches only a public offline fallback, never workspace HTML, API data, router payloads, or writes. Updates wait for existing app windows to close; no forced reload of editors. PWA resources bypass Supabase session middleware. Test the production server with `npm run build` then `npm run test:pwa`; final iOS/Android installation and magic-link sign-in should also be checked on real devices.
 - In both All and Archive, the Complete and Canceled columns show recurring history as one compact, initially collapsed title-and-count row per recurrence source, including single occurrences and both stacking modes. Expanding reveals individual editable cards newest completion first. Counts reflect the current filters; completed and canceled histories remain separate. Ordinary cards and active recurring occurrences stay individual. Group expansion is not persisted across page loads.
 - The header and login page share `BrandLogo`, using the supplied light/dark SVGs selected by the root theme class before hydration. Served dark artwork has a transparent background to blend with both surfaces; source files in the project root remain untouched. `app/icon.svg` uses the supplied favicon, with `app/favicon.ico` generated from the same artwork as a fallback. Header controls wrap on narrow screens to preserve logo readability.
