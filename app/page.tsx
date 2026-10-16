@@ -433,7 +433,7 @@ export default function WillDoIt() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b border-line bg-surface/80 backdrop-blur sticky top-0 z-50">
+      <header className="app-header border-b border-line bg-surface/80 backdrop-blur sticky top-0 z-50">
         <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-3">
             <h1 className="shrink-0"><BrandLogo /></h1>
@@ -467,7 +467,7 @@ export default function WillDoIt() {
 
       {/* View switcher lives in its own stable bar so it never shifts
           horizontally when the number of columns changes between views. */}
-      <div className="sticky top-14 z-40 border-b border-line bg-surface/80 backdrop-blur">
+      <div className="app-view-toolbar sticky top-14 z-40 border-b border-line bg-surface/80 backdrop-blur">
         <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:gap-6 items-center justify-center">
           <div className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
             {VIEWS.map((v) => (
