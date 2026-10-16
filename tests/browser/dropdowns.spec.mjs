@@ -323,7 +323,7 @@ for (const theme of ['light', 'dark']) test(`hide recurring filters the workspac
  await page.getByRole('button', { name: 'Show recurring', exact: true }).click();
  await expect(toggle).not.toBeChecked();
  // Archived occurrences are restored inside their collapsed recurrence group.
- await expect(page.getByText('Routine complete', { exact: true })).toBeAttached();
+ await expect(page.locator('.card').getByText('Routine complete', { exact: true })).toBeAttached();
  await page.reload();
  await expect(toggle).not.toBeChecked();
  // Invalid saved values must use the default, rather than treating a string as enabled.
