@@ -51,7 +51,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
     >
       {/* Left content */}
       <div className="p-3">
-        <div className="font-medium leading-tight text-ink min-w-0">
+        <div className="card-title font-medium leading-tight text-ink min-w-0">
           <span className="break-words min-w-0">{card.title}</span>
         </div>
 
