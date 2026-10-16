@@ -506,7 +506,7 @@ export default function WillDoIt() {
               <>
                 <span aria-hidden="true" className="h-6 w-px shrink-0 bg-line" />
                 <AppSelect
-                  className="w-[11rem] shrink-0 sm:w-[12.5rem] [&_button]:text-xs sm:[&_button]:text-sm"
+                  className="w-[11rem] shrink-0 sm:w-[12.5rem]"
                   size="small"
                   valuePrefix="History"
                   value={archivePeriod}

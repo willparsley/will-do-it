@@ -42,7 +42,7 @@ export function AppSelect({ value, onValueChange, options, placeholder = 'Choose
       isOpen={open && !disabled}
       onOpenChange={setOpen}
       placeholder={placeholder}
-      className={`${styles.root} ${styles[size] || ''} ${className}`}
+      className={`${styles.root} ${styles[size] || ''} ${valuePrefix ? styles.prefixed : ''} ${className}`}
       onKeyDown={event => {
         // The enclosing recurrence dialog also handles Escape. Let the menu close first.
         if (open && event.key === 'Escape') {
