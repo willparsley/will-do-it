@@ -395,3 +395,12 @@ textarea::placeholder {
   box-shadow: 0 0 0 3px var(--accent-ring);
   border-color: var(--accent);
 }
+
+/* Prerequisites remain visible alongside the existing status stripe. */
+.card.card-blocked {
+  outline: 2px solid #c76a16;
+  outline-offset: -2px;
+}
+.card-blocked-label { color: #99480c; }
+.dark .card.card-blocked { outline-color: #f5a04a; }
+.dark .card-blocked-label { color: #f5b36e; }

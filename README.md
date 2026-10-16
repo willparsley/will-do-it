@@ -105,3 +105,9 @@ The checks serve the actual production HTML, JavaScript, and CSS from `.next`, m
 ### Card form redesign migration
 
 Apply `supabase/migrations/202610150002_card_creation_notes.sql` before deploying the card form redesign. It adds `create_recurring_card_with_notes` for atomic creation with notes and preserves the original creation RPC for existing clients. Notes belong to the initial occurrence; future occurrences do not inherit them.
+
+### Card prerequisites
+
+Apply `supabase/migrations/202610150003_card_prerequisites.sql` before deploying this version. Add or edit a card and expand **Prerequisite** to search cards by title or stream, then select one prerequisite. Choose **No prerequisite** to remove it.
+
+Unfinished cards have an orange outline and a “Blocked by” label until their prerequisite is Complete. Canceled prerequisites still block. This indicator is advisory; movement and completion remain available. Links use the full workspace regardless of view filters. A recurring card’s link belongs to that occurrence only. Circular links are rejected. Referenced cards cannot be deleted until their incoming links are removed.

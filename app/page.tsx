@@ -190,8 +190,8 @@ export default function WillDoIt() {
   const GRID_GAP = 12; // must match the `gap-3` class used by the grids
 
   // Shared by the header and every row so their columns always line up.
-  // minmax(0, COL_MAX) lets columns shrink to fit but never exceed COL_MAX.
-  const gridColumns = `${streamColWidth}px repeat(${columns.length}, minmax(0, ${COL_MAX}px))`;
+  // Keep cards readable on narrow screens; the workspace scrolls horizontally.
+  const gridColumns = `${streamColWidth}px repeat(${columns.length}, minmax(180px, ${COL_MAX}px))`;
 
   // Cap the whole matrix so row panels end where the columns end instead of
   // trailing off into empty space. The +34 accounts for a row's p-4 padding
@@ -418,7 +418,7 @@ export default function WillDoIt() {
   };
 
   const renderCard = (card: Card) => (
-    <CardComponent key={card.id} card={card} onClick={() => setEditingCard(card)}
+    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} onClick={() => setEditingCard(card)}
       onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />
   );
 
@@ -522,7 +522,7 @@ export default function WillDoIt() {
         )}
       </div>
 
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 flex-1">
+      <div className="w-full overflow-x-auto px-4 sm:px-6 lg:px-8 py-6 flex-1">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -530,7 +530,7 @@ export default function WillDoIt() {
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
         >
-          <div className="space-y-3 mx-auto" style={{ maxWidth: matrixMaxWidth }}>
+          <div className="space-y-3 mx-auto" style={{ maxWidth: matrixMaxWidth, minWidth: 34 + streamColWidth + columns.length * 180 + columns.length * GRID_GAP }}>
             <div
               className="grid gap-3 px-4 border border-transparent"
               style={{ gridTemplateColumns: gridColumns }}
@@ -613,7 +613,7 @@ export default function WillDoIt() {
           <DragOverlay dropAnimation={null}>
             {activeDragCard ? (
               <div className="w-64 max-w-full">
-                <CardComponent card={activeDragCard} overlay />
+                <CardComponent card={activeDragCard} prerequisite={cards.find(other => other.id === activeDragCard.prerequisite_card_id)} overlay />
               </div>
             ) : null}
           </DragOverlay>
@@ -622,6 +622,7 @@ export default function WillDoIt() {
         {showAddModal && (
           <AddCardModal
             streams={streams}
+            cards={cards}
             onClose={() => setShowAddModal(false)}
             onCardCreated={handleCardCreated}
           />
@@ -630,6 +631,7 @@ export default function WillDoIt() {
         {editingCard && (
           <EditCardModal
             card={editingCard}
+            cards={cards}
             streams={streams}
             onClose={() => setEditingCard(null)}
             onCardUpdated={handleCardUpdated}

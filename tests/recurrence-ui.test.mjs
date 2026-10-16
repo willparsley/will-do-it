@@ -119,7 +119,7 @@ test('weekly intervals remain visible after switching from every-N-days and recu
   assert.ok(text(tree).includes('weeks'));
   await nodes(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
   assert.equal(calls.length,1);
-  assert.equal(calls[0].name,'create_recurring_card_with_notes');
+  assert.equal(calls[0].name,'create_recurring_card_with_prerequisite');
   assert.equal(calls[0].args.p_frequency,'weekly');
   assert.equal(calls[0].args.p_interval,3);
   assert.equal(calls[0].args.p_due_at,null);
