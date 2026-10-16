@@ -40,7 +40,7 @@ export function CardPrerequisiteField({ cards, streams, cardId, value, onChange,
             ...matching.map(card => ({ value: card.id, label: `${card.title} · ${streamNames.get(card.stream_id) || 'Stream'} · ${STATUS_LABELS[card.status]}` }))]} />
       </div>
       {search && !matching.length && <p className={styles.help}>No matching cards.</p>}
-      <p className={styles.help}>{selected ? selected.status === 'complete' ? `Prerequisite complete: ${selected.title}.` : `Blocked until “${selected.title}” is Complete.` : 'An unfinished prerequisite adds an orange outline and a blocked label. You can still move or complete this card.'}</p>
+      <p className={styles.help}>{selected ? selected.status === 'complete' ? `Prerequisite complete: ${selected.title}.` : `Blocked until “${selected.title}” is Complete.` : 'An unfinished prerequisite softens the card title and adds a muted red blocked label. You can still move or complete this card.'}</p>
       <p className={styles.help}>For recurring tasks, this link applies only to this occurrence.</p>
     </div>
   </details>;
