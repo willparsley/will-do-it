@@ -55,16 +55,16 @@ test('archive month cutoff clamps month ends and includes the exact cutoff insta
 
 test('archive groups by source identity, preserving individual occurrences and separate same-title sources', () => {
   const cards = hydrateRecurringCards([
-    {...base,id:'a',status:'complete'}, {...base,id:'b',status:'canceled'},
+    {...base,id:'a',status:'complete'}, {...base,id:'b',status:'complete'},
     {...base,id:'c',status:'complete',recurrence_source_id:'different'},
     {...base,id:'ordinary',status:'complete',recurrence_source_id:null},
   ],[source,{...source,id:'different'}]);
   const groups = archiveGroups(cards);
   assert.equal(groups.length,3);
   assert.deepEqual(groups[0].cards.map(c=>c.id),['a','b']);
-  const html = renderToStaticMarkup(React.createElement(ArchiveCards,{cards,renderCard:c=>React.createElement('article',{key:c.id},c.id)}));
+  const html = renderToStaticMarkup(React.createElement(ArchiveCards,{cards,status:'complete',renderCard:c=>React.createElement('article',{key:c.id},c.id)}));
   assert.equal((html.match(/<details/g)||[]).length,2);
-  assert.ok(html.includes('2 occurrences'));
+  assert.ok(html.includes('2 completed'));
   assert.equal((html.match(/<article/g)||[]).length,4);
 });
 
@@ -143,5 +143,41 @@ test('calendar day changes use local midnight by default and preserve explicit o
     }
   } finally {
     if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+  }
+});
+
+test('recurring history sorts newest first without mutating card order or combining same-title sources', () => {
+  const cards = [
+    {...base,id:'unknown',status:'complete',completed_at:null},
+    {...base,id:'old',status:'complete',completed_at:'2020-01-01T00:00:00Z'},
+    {...base,id:'ordinary',status:'complete',recurrence_source_id:null},
+    {...base,id:'recent',status:'complete',completed_at:'2026-10-14T00:00:00Z'},
+    {...base,id:'other-source',status:'complete',recurrence_source_id:'other'},
+  ];
+  const groups=archiveGroups(cards);
+  assert.deepEqual(groups[0].cards.map(card=>card.id),['recent','old','unknown']);
+  assert.deepEqual(groups.slice(1).map(group=>group.cards.map(card=>card.id)),[['ordinary'],['other-source']]);
+  assert.deepEqual(cards.map(card=>card.id),['unknown','old','ordinary','recent','other-source']);
+});
+
+test('terminal history counts reflect view filters, keep statuses separate, and start collapsed even for one occurrence', () => {
+  const cards=hydrateRecurringCards([
+    {...base,id:'recent',status:'complete',completed_at:now.toISOString()},
+    {...base,id:'old',status:'complete',completed_at:'2020-01-01T00:00:00Z'},
+    {...base,id:'canceled',status:'canceled',completed_at:now.toISOString()},
+    {...base,id:'pending',status:'waiting'},
+    {...base,id:'ordinary',status:'complete',recurrence_source_id:null,stream_id:'new-stream',completed_at:now.toISOString()},
+  ],[source]);
+  const render=(view,status)=>renderToStaticMarkup(React.createElement(ArchiveCards,{
+    cards:cardsForStream(cards,'new-stream',view,'month',now).filter(card=>card.status===status),status,
+    renderCard:card=>React.createElement('article',{key:card.id},card.id),
+  }));
+  for(const [view,status,count] of [['all','complete',2],['archive','complete',1],['all','canceled',1],['archive','canceled',1]]) {
+    const html=render(view,status);
+    assert.ok(html.includes(`${count} ${status==='complete'?'completed':'canceled'}`));
+    assert.equal((html.match(/<details/g)||[]).length,1);
+    assert.doesNotMatch(html,/<details[^>]*\sopen(?:[=>\s])/);
+    assert.ok(!html.includes('pending'));
+    if(status==='complete') assert.ok(html.includes('<article>ordinary</article>'));
   }
 });

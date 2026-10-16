@@ -323,7 +323,7 @@ for (const theme of ['light', 'dark']) test(`hide recurring filters the workspac
  await page.getByRole('button', { name: 'Show recurring', exact: true }).click();
  await expect(toggle).not.toBeChecked();
  // Archived occurrences are restored inside their collapsed recurrence group.
- await expect(page.getByText('Routine complete', { exact: true })).toBeAttached();
+ await expect(page.locator('.card').getByText('Routine complete', { exact: true })).toBeAttached();
  await page.reload();
  await expect(toggle).not.toBeChecked();
  // Invalid saved values must use the default, rather than treating a string as enabled.
@@ -460,4 +460,96 @@ for (const theme of ['light','dark']) test(`supplied logos and favicon on worksp
  await checkLogo(other);
  await page.screenshot({path:testInfo.outputPath(`login-${other}.png`),scale:'css'});
  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href',/\/icon\.svg/);
+});
+
+for (const theme of ['light','dark']) test(`recurring history saves space in All and Archive in ${theme} mode`, async ({page},testInfo)=>{
+ const date=new Date();
+ const recent=hours=>new Date(date.getTime()-hours*3600000).toISOString();
+ const availableStreams=streams.map(stream=>({...stream,area:stream.id==='0'?'work':'personal'}));
+ const sources=[
+   {id:'walk',user_id:user.id,stream_id:'1',base_title:'Daily walk',stack_missed:false},
+   {id:'stacking',user_id:user.id,stream_id:'1',base_title:'Daily walk',stack_missed:true},
+ ];
+ const recurring=(id,title,status,completed_at,source='walk')=>({id,title,status,completed_at,stream_id:'0',user_id:user.id,position:0,is_recurring:true,recurrence_source_id:source});
+ const fixtureCards=[
+   ...Array.from({length:12},(_,i)=>recurring(`walk-${i}`,`Walk occurrence ${i}`,'complete',recent(i))),
+   recurring('old','Old walk','complete','2020-01-01T00:00:00Z'),
+   recurring('unknown','Undated walk','complete',null),
+   recurring('cancel-1','Canceled walk one','canceled',recent(1)),
+   recurring('cancel-2','Canceled walk two','canceled',recent(2)),
+   recurring('stacking-1','Other recurring task','complete',recent(1),'stacking'),
+   {...recurring('pending','Next walk','waiting',null),stream_id:'1'},
+   {id:'ordinary',title:'One-off completed',status:'complete',completed_at:recent(0),stream_id:'0',user_id:user.id,position:0,is_recurring:false},
+ ];
+ await page.addInitScript(({storageKey,session,theme})=>{
+   document.cookie=storageKey+'=base64-'+btoa(JSON.stringify(session)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')+'; path=/';
+   localStorage.setItem('theme',theme);
+ },{storageKey,session,theme});
+ await page.route('**/*',async route=>{
+   const url=new URL(route.request().url());
+   if(url.origin===new URL(supabaseUrl).origin){
+     const data=url.pathname.endsWith('/user')?user:url.pathname.endsWith('/streams')?availableStreams:url.pathname.endsWith('/cards')?fixtureCards:url.pathname.endsWith('/recurrence_sources')?sources:0;
+     await route.fulfill({json:data,headers:{'access-control-allow-origin':'*'}});return;
+   }
+   if(await serveBrandAsset(route,url)) return;
+   if(url.hostname==='app.test'){
+     const asset=url.pathname.startsWith('/_next/static/')?'/'+url.pathname.slice('/_next/'.length):'/server/app/index.html';
+     const type=url.pathname.endsWith('.css')?'text/css':url.pathname.endsWith('.js')?'application/javascript':url.pathname.endsWith('.woff2')?'font/woff2':'text/html';
+     await route.fulfill({body:await readFile(root+'/.next'+asset),contentType:type});return;
+   }
+   await route.abort();
+ });
+ const tab=name=>page.getByRole('button',{name,exact:true}).and(page.locator('[aria-pressed]'));
+ const group=(count,status)=>page.locator('details').filter({has:page.locator('summary').filter({hasText:`${count} ${status}`})});
+ await page.goto('http://app.test');
+ await tab('All').click();
+ const completed=group(14,'completed');
+ await expect(completed).toHaveCount(1);
+ await expect(completed.locator('summary')).toContainText('Daily walk');
+ await expect(group(1,'completed')).toHaveCount(1); // Separate source, same title, stacking enabled.
+ await expect(group(2,'canceled')).toHaveCount(1);
+ await expect(page.getByText('Next walk',{exact:true})).toBeVisible();
+ await expect(page.getByText('One-off completed',{exact:true})).toBeVisible();
+ await expect(completed.locator('.card')).toHaveCount(14);
+ await expect(completed.locator('.card').first()).not.toBeVisible();
+ const closed=await completed.boundingBox();
+ assert.ok(closed.height<=82,`Closed history uses ${closed.height}px for 14 occurrences`);
+ const summary=completed.locator('summary');
+ await summary.scrollIntoViewIfNeeded();
+ assert.ok((await summary.boundingBox()).height>=44);
+ await page.screenshot({path:testInfo.outputPath(`compact-history-${theme}.png`),scale:'css'});
+ await summary.focus();
+ await page.keyboard.press('Enter');
+ await expect(completed).toHaveAttribute('open','');
+ await expect(completed.locator('.card').first()).toBeVisible();
+ assert.deepEqual(await completed.locator('.card-title').allTextContents(),[
+   ...Array.from({length:12},(_,i)=>`Walk occurrence ${i}`),'Old walk','Undated walk',
+ ]);
+ assert.ok((await completed.boundingBox()).height>closed.height*3);
+ await completed.getByText('Walk occurrence 0',{exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Edit Card',exact:true})).toBeVisible();
+ await expect(page.getByLabel('Title',{exact:true})).toHaveValue('Walk occurrence 0');
+ await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ await summary.click();
+ await expect(completed).not.toHaveAttribute('open','');
+ await tab('Archive').click();
+ const recentGroup=group(12,'completed');
+ await expect(recentGroup).toHaveCount(1);
+ await expect(recentGroup.locator('.card').first()).not.toBeVisible();
+ await expect(group(2,'canceled')).toHaveCount(1);
+ await page.locator('button[aria-label="Archive period"]').click();
+ await page.getByRole('option',{name:'All time',exact:true}).click();
+ await expect(group(14,'completed')).toHaveCount(1);
+ await page.getByRole('button',{name:'Work',exact:true}).click();
+ await expect(page.locator('details')).toHaveCount(0);
+ await expect(page.getByText('One-off completed',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Personal',exact:true}).click();
+ await expect(group(14,'completed')).toHaveCount(1); // History follows the source's current stream/area.
+ await page.getByRole('switch',{name:'Hide recurring'}).check();
+ await expect(page.locator('details')).toHaveCount(0);
+ await expect(page.getByText('No non-recurring tasks in this view.',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Show recurring',exact:true}).click();
+ await expect(group(14,'completed')).toHaveCount(1);
+ await page.reload();
+ await expect(group(14,'completed')).not.toHaveAttribute('open','');
 });

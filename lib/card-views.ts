@@ -58,6 +58,10 @@ export function archiveGroups(cards: Card[]): ArchiveGroup[] {
     group.cards.push(card);
     groups.set(id, group);
   }
+  for (const group of groups.values()) {
+    if (group.recurring) group.cards.sort((a, b) =>
+      new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime());
+  }
   return [...groups.values()];
 }
 
