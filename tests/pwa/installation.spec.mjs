@@ -10,7 +10,13 @@ test('installation metadata and icons are public and valid', async ({ page, requ
   const manifest = await response.json();
   expect(manifest).toMatchObject({
     id: '/', name: 'Will Do It', start_url: '/', scope: '/', display: 'standalone',
+    theme_color: '#00995B', background_color: '#00995B',
   });
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /viewport-fit=auto/);
+  await expect(page.locator('meta[name="color-scheme"]')).toHaveAttribute('content', 'light dark');
+  for (const meta of await page.locator('meta[name="theme-color"]').all()) {
+    await expect(meta).toHaveAttribute('content', '#00995B');
+  }
   expect(manifest.icons.map((icon) => icon.sizes)).toEqual(['192x192', '512x512', '512x512']);
   expect(manifest.icons.find((icon) => icon.purpose === 'maskable')).toBeTruthy();
   for (const icon of manifest.icons) {
@@ -49,7 +55,7 @@ test('offline navigation recovers online and never caches account requests', asy
   await page.reload();
   await expect(page.getByRole('heading', { name: "You're offline" })).toBeVisible();
   const cachedPaths = await page.evaluate(async () => {
-    const cache = await caches.open('will-do-it-offline-v3');
+    const cache = await caches.open('will-do-it-offline-v4');
     return (await cache.keys()).map((entry) => new URL(entry.url).pathname);
   });
   expect(cachedPaths).toEqual(['/offline.html']);
@@ -61,4 +67,17 @@ test('offline navigation recovers online and never caches account requests', asy
   await context.setOffline(false);
   await page.getByRole('link', { name: 'Try again' }).click();
   await expect(page.getByRole('button', { name: 'Send magic link' })).toBeVisible();
+});
+
+test('app theme changes reapply logo green to every system theme tag', async ({ page }) => {
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Send magic link' })).toBeVisible();
+  for (const dark of [true, false]) {
+    await page.evaluate(dark => {
+      document.querySelectorAll('meta[name="theme-color"]').forEach(meta => { meta.content = '#ffffff'; });
+      document.documentElement.classList.toggle('dark', dark);
+    }, dark);
+    await expect.poll(() => page.locator('meta[name="theme-color"]').evaluateAll(tags => tags.map(meta => meta.content)))
+      .toEqual(['#00995B', '#00995B']);
+  }
 });

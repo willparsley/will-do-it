@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { PwaRegistration } from "@/components/PwaRegistration";
+import { ThemeColorSync } from "@/components/ThemeColorSync";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#00995B",
+  viewportFit: "auto",
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#00995B" },
+    { media: "(prefers-color-scheme: dark)", color: "#00995B" },
+  ],
 };
 
 const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
@@ -44,14 +50,15 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-canvas text-ink">
+      <body className="min-h-dvh flex flex-col bg-canvas text-ink">
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <div className="app-shell">{children}</div>
+        <ThemeColorSync />
+        {children}
         <PwaRegistration />
         <Toaster
           position="top-right"
           offset={{ top: 124, right: 16 }}
-          mobileOffset={{ top: 'calc(124px + var(--app-safe-top))', right: 'calc(12px + var(--app-safe-right))' }}
+          mobileOffset={{ top: 124, right: 12 }}
           richColors
           closeButton
         />

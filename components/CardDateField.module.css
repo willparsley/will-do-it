@@ -30,5 +30,5 @@
 .day[data-disabled] { opacity: .5; cursor: not-allowed; }
 .done { display: block; width: 100%; min-height: 44px; margin-top: .5rem; border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: .875rem; cursor: pointer; }
 @media (max-width: 640px) {
-  .popover { position: fixed !important; top: calc(100dvh - max(12px, env(safe-area-inset-bottom))) !important; left: 50dvw !important; bottom: auto !important; transform: translate(-50%, -100%) !important; max-height: calc(100dvh - 24px - var(--app-safe-top) - var(--app-safe-bottom-max)) !important; padding: .5rem; }
+  .popover { position: fixed !important; top: calc(100dvh - max(12px, env(safe-area-inset-bottom))) !important; left: 50dvw !important; bottom: auto !important; transform: translate(-50%, -100%) !important; max-height: calc(100dvh - 24px) !important; padding: .5rem; }
 }
