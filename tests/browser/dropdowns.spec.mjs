@@ -506,13 +506,18 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  const activeTabBounds=await tab('Active').boundingBox();
  await tab('All').click();
  const period=page.locator('button[aria-label="Completed/canceled period"]');
- await expect(period).toContainText('Past week');
+ await expect(period).toContainText('History: Past week');
  await expect(group(12,'completed')).toHaveCount(1);
  await expect(group(14,'completed')).toHaveCount(0);
  const bounds=await period.boundingBox();
  assert.ok(bounds.x>=0 && bounds.x+bounds.width<=page.viewportSize().width);
  const toggleBounds=await page.getByRole('switch',{name:'Hide recurring'}).boundingBox();
  const tabBounds=await tab('Active').boundingBox();
+ const divider=period.locator('../..').locator(':scope > span[aria-hidden="true"]');
+ const dividerBounds=await divider.boundingBox();
+ assert.ok(dividerBounds.width===1 && dividerBounds.height>=24,'Filters have a visible divider');
+ assert.ok(dividerBounds.x-(toggleBounds.x+toggleBounds.width)>=8,'Divider has space after the switch');
+ assert.ok(bounds.x-(dividerBounds.x+dividerBounds.width)>=8,'Divider has space before History');
  assert.ok(Math.abs((bounds.y+bounds.height/2)-(toggleBounds.y+toggleBounds.height/2))<=1,'History and Hide recurring share a row');
  assert.ok(Math.abs(tabBounds.x-activeTabBounds.x)<=1,'View tabs stay anchored between views');
  if(page.viewportSize().width>=1024) {
@@ -522,6 +527,10 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  }
  await period.click();
  await expect(page.getByRole('option')).toHaveCount(5);
+ await page.getByRole('option',{name:'Past 3 months',exact:true}).click();
+ await expect(period).toContainText('History: Past 3 months');
+ assert.ok(await period.locator(':scope > span').evaluate(el=>el.scrollWidth<=el.clientWidth),'Longest History value fits without clipping');
+ await period.click();
  await page.getByRole('option',{name:'All time',exact:true}).click();
  const completed=group(14,'completed');
  await expect(completed).toHaveCount(1);

@@ -17,6 +17,7 @@ interface AppSelectProps {
   onValueChange: (value: string) => void;
   options: SelectOption[];
   placeholder?: string;
+  valuePrefix?: string;
   disabled?: boolean;
   id?: string;
   'aria-label': string;
@@ -25,7 +26,7 @@ interface AppSelectProps {
 }
 
 /** Shared, custom-rendered select. The library's hidden select supports autofill only. */
-export function AppSelect({ value, onValueChange, options, placeholder = 'Choose…', disabled = false, id, 'aria-label': label, className = 'w-full', size = 'default' }: AppSelectProps) {
+export function AppSelect({ value, onValueChange, options, placeholder = 'Choose…', valuePrefix, disabled = false, id, 'aria-label': label, className = 'w-full', size = 'default' }: AppSelectProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -52,7 +53,7 @@ export function AppSelect({ value, onValueChange, options, placeholder = 'Choose
     >
       <Button ref={triggerRef} id={id} type="button" className={styles.trigger}>
         <SelectValue className={styles.value}>
-          {({ selectedText, isPlaceholder }) => isPlaceholder ? placeholder : selectedText}
+          {({ selectedText, isPlaceholder }) => isPlaceholder ? placeholder : valuePrefix ? `${valuePrefix}: ${selectedText}` : selectedText}
         </SelectValue>
         <ChevronDown size={14} aria-hidden="true" className={`${styles.icon} ${styles.chevron}`} />
       </Button>

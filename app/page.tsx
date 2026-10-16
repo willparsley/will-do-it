@@ -485,7 +485,7 @@ export default function WillDoIt() {
               </button>
             ))}
           </div>
-          <div className="flex items-center justify-center gap-2 lg:min-w-[22rem] lg:justify-start">
+          <div className="flex items-center justify-center gap-2 sm:gap-4 lg:min-w-[24rem] lg:justify-start">
             <button
               type="button"
               role="switch"
@@ -495,19 +495,20 @@ export default function WillDoIt() {
                 setHideRecurring(next);
                 savePreferences({ hideRecurring: next });
               }}
-              className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-1 text-xs sm:text-sm text-ink-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-1 text-xs sm:text-sm font-medium text-ink-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              <span aria-hidden="true" className={`relative h-5 w-9 rounded-full border transition-colors ${hideRecurring ? 'border-accent bg-accent' : 'border-line bg-sunken'}`}>
+              <span aria-hidden="true" className={`relative h-5 w-9 rounded-full border transition-colors ${hideRecurring ? 'border-accent bg-accent' : 'border-line-strong bg-sunken'}`}>
                 <span className={`absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full shadow-sm transition-transform ${hideRecurring ? 'translate-x-4 bg-accent-ink' : 'bg-ink-soft'}`} />
               </span>
               Hide recurring
             </button>
             {columns.some(status => status === 'complete' || status === 'canceled') && (
-              <div className="flex shrink-0 items-center gap-1.5 text-xs sm:text-sm text-ink-soft">
-                <span>History</span>
+              <>
+                <span aria-hidden="true" className="h-6 w-px shrink-0 bg-line" />
                 <AppSelect
-                  className="w-[8.5rem]"
+                  className="w-[11rem] shrink-0 sm:w-[12.5rem] [&_button]:text-xs sm:[&_button]:text-sm"
                   size="small"
+                  valuePrefix="History"
                   value={archivePeriod}
                   onValueChange={value => {
                     const archivePeriod = value as ArchivePeriod;
@@ -517,7 +518,7 @@ export default function WillDoIt() {
                   aria-label="Completed/canceled period"
                   options={[...HISTORY_PERIODS]}
                 />
-              </div>
+              </>
             )}
           </div>
         </div>
