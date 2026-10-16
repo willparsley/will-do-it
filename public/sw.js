@@ -1,5 +1,5 @@
 /* global self, caches, fetch, URL, Response */
-const CACHE_NAME = 'will-do-it-offline-v1';
+const CACHE_NAME = 'will-do-it-offline-v2';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
