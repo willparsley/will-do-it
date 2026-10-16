@@ -49,7 +49,7 @@ test('offline navigation recovers online and never caches account requests', asy
   await page.reload();
   await expect(page.getByRole('heading', { name: "You're offline" })).toBeVisible();
   const cachedPaths = await page.evaluate(async () => {
-    const cache = await caches.open('will-do-it-offline-v1');
+    const cache = await caches.open('will-do-it-offline-v2');
     return (await cache.keys()).map((entry) => new URL(entry.url).pathname);
   });
   expect(cachedPaths).toEqual(['/offline.html']);
