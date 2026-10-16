@@ -46,12 +46,12 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-canvas text-ink">
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        {children}
+        <div className="app-shell">{children}</div>
         <PwaRegistration />
         <Toaster
           position="top-right"
           offset={{ top: 124, right: 16 }}
-          mobileOffset={{ top: 124, right: 12 }}
+          mobileOffset={{ top: 'calc(124px + var(--app-safe-top))', right: 'calc(12px + var(--app-safe-right))' }}
           richColors
           closeButton
         />
