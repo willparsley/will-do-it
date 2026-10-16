@@ -468,7 +468,7 @@ export default function WillDoIt() {
       {/* View switcher lives in its own stable bar so it never shifts
           horizontally when the number of columns changes between views. */}
       <div className="sticky top-14 z-40 border-b border-line bg-surface/80 backdrop-blur">
-        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 sm:flex-row sm:gap-6 items-center justify-center">
+        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:gap-6 items-center justify-center">
           <div className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
             {VIEWS.map((v) => (
               <button
@@ -485,42 +485,42 @@ export default function WillDoIt() {
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={hideRecurring}
-            onClick={() => {
-              const next = !hideRecurring;
-              setHideRecurring(next);
-              savePreferences({ hideRecurring: next });
-            }}
-            className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-ink-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            <span aria-hidden="true" className={`relative h-5 w-9 rounded-full border transition-colors ${hideRecurring ? 'border-accent bg-accent' : 'border-line bg-sunken'}`}>
-              <span className={`absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full shadow-sm transition-transform ${hideRecurring ? 'translate-x-4 bg-accent-ink' : 'bg-ink-soft'}`} />
-            </span>
-            Hide recurring
-          </button>
-        </div>
-        {columns.some(status => status === 'complete' || status === 'canceled') && (
-          <div className="flex justify-center pb-3 px-4">
-            <div className="flex items-center gap-2 text-sm text-ink-soft">
-              <span>Completed/canceled</span>
-              <AppSelect
-                className="w-auto"
-                size="small"
-                value={archivePeriod}
-                onValueChange={value => {
-                  const archivePeriod = value as ArchivePeriod;
-                  setArchivePeriod(archivePeriod);
-                  savePreferences({ archivePeriod });
-                }}
-                aria-label="Completed/canceled period"
-                options={[...HISTORY_PERIODS]}
-              />
-            </div>
+          <div className="flex items-center justify-center gap-2 lg:min-w-[22rem] lg:justify-start">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={hideRecurring}
+              onClick={() => {
+                const next = !hideRecurring;
+                setHideRecurring(next);
+                savePreferences({ hideRecurring: next });
+              }}
+              className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-1 text-xs sm:text-sm text-ink-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <span aria-hidden="true" className={`relative h-5 w-9 rounded-full border transition-colors ${hideRecurring ? 'border-accent bg-accent' : 'border-line bg-sunken'}`}>
+                <span className={`absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full shadow-sm transition-transform ${hideRecurring ? 'translate-x-4 bg-accent-ink' : 'bg-ink-soft'}`} />
+              </span>
+              Hide recurring
+            </button>
+            {columns.some(status => status === 'complete' || status === 'canceled') && (
+              <div className="flex shrink-0 items-center gap-1.5 text-xs sm:text-sm text-ink-soft">
+                <span>History</span>
+                <AppSelect
+                  className="w-[8.5rem]"
+                  size="small"
+                  value={archivePeriod}
+                  onValueChange={value => {
+                    const archivePeriod = value as ArchivePeriod;
+                    setArchivePeriod(archivePeriod);
+                    savePreferences({ archivePeriod });
+                  }}
+                  aria-label="Completed/canceled period"
+                  options={[...HISTORY_PERIODS]}
+                />
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       <div className="w-full overflow-x-auto px-4 sm:px-6 lg:px-8 py-6 flex-1">

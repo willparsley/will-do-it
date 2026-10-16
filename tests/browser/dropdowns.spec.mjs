@@ -503,6 +503,7 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  const group=(count,status)=>page.locator('details').filter({has:page.locator('summary').filter({hasText:`${count} ${status}`})});
  await page.goto('http://app.test');
  await expect(page.locator('button[aria-label="Completed/canceled period"]')).toHaveCount(0);
+ const activeTabBounds=await tab('Active').boundingBox();
  await tab('All').click();
  const period=page.locator('button[aria-label="Completed/canceled period"]');
  await expect(period).toContainText('Past week');
@@ -510,6 +511,15 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  await expect(group(14,'completed')).toHaveCount(0);
  const bounds=await period.boundingBox();
  assert.ok(bounds.x>=0 && bounds.x+bounds.width<=page.viewportSize().width);
+ const toggleBounds=await page.getByRole('switch',{name:'Hide recurring'}).boundingBox();
+ const tabBounds=await tab('Active').boundingBox();
+ assert.ok(Math.abs((bounds.y+bounds.height/2)-(toggleBounds.y+toggleBounds.height/2))<=1,'History and Hide recurring share a row');
+ assert.ok(Math.abs(tabBounds.x-activeTabBounds.x)<=1,'View tabs stay anchored between views');
+ if(page.viewportSize().width>=1024) {
+   assert.ok(Math.abs((bounds.y+bounds.height/2)-(tabBounds.y+tabBounds.height/2))<=1,'Desktop controls share the tabs row');
+ } else {
+   assert.ok(bounds.y>=tabBounds.y+tabBounds.height,'Mobile controls sit below tabs');
+ }
  await period.click();
  await expect(page.getByRole('option')).toHaveCount(5);
  await page.getByRole('option',{name:'All time',exact:true}).click();
