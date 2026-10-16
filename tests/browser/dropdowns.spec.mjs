@@ -12,6 +12,15 @@ const encode=v=>Buffer.from(JSON.stringify(v)).toString('base64url');
 const expires=Math.floor(Date.now()/1000)+3600;
 const session={access_token:encode({alg:'HS256',typ:'JWT'})+'.'+encode({sub:user.id,exp:expires,aud:'authenticated',role:'authenticated'})+'.fixture',refresh_token:'fixture',token_type:'bearer',expires_in:3600,expires_at:expires,user};
 const streams=['Car','Exercise','Netbox','test','Uncategorized'].map((title,i)=>({id:String(i),user_id:user.id,title,state:'in_progress',area:'neutral',position:i}));
+async function serveBrandAsset(route, url) {
+ if(url.hostname !== 'app.test') return false;
+ const file = url.pathname.startsWith('/branding/') ? '/public' + url.pathname
+   : url.pathname === '/icon.svg' ? '/app/icon.svg'
+   : url.pathname === '/favicon.ico' ? '/app/favicon.ico' : null;
+ if(!file) return false;
+ await route.fulfill({body:await readFile(root+file),contentType:file.endsWith('.ico')?'image/x-icon':'image/svg+xml'});
+ return true;
+}
 // Serve the real Next production assets; mock all account traffic to avoid live writes.
 // This catches missing CSS processing and stylesheet loading, unlike a component fixture.
 for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${theme} mode`, async ({ page, isMobile }, testInfo) => {
@@ -25,6 +34,7 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
    const data=url.pathname.endsWith('/user')?user:url.pathname.endsWith('/streams')?availableStreams:url.pathname.includes('/rpc/')?0:[];
    await route.fulfill({json:data,headers:{'access-control-allow-origin':'*'}});return;
   }
+  if(await serveBrandAsset(route,url)) return;
   if(url.hostname==='app.test'){
    const asset=url.pathname.startsWith('/_next/static/')?'/'+url.pathname.slice('/_next/'.length):'/server/app/index.html';
    const type=url.pathname.endsWith('.css')?'text/css':url.pathname.endsWith('.js')?'application/javascript':url.pathname.endsWith('.woff2')?'font/woff2':'text/html';
@@ -119,7 +129,8 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
      }
      await route.fulfill({json:data,headers:{'access-control-allow-origin':'*'}});return;
    }
-   if(url.hostname==='app.test'){
+   if(await serveBrandAsset(route,url)) return;
+  if(url.hostname==='app.test'){
      const asset=url.pathname.startsWith('/_next/static/')?'/'+url.pathname.slice('/_next/'.length):'/server/app/index.html';
      const contentType=url.pathname.endsWith('.css')?'text/css':url.pathname.endsWith('.js')?'application/javascript':url.pathname.endsWith('.woff2')?'font/woff2':'text/html';
      await route.fulfill({body:await readFile(root+'/.next'+asset),contentType});return;
@@ -272,6 +283,7 @@ for (const theme of ['light', 'dark']) test(`hide recurring filters the workspac
    const data = url.pathname.endsWith('/user') ? user : url.pathname.endsWith('/streams') ? availableStreams : url.pathname.endsWith('/cards') ? fixtureCards : url.pathname.includes('/rpc/') ? 0 : [];
    await route.fulfill({ json: data, headers: { 'access-control-allow-origin': '*' } }); return;
   }
+  if(await serveBrandAsset(route,url)) return;
   if (url.hostname === 'app.test') {
    const asset = url.pathname.startsWith('/_next/static/') ? '/' + url.pathname.slice('/_next/'.length) : '/server/app/index.html';
    const type = url.pathname.endsWith('.css') ? 'text/css' : url.pathname.endsWith('.js') ? 'application/javascript' : url.pathname.endsWith('.woff2') ? 'font/woff2' : 'text/html';
@@ -349,6 +361,7 @@ for (const theme of ['light','dark']) test(`prerequisite links and softened bloc
      }
      await route.fulfill({json:data,headers:{'access-control-allow-origin':'*'}});return;
    }
+   if(await serveBrandAsset(route,url)) return;
    if(url.hostname==='app.test') {
      const asset=url.pathname.startsWith('/_next/static/')?'/'+url.pathname.slice('/_next/'.length):'/server/app/index.html';
      const type=url.pathname.endsWith('.css')?'text/css':url.pathname.endsWith('.js')?'application/javascript':url.pathname.endsWith('.woff2')?'font/woff2':'text/html';
@@ -403,4 +416,48 @@ for (const theme of ['light','dark']) test(`prerequisite links and softened bloc
  const created=page.locator('.card').filter({has:page.getByText('Check DNS records',{exact:true})});
  await expect(created).toHaveClass(/card-blocked/);
  assert.equal(calls.find(call=>call.path.endsWith('/cards')).body.prerequisite_card_id,'dns');
+});
+
+for (const theme of ['light','dark']) test(`supplied logos and favicon on workspace and login in ${theme} mode`, async ({page},testInfo)=>{
+ await page.addInitScript(({storageKey,session,theme})=>{
+   document.cookie=storageKey+'=base64-'+btoa(JSON.stringify(session)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')+'; path=/';
+   if(!localStorage.getItem('theme')) localStorage.setItem('theme',theme);
+ },{storageKey,session,theme});
+ await page.route('**/*',async route=>{
+   const url=new URL(route.request().url());
+   if(url.origin===new URL(supabaseUrl).origin){
+     const data=url.pathname.endsWith('/user')?user:url.pathname.endsWith('/streams')?streams:url.pathname.includes('/rpc/')?0:[];
+     await route.fulfill({json:data,headers:{'access-control-allow-origin':'*'}});return;
+   }
+   if(await serveBrandAsset(route,url)) return;
+   if(url.hostname==='app.test'){
+     const asset=url.pathname.startsWith('/_next/static/')?'/'+url.pathname.slice('/_next/'.length):url.pathname==='/login'?'/server/app/login.html':'/server/app/index.html';
+     const type=url.pathname.endsWith('.css')?'text/css':url.pathname.endsWith('.js')?'application/javascript':url.pathname.endsWith('.woff2')?'font/woff2':'text/html';
+     await route.fulfill({body:await readFile(root+'/.next'+asset),contentType:type});return;
+   }
+   await route.abort();
+ });
+ async function checkLogo(expectedTheme) {
+   const logo=page.getByRole('heading',{name:'Will Do It',exact:true}).getByRole('img',{name:'Will Do It',exact:true});
+   await expect(logo).toBeVisible();
+   await expect(logo).toHaveAttribute('src',`/branding/willdoit-logo-${expectedTheme}.svg`);
+   await expect.poll(()=>logo.evaluate(img=>img.complete && img.naturalWidth>0)).toBe(true);
+   const box=await logo.boundingBox();
+   assert.ok(box.width>90 && Math.abs(box.width/box.height-2.5)<0.05);
+   assert.ok(box.x>=0 && box.x+box.width<=page.viewportSize().width);
+ }
+ await page.goto('http://app.test');
+ await checkLogo(theme);
+ const header=page.locator('header');
+ await header.screenshot({path:testInfo.outputPath(`header-${theme}.png`),scale:'css'});
+ await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href',/\/icon\.svg/);
+ const favicon=await page.evaluate(async()=>{const response=await fetch(document.querySelector('link[rel="icon"][type="image/svg+xml"]').href);return response.text()});
+ assert.equal(favicon,await readFile(root+'/app/icon.svg','utf8'));
+ const other=theme==='dark'?'light':'dark';
+ await page.getByRole('button',{name:'Toggle dark mode'}).click();
+ await checkLogo(other);
+ await page.goto('http://app.test/login');
+ await checkLogo(other);
+ await page.screenshot({path:testInfo.outputPath(`login-${other}.png`),scale:'css'});
+ await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href',/\/icon\.svg/);
 });
