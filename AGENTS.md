@@ -27,7 +27,7 @@ Will Do It is a calm, visual personal productivity app for managing to-dos as ca
 **PWA**: Installable web app. Reminders work via in-app visuals + auto-promotion. Push notifications planned as future enhancement.
 
 ## Current Status (as of Oct 2026)
-Supabase-backed Streams/Cards CRUD, matrix drag-and-drop, transactional recurrence generation/lifecycle, reminders, and grouped archive views are implemented. PWA installation and push notifications remain future work.
+Supabase-backed Streams/Cards CRUD, matrix drag-and-drop, transactional recurrence generation/lifecycle, reminders, grouped archive views, and mobile PWA installation metadata are implemented. Push notifications and offline workspace editing remain future work.
 
 ## Core Data Model (High Level)
 
@@ -164,6 +164,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Email/SMS for reminders
 
 ## Decisions Log
+- Mobile installation uses the root web manifest with a stable `/` identity/start URL and standalone display. PNG install icons and the Apple touch icon derive from the existing favicon SVG; Android has a separate maskable icon with safe padding. Regenerate with `node scripts/generate-pwa-icons.mjs`. The production-only service worker caches only a public offline fallback, never workspace HTML, API data, router payloads, or writes. Updates wait for existing app windows to close; no forced reload of editors. PWA resources bypass Supabase session middleware. Test the production server with `npm run build` then `npm run test:pwa`; final iOS/Android installation and magic-link sign-in should also be checked on real devices.
 - In both All and Archive, the Complete and Canceled columns show recurring history as one compact, initially collapsed title-and-count row per recurrence source, including single occurrences and both stacking modes. Expanding reveals individual editable cards newest completion first. Counts reflect the current filters; completed and canceled histories remain separate. Ordinary cards and active recurring occurrences stay individual. Group expansion is not persisted across page loads.
 - The header and login page share `BrandLogo`, using the supplied light/dark SVGs selected by the root theme class before hydration. Served dark artwork has a transparent background to blend with both surfaces; source files in the project root remain untouched. `app/icon.svg` uses the supplied favicon, with `app/favicon.ico` generated from the same artwork as a fallback. Header controls wrap on narrow screens to preserve logo readability.
 - Cards support one optional prerequisite, selected in add/edit forms across streams and statuses. Active cards show a softened title plus a muted red “Blocked by” label, with separate light/dark shades and no outline until the linked card is Complete (Canceled still blocks); this is advisory and does not prevent movement or completion. Matrix status columns keep a 180px minimum with horizontal scrolling on narrow screens so cards and blocked labels remain readable. Links apply to individual recurring occurrences and are not copied to successors. Self-links, cycles, and cross-account links are rejected in the database. Remove incoming prerequisite links before deleting a referenced card. Apply `202610150003_card_prerequisites.sql` before deploying.
