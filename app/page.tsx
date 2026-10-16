@@ -31,7 +31,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { toast } from 'sonner';
 import type { User } from '@supabase/supabase-js';
 import { ArchiveCards } from '@/components/ArchiveCards';
-import { ArchivePeriod, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
+import { ArchivePeriod, HISTORY_PERIODS, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
 import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
@@ -48,7 +48,7 @@ export default function WillDoIt() {
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [recurrenceSources, setRecurrenceSources] = useState<RecurrenceSource[]>([]);
-  const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('month');
+  const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('week');
   const [hideRecurring, setHideRecurring] = useState(false);
   const loadSequence = useRef(0);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
@@ -141,7 +141,7 @@ export default function WillDoIt() {
           const savedView = VIEWS.find(option => option.id === preferences.view);
           if (savedView) setView(savedView.id);
           if (['all', 'work', 'personal'].includes(preferences.area)) setActiveFilter(preferences.area);
-          if (['month', 'year', 'all'].includes(preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
+          if (HISTORY_PERIODS.some(option => option.value === preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
           if (typeof preferences.hideRecurring === 'boolean') setHideRecurring(preferences.hideRecurring);
         }
       } catch {
@@ -502,10 +502,10 @@ export default function WillDoIt() {
             Hide recurring
           </button>
         </div>
-        {view === 'archive' && (
+        {columns.some(status => status === 'complete' || status === 'canceled') && (
           <div className="flex justify-center pb-3 px-4">
             <div className="flex items-center gap-2 text-sm text-ink-soft">
-              <span>Archive period</span>
+              <span>Completed/canceled</span>
               <AppSelect
                 className="w-auto"
                 size="small"
@@ -515,8 +515,8 @@ export default function WillDoIt() {
                   setArchivePeriod(archivePeriod);
                   savePreferences({ archivePeriod });
                 }}
-                aria-label="Archive period"
-                options={[{ value: 'month', label: 'Past month' }, { value: 'year', label: 'Past 1 year' }, { value: 'all', label: 'All time' }]}
+                aria-label="Completed/canceled period"
+                options={[...HISTORY_PERIODS]}
               />
             </div>
           </div>

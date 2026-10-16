@@ -1,8 +1,15 @@
-import { subMonths, subYears } from 'date-fns';
+import { subMonths, subWeeks, subYears } from 'date-fns';
 import { ACTIVE_STATUSES, BACKLOG_STATUSES, Card, CardStatus, RecurrenceSource, STATUS_FLOW } from './types';
 
 export type View = 'activated' | 'backlog' | 'all' | 'archive';
-export type ArchivePeriod = 'month' | 'year' | 'all';
+export const HISTORY_PERIODS = [
+  { value: 'week', label: 'Past week' },
+  { value: 'month', label: 'Past month' },
+  { value: 'quarter', label: 'Past 3 months' },
+  { value: 'year', label: 'Past year' },
+  { value: 'all', label: 'All time' },
+] as const;
+export type ArchivePeriod = typeof HISTORY_PERIODS[number]['value'];
 
 export function isTerminal(card: Pick<Card, 'status'>): boolean {
   return card.status === 'complete' || card.status === 'canceled';
@@ -32,10 +39,13 @@ export function displayStreamId(card: Card): string {
 
 export function cardsForStream(cards: Card[], streamId: string, view: View, period: ArchivePeriod, now = new Date()): Card[] {
   const statuses = statusesForView(view);
-  const cutoff = period === 'month' ? subMonths(now, 1) : subYears(now, 1);
+  const cutoff = period === 'all' ? null
+    : period === 'week' ? subWeeks(now, 1)
+    : period === 'month' ? subMonths(now, 1)
+    : period === 'quarter' ? subMonths(now, 3) : subYears(now, 1);
   return cards.filter(card => {
     if (displayStreamId(card) !== streamId || !statuses.includes(card.status)) return false;
-    if (view !== 'archive' || period === 'all') return true;
+    if (!isTerminal(card) || !cutoff) return true;
     return !!card.completed_at && new Date(card.completed_at).getTime() >= cutoff.getTime();
   }).sort((a, b) => view === 'archive'
     ? new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime()
