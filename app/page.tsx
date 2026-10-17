@@ -462,7 +462,7 @@ export default function WillDoIt() {
       onEdit={() => { setSelectedCardId(null); setEditingCard(card); }}
       onClick={event => {
         if (activeDragCard || (suppressCardClick.current && event?.detail !== 0)) return;
-        if (touchInput.current || event?.detail === 0) setSelectedCardId(card.id);
+        if (touchInput.current || event?.detail === 0) setSelectedCardId(current => current === card.id ? null : card.id);
         else { setSelectedCardId(null); setEditingCard(card); }
       }}
       onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />
