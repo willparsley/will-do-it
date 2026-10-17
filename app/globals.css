@@ -403,3 +403,25 @@ textarea::placeholder {
 /* Quiet blocked titles, with a readable dusty-red prerequisite label. */
 .card-blocked .card-title { color: var(--card-blocked-title); }
 .card-blocked-label { color: var(--card-blocked-label); }
+
+/* Selected-card actions use full touch targets without crowding the title. */
+.card[data-selected] {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+.card-touch-action {
+  display: flex;
+  flex: 1;
+  min-width: 44px;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.card-touch-action:hover { background: var(--surface-sunken); }
+.card-touch-action:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.card-touch-complete { color: #008751; }
+.dark .card-touch-complete { color: #00c177; }

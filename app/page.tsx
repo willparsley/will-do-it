@@ -59,6 +59,10 @@ export default function WillDoIt() {
   const [editingRecurrenceId, setEditingRecurrenceId] = useState<string | null>(null);
   const [showStreamModal, setShowStreamModal] = useState(false);
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [touchMode, setTouchMode] = useState(false);
+  const touchInput = useRef(false);
+  const suppressCardClick = useRef(false);
   const [activeDragCard, setActiveDragCard] = useState<Card | null>(null);
 
   const sensors = useSensors(
@@ -162,6 +166,26 @@ export default function WillDoIt() {
     }
   };
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const pointer = (event: PointerEvent) => {
+      touchInput.current = event.pointerType === 'touch' || event.pointerType === 'pen';
+      setTouchMode(touchInput.current);
+      suppressCardClick.current = false;
+      const target = event.target as Element;
+      if (!target.closest('[data-card-id]')) setSelectedCardId(null);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedCardId(null);
+    };
+    document.addEventListener('pointerdown', pointer, true);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', pointer, true);
+      document.removeEventListener('keydown', escape);
+    };
+  }, []);
+
   const visibleCards = hideRecurring
     ? cards.filter(card => !card.is_recurring && !card.recurrence_source_id)
     : cards;
@@ -177,6 +201,17 @@ export default function WillDoIt() {
 
   function getCardsForStream(streamId: string): Card[] {
     return cardsForStream(visibleCards, streamId, view, archivePeriod);
+  }
+
+  // Adjust transient selection before rendering a changed workspace context.
+  const selectionContext = [view, activeFilter, archivePeriod, hideRecurring, editingCard?.id,
+    editingRecurrenceId, !!creationContext, showStreamModal, editingStream?.id].join(':');
+  const [previousSelectionContext, setPreviousSelectionContext] = useState(selectionContext);
+  if (previousSelectionContext !== selectionContext) {
+    setPreviousSelectionContext(selectionContext);
+    if (selectedCardId) setSelectedCardId(null);
+  } else if (selectedCardId && !filteredStreams.some(stream => getCardsForStream(stream.id).some(card => card.id === selectedCardId))) {
+    setSelectedCardId(null);
   }
 
   const columns = statusesForView(view);
@@ -241,6 +276,8 @@ export default function WillDoIt() {
   };
 
   const handleDragStart = (event: DragStartEvent) => {
+    suppressCardClick.current = true;
+    setSelectedCardId(null);
     const card = cards.find((c) => c.id === event.active.id);
     setActiveDragCard(card || null);
   };
@@ -352,6 +389,7 @@ export default function WillDoIt() {
   };
 
   const handleCompleteCard = async (cardId: string) => {
+    setSelectedCardId(null);
     const card = cards.find(c => c.id === cardId);
     if (!card) return;
 
@@ -376,6 +414,7 @@ export default function WillDoIt() {
   };
 
   const handleAdvanceCard = async (cardId: string) => {
+    setSelectedCardId(null);
     const card = cards.find(c => c.id === cardId);
     if (!card) return;
 
@@ -419,7 +458,13 @@ export default function WillDoIt() {
   };
 
   const renderCard = (card: Card) => (
-    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} onClick={() => setEditingCard(card)}
+    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={touchMode}
+      onEdit={() => { setSelectedCardId(null); setEditingCard(card); }}
+      onClick={event => {
+        if (activeDragCard || (suppressCardClick.current && event?.detail !== 0)) return;
+        if (touchInput.current || event?.detail === 0) setSelectedCardId(card.id);
+        else { setSelectedCardId(null); setEditingCard(card); }
+      }}
       onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />
   );
 
@@ -617,7 +662,7 @@ export default function WillDoIt() {
           <DragOverlay dropAnimation={null}>
             {activeDragCard ? (
               <div className="w-64 max-w-full">
-                <CardComponent card={activeDragCard} prerequisite={cards.find(other => other.id === activeDragCard.prerequisite_card_id)} overlay />
+                <CardComponent card={activeDragCard} prerequisite={cards.find(other => other.id === activeDragCard.prerequisite_card_id)} overlay touchMode={touchMode} />
               </div>
             ) : null}
           </DragOverlay>

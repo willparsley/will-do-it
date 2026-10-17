@@ -2,14 +2,17 @@
 
 import { Card as CardType, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { isCardBlocked } from '@/lib/card-prerequisites';
-import { Repeat, LockKeyhole } from 'lucide-react';
+import { Pencil, Check, ArrowRight, Repeat, LockKeyhole } from 'lucide-react';
 import { dueBadge, isTerminal } from '@/lib/card-views';
 import { useDraggable } from '@dnd-kit/core';
 
 interface CardViewProps {
   card: CardType;
   prerequisite?: CardType;
-  onClick?: () => void;
+  onClick?: (event: React.MouseEvent) => void;
+  onEdit?: () => void;
+  selected?: boolean;
+  touchMode?: boolean;
   onComplete?: (id: string) => void;
   onAdvance?: (id: string) => void;
   onEditRecurrence?: (sourceId: string) => void;
@@ -19,7 +22,7 @@ interface CardViewProps {
  * Presentational card. Used both for the real, draggable card and for the
  * DragOverlay preview (so the preview doesn't register a duplicate draggable).
  */
-export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence }: CardViewProps) {
+export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected = false, touchMode = false }: CardViewProps) {
   const blocked = isCardBlocked(card, prerequisite);
   const isFinished = isTerminal(card);
   const hasReminder = !isFinished && !!card.remind_at;
@@ -46,13 +49,17 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
   return (
     <div
       onClick={onClick}
-      className={`card rounded-lg text-sm cursor-grab active:cursor-grabbing group grid grid-cols-[minmax(0,1fr)_2.25rem] overflow-hidden ${hasStatusBar ? 'status-bar' : ''} ${blocked ? 'card-blocked' : ''}`}
+      data-card-id={card.id}
+      data-selected={selected || undefined}
+      className={`card rounded-lg text-sm cursor-grab active:cursor-grabbing group grid ${(touchMode || selected) && !isFinished ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_2.25rem]'} overflow-hidden ${hasStatusBar ? 'status-bar' : ''} ${blocked ? 'card-blocked' : ''}`}
       style={hasStatusBar ? ({ '--status-color': `var(--status-${card.status})` } as React.CSSProperties) : undefined}
     >
       {/* Left content */}
       <div className="p-3">
         <div className="card-title font-medium leading-tight text-ink min-w-0">
-          <span className="break-words min-w-0">{card.title}</span>
+          {onClick ? <button type="button" className="block w-full text-left break-words min-w-0 focus-visible:outline-2 focus-visible:outline-accent"
+            aria-label={`Actions for ${card.title}`} aria-expanded={selected}>{card.title}</button>
+            : <span className="break-words min-w-0">{card.title}</span>}
         </div>
 
         {blocked && <p className="card-blocked-label mt-2 flex items-start gap-1 text-xs">
@@ -95,7 +102,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
       </div>
 
       {/* Right column: action rail for active cards, or static visual flair for finished cards */}
-      {showActions && (
+      {showActions && !touchMode && !selected && (
         <div className="grid grid-rows-[repeat(2,minmax(0,1fr))] w-9 self-stretch">
           {/* Upper row cell (complete tab) */}
           <div className="h-full w-full">
@@ -103,8 +110,8 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
               <button
                 onClick={handleComplete}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="h-full w-full flex items-center justify-center bg-[#285748] hover:bg-[#1e2f38] transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto hover:shadow-[inset_0_3px_5px_rgba(0,0,0,0.45)]"
-                title="Mark complete"
+                className="h-full w-full flex items-center justify-center bg-[#285748] hover:bg-[#1e2f38] transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto hover:shadow-[inset_0_3px_5px_rgba(0,0,0,0.45)]"
+                type="button" aria-label="Mark complete" title="Mark complete"
               >
                 <svg
                   className="h-6 w-6 text-[#00C177]"
@@ -124,9 +131,9 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
               <button
                 onClick={handleAdvance}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="h-full w-full flex items-center justify-center hover:brightness-[0.72] transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto hover:shadow-[inset_0_3px_5px_rgba(0,0,0,0.45)]"
+                className="h-full w-full flex items-center justify-center hover:brightness-[0.72] transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto hover:shadow-[inset_0_3px_5px_rgba(0,0,0,0.45)]"
                 style={{ backgroundColor: promoteColor }}
-                title={`Advance to ${next ? STATUS_LABELS[next] : ''}`}
+                type="button" aria-label={`Advance to ${next ? STATUS_LABELS[next] : ''}`} title={`Advance to ${next ? STATUS_LABELS[next] : ''}`}
               >
                 <svg
                   className="h-6 w-6 group-hover:brightness-[1.4]"
@@ -174,6 +181,19 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
           )}
         </div>
       )}
+
+      {selected && onClick && <div className="col-span-full flex border-t border-line bg-surface" role="group" aria-label={`Actions for ${card.title}`}
+        onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
+        <button type="button" className="card-touch-action text-ink-soft" aria-label={`Edit ${card.title}`} onClick={onEdit}>
+          <Pencil size={16} aria-hidden="true" /><span>Edit</span>
+        </button>
+        {!isFinished && canComplete && <button type="button" className="card-touch-action card-touch-complete" aria-label="Mark complete" onClick={handleComplete}>
+          <Check size={16} aria-hidden="true" /><span>Complete</span>
+        </button>}
+        {!isFinished && canPromote && <button type="button" className="card-touch-action" style={{ color: `color-mix(in srgb, var(--status-${next}) 55%, var(--text))` }} aria-label={`Advance to ${next ? STATUS_LABELS[next] : ''}`} onClick={handleAdvance}>
+          <ArrowRight size={16} aria-hidden="true" /><span>Advance</span>
+        </button>}
+      </div>}
     </div>
   );
 }
@@ -183,7 +203,7 @@ interface CardProps extends CardViewProps {
   overlay?: boolean;
 }
 
-export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, overlay = false }: CardProps) {
+export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected, touchMode, overlay = false }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     disabled: overlay,
@@ -192,7 +212,7 @@ export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEdi
   if (overlay) {
     return (
       <div className="rotate-1 scale-[1.03] shadow-lg">
-        <CardView card={card} prerequisite={prerequisite} />
+        <CardView card={card} prerequisite={prerequisite} touchMode={touchMode} />
       </div>
     );
   }
@@ -202,9 +222,11 @@ export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEdi
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      role={undefined}
+      tabIndex={undefined}
       className={isDragging ? 'opacity-40' : ''}
     >
-      <CardView card={card} prerequisite={prerequisite} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} />
+      <CardView card={card} prerequisite={prerequisite} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} selected={selected} touchMode={touchMode} onEdit={onEdit} />
     </div>
   );
 }
