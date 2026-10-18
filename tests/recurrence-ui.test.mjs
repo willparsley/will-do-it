@@ -132,7 +132,7 @@ test('workspace refresh calls conditional promotion and hydrates cards before di
   const supabase={auth:{async getUser(){return {data:{user},error:null};}},async rpc(name){calls.push(name);return {data:0,error:null};},from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[card]:[source],error:null});},async order(){return {data:streams,error:null};}};}};
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module,
-    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},closestCenter(){}},
+    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
   ui.render();ui.effects[0]();
   await new Promise(resolve=>setTimeout(resolve,0));
@@ -166,7 +166,7 @@ for (const refreshFails of [false,true]) test(`workspace stays visible during a 
   };
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module,
-    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},closestCenter(){}},
+    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
   assert.ok(text(ui.render()).includes('Loading your workspace'));
   ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
@@ -201,7 +201,7 @@ for(const action of ['complete','advance','drag']) test(`failed stale ${action} 
   },from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[persisted]:[source]});},async order(){return {data:streams};}};}};
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module,
-    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},closestCenter(){}},
+    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
   ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
   button(ui.render(),'All').props.onClick();
@@ -257,7 +257,7 @@ for (const operation of ['create', 'edit', 'drag']) {
         };
         const ui = driver('app/page.tsx', 'default', {}, {
           '@/lib/supabase/client': { createClient: () => supabase }, sonner: notices.module,
-          '@dnd-kit/core': { useSensors: () => [], useSensor: () => null, MouseSensor() {}, TouchSensor() {}, DndContext() {}, DragOverlay() {}, closestCenter() {} },
+          '@dnd-kit/core': { useSensors: () => [], useSensor: () => null, MouseSensor() {}, TouchSensor() {}, DndContext() {}, DragOverlay() {}, pointerWithin() {} },
         });
         ui.render(); ui.effects[0](); await new Promise(resolve => setTimeout(resolve, 0));
         let tree = ui.render();
@@ -312,7 +312,7 @@ for (const action of ['complete','advance']) for (const fails of [false,true]) {
     const ui=driver('app/page.tsx','default',{}, {
       '@/lib/supabase/client':{createClient:()=>supabase},
       sonner:{toast:{success:(message,options)=>{successes.push({message,options});return 'toast';},error:message=>errors.push(message),loading:()=> 'pending',dismiss(){}}},
-      '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},closestCenter(){}},
+      '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
     });
     ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
     button(ui.render(),'All').props.onClick();
