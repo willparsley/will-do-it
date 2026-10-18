@@ -305,7 +305,7 @@ for (const theme of ['light', 'dark']) test(`hide recurring filters the workspac
  await page.keyboard.press('Space');
  await expect(toggle).toBeChecked();
  for (const [view, status] of [['Active', 'waiting'], ['Backlog', 'backlog'], ['All', 'waiting'], ['Archive', 'complete']]) {
-  await page.getByRole('button', { name: view, exact: true }).and(page.locator('[aria-pressed]')).click();
+  await page.getByRole('group', { name: 'Board view', exact: true }).getByRole('button', { name: view, exact: true }).click();
   await expect(page.getByText(`One-off ${status}`, { exact: true })).toBeVisible();
   await expect(page.getByText(`Routine ${status}`, { exact: true })).toHaveCount(0);
   await expect(page.getByText(`Linked ${status}`, { exact: true })).toHaveCount(0);
@@ -499,7 +499,7 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
    }
    await route.abort();
  });
- const tab=name=>page.getByRole('button',{name,exact:true}).and(page.locator('[aria-pressed]'));
+ const tab=name=>page.getByRole('group', { name: 'Board view', exact: true }).getByRole('button',{name,exact:true});
  const group=(count,status)=>page.locator('details').filter({has:page.locator('summary').filter({hasText:`${count} ${status}`})});
  await page.goto('http://app.test');
  await expect(page.locator('button[aria-label="Completed/canceled period"]')).toHaveCount(0);

@@ -27,6 +27,11 @@
   --accent-soft: #eff6ff;
   --accent-ring: rgba(37, 99, 235, 0.35);
 
+  --area-work-foreground: #3f648e;
+  --area-work-background: #edf3f9;
+  --area-personal-foreground: #a7553c;
+  --area-personal-background: #fbf0eb;
+
   --status-backlog: #a1a1aa;
   --status-priority_backlog: #f59e0b;
   --status-research: #8b5cf6;
@@ -65,6 +70,11 @@
   --accent-ink: #0b1220;
   --accent-soft: #1e2537;
   --accent-ring: rgba(122, 162, 247, 0.4);
+
+  --area-work-foreground: #9bbce0;
+  --area-work-background: #26313e;
+  --area-personal-foreground: #e5a48f;
+  --area-personal-background: #392b29;
 
   --status-backlog: #71717a;
   --status-priority_backlog: #fbbf24;

@@ -1,6 +1,8 @@
 'use client';
 
 import { Area } from '@/lib/types';
+import { AreaIndicator } from './AreaIndicator';
+import styles from './StreamArea.module.css';
 
 interface AreaFilterProps {
   value: Area | 'all';
@@ -15,17 +17,17 @@ export function AreaFilter({ value, onChange }: AreaFilterProps) {
   ];
 
   return (
-    <div className="flex items-center gap-0.5 text-sm border border-line rounded-full p-0.5 bg-surface">
+    <div role="group" aria-label="Area filter" className="flex items-center gap-0.5 text-sm border border-line rounded-full p-0.5 bg-surface">
       {options.map(opt => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
-          className={`px-3 py-1 rounded-full transition-colors text-xs font-medium ${
-            value === opt.value
-              ? 'bg-accent text-accent-ink'
-              : 'text-ink-soft hover:text-ink hover:bg-sunken'
-          }`}
+          type="button"
+          data-area={opt.value}
+          aria-pressed={value === opt.value}
+          className={`${styles.area} ${styles.filter} focus-ring`}
         >
+          {opt.value !== 'all' && opt.value !== 'neutral' && <AreaIndicator area={opt.value} />}
           {opt.label}
         </button>
       ))}

@@ -135,7 +135,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   const saves = calls.filter(call => call.path.endsWith('/save_card_with_undo'));
   expect(saves).toHaveLength(3);
   expect(saves.at(-1).body.p_changes.status).toBe('complete');
-  await page.locator('button[aria-pressed]').filter({ hasText: /^All$/ }).focus();
+  await page.getByRole('group', { name: 'Board view', exact: true }).locator('button[aria-pressed]').filter({ hasText: /^All$/ }).focus();
   await page.keyboard.press('Enter');
   const finished = page.locator('.card[data-card-id="finished"]');
   await select(finished);

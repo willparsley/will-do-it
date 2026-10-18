@@ -59,7 +59,7 @@ for (const theme of ['light', 'dark']) test(`cell add defaults, saves, focus, an
   const dismissConfirmation = async prompt => { confirmations++; await prompt.dismiss(); };
   page.on('dialog', dismissConfirmation);
   for (const [view, viewStatuses] of [['Active', [2, 3, 4, 5]], ['Backlog', [0, 1, 2]], ['All', statuses.map((_, i) => i)], ['Archive', [6, 7]]]) {
-    await page.locator('button[aria-pressed]').filter({ hasText: new RegExp('^' + view + '$') }).click();
+    await page.getByRole('group', { name: 'Board view', exact: true }).locator('button[aria-pressed]').filter({ hasText: new RegExp('^' + view + '$') }).click();
     await expect(addButton('Work stream', labels[viewStatuses[0]])).toBeAttached();
     await expect(page.getByRole('button', { name: /^Add card to Closed/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Add card to Hidden/ })).toHaveCount(0);
