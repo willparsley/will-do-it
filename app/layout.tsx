@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "sonner";
+import { AppToaster } from "@/components/AppToaster";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import { ThemeColorSync } from "@/components/ThemeColorSync";
 
@@ -55,13 +55,7 @@ export default function RootLayout({
         <ThemeColorSync />
         {children}
         <PwaRegistration />
-        <Toaster
-          position="top-right"
-          offset={{ top: 124, right: 16 }}
-          mobileOffset={{ top: 124, right: 12 }}
-          richColors
-          closeButton
-        />
+        <AppToaster />
       </body>
     </html>
   );

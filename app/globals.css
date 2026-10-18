@@ -14,6 +14,8 @@
   --surface-sunken: #eceeec;
   --surface-chrome: #e9ece9;
   --surface-field: #eef0ed;
+  --surface-dialog: #f7f8f6;
+  --surface-popover: #f7f8f6;
 
   --border-subtle: #d3d8d3;
   --border-strong: #aeb8af;
@@ -23,6 +25,8 @@
   --text-muted: #5d6960;
   --card-blocked-title: #74747d;
   --card-blocked-label: #a45454;
+  --card-canceled-background: #7f1d1d;
+  --card-canceled-foreground: #f87171;
 
   --accent: #008751;
   --accent-label: #007044;
@@ -57,19 +61,23 @@
 
 .dark {
   --canvas: #17171a;
-  --surface: #232327;
+  --surface: #29292e;
   --surface-sunken: #1d1d21;
   --surface-chrome: #232327;
-  --surface-field: #232327;
+  --surface-field: #202024;
+  --surface-dialog: #26262b;
+  --surface-popover: #2c2c32;
 
   --border-subtle: #2c2c31;
-  --border-strong: #3f3f46;
+  --border-strong: #50505a;
 
   --text: #ededed;
   --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --text-muted: #91919b;
   --card-blocked-title: #9a9aa3;
   --card-blocked-label: #ce9191;
+  --card-canceled-background: #392628;
+  --card-canceled-foreground: #d99494;
 
   --accent: #00c177;
   --accent-label: #00c177;
@@ -135,6 +143,11 @@ body {
 input, textarea, select {
   color: inherit;
   font-family: inherit;
+}
+
+.dark input[type='checkbox'],
+.dark input[type='radio'] {
+  accent-color: var(--accent);
 }
 
 input::placeholder,
@@ -285,6 +298,12 @@ textarea::placeholder {
 .dark .badge-soon { background: #1b2a45; color: #93c5fd; }
 .dark .badge-future { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--border-subtle); }
 
+.card-metadata { font-size: 10px; }
+.dark .card-metadata { font-size: 12px; line-height: 1.4; }
+.dark .badge-future { font-size: 11px; }
+.card-canceled-rail { background: var(--card-canceled-background); }
+.card-canceled-rail svg { color: var(--card-canceled-foreground); }
+
 /* ------------------------------------------------------------------ */
 /* Controls                                                            */
 /* ------------------------------------------------------------------ */
@@ -403,7 +422,7 @@ textarea::placeholder {
   min-width: 0;
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;
-  background: var(--surface);
+  background: var(--surface-dialog);
   border: 1px solid var(--border-subtle);
   border-radius: 1rem;
   width: 100%;
@@ -444,3 +463,19 @@ textarea::placeholder {
 .card-touch-action:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .card-touch-complete { color: #008751; }
 .dark .card-touch-complete { color: #00c177; }
+
+/* Dark notifications share the workspace surfaces, including Undo actions. */
+.dark [data-sonner-toaster][data-sonner-theme='dark'] {
+  --normal-bg: var(--surface);
+  --normal-border: var(--border-strong);
+  --normal-text: var(--text);
+  --success-bg: var(--accent-soft);
+  --success-border: #2d5845;
+  --success-text: #a0e6bf;
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+.dark [data-sonner-toast][data-styled='true'] [data-button] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}

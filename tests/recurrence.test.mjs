@@ -721,6 +721,12 @@ test('lifecycle RPCs cannot access another user cards or streams', async () => {
 
 test('stacking batches resume at the cursor without losing or duplicating periods', async () => {
   await fixture({stack:true,daysAgo:1001});
+  // Anchor the seed to a calendar day in the source timezone. Subtracting
+  // 1001 UTC days can land on the previous local day across DST near midnight.
+  await query(`update cards set due_at = seed.day, completed_at = seed.day
+    from (select (((now() at time zone 'America/New_York')::date - 1001)
+      + time '12:00') at time zone 'America/New_York' as day) seed
+    where id = $1`, [original]);
   assert.equal(await generate(),1000);
   assert.equal(await generate(),2);
   assert.equal(await generate(),0);
