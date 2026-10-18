@@ -10,7 +10,7 @@ async function workspace(userId='user') {
   };
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:{toast:{error(){},success(){}}},
-    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},closestCenter(){}},
+    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
   ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
   return ui;

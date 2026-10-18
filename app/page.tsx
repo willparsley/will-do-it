@@ -6,7 +6,7 @@ import { AppSelect } from '@/components/AppSelect';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
   DndContext, 
-  closestCenter, 
+  pointerWithin,
   MouseSensor, 
   TouchSensor, 
   useSensor, 
@@ -573,7 +573,9 @@ export default function WillDoIt() {
       <div className="w-full overflow-x-auto px-4 sm:px-6 lg:px-8 py-6 flex-1">
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          // Tall rows can have centers farther away than a neighboring row.
+          // Mouse and touch drops must target the cell containing the pointer.
+          collisionDetection={pointerWithin}
           onDragStart={handleDragStart}
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
