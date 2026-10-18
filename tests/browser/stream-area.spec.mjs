@@ -54,7 +54,7 @@ for (const theme of ['light', 'dark']) test(`stream area indicators and accessib
   const workFilter = filter.getByRole('button', { name: 'Work', exact: true });
   const personalFilter = filter.getByRole('button', { name: 'Personal', exact: true });
   const allFilter = filter.getByRole('button', { name: 'All', exact: true });
-  const normalText = theme === 'light' ? 'rgb(24, 24, 27)' : 'rgb(237, 237, 237)';
+  const normalText = theme === 'light' ? 'rgb(37, 43, 40)' : 'rgb(237, 237, 237)';
   const style = locator => locator.evaluate(el => {
     const s = getComputedStyle(el); return { background: s.backgroundColor, color: s.color };
   });

@@ -1,6 +1,6 @@
 .field { min-width: 0; }
 .dateRow { display: flex; gap: .25rem; align-items: center; }
-.trigger { min-height: 44px; width: 100%; min-width: 0; display: flex; align-items: center; gap: .625rem; padding: .625rem .75rem; border: 1px solid var(--border-strong); border-radius: .5rem; background: var(--surface); color: var(--text); text-align: left; font-size: .875rem; cursor: pointer; }
+.trigger { min-height: 44px; width: 100%; min-width: 0; display: flex; align-items: center; gap: .625rem; padding: .625rem .75rem; border: 1px solid var(--border-strong); border-radius: .5rem; background: var(--surface-field); color: var(--text); text-align: left; font-size: .875rem; cursor: pointer; }
 .trigger svg { flex-shrink: 0; color: var(--text-secondary); }
 .trigger:hover { border-color: var(--accent); }
 .trigger:disabled, .field button:disabled { opacity: .6; cursor: not-allowed; }

@@ -4,18 +4,32 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=auto">
     <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" content="#00995B">
+    <meta name="theme-color" content="#008751">
     <title>You're offline · Will Do It</title>
     <style>
-      :root { color-scheme: light dark; font-family: system-ui, sans-serif; background: #eeeeef; color: #18181b; }
+      :root { color-scheme: light; font-family: system-ui, sans-serif; background: #e2e5e3; color: #252b28; --accent: #008751; --accent-ink: #ffffff; --secondary: #505b53; }
+      :root.dark { color-scheme: dark; background: #17171a; color: #ededed; --accent: #00c177; --accent-ink: #0b1220; --secondary: #a1a1aa; }
       body { min-height: 100dvh; margin: 0; display: grid; place-items: center; }
       main { max-width: 24rem; padding: 2rem; text-align: center; }
       h1 { font-size: 1.5rem; font-weight: 600; }
-      p { line-height: 1.6; color: #52525b; }
-      a { display: inline-block; margin-top: 1rem; padding: .75rem 1.25rem; border-radius: .5rem; background: #2563eb; color: white; text-decoration: none; }
-      a:focus-visible { outline: 3px solid #00995b; outline-offset: 4px; }
-      @media (prefers-color-scheme: dark) { :root { background: #17171a; color: #ededed; } p { color: #a1a1aa; } }
+      p { line-height: 1.6; color: var(--secondary); }
+      a { display: inline-block; margin-top: 1rem; padding: .75rem 1.25rem; border-radius: .5rem; background: var(--accent); color: var(--accent-ink); text-decoration: none; }
+      a:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
     </style>
+    <script>
+      (function () {
+        var preference;
+        try { preference = localStorage.getItem('theme'); } catch (e) {}
+        var systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+        function syncTheme() {
+          var dark = preference === 'dark' || (preference !== 'light' && systemTheme.matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.querySelector('meta[name="theme-color"]').content = dark ? '#00C177' : '#008751';
+        }
+        syncTheme();
+        systemTheme.addEventListener('change', syncTheme);
+      })();
+    </script>
   </head>
   <body>
     <main>

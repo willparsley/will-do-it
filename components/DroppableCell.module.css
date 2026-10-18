@@ -22,7 +22,7 @@
 .add:hover,
 .add:focus-visible {
   opacity: 1;
-  color: var(--accent);
+  color: var(--accent-label);
   border-color: var(--accent);
   background: var(--accent-soft);
 }

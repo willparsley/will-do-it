@@ -22,7 +22,7 @@
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-strong);
   border-radius: 0.5rem;
-  background: var(--surface);
+  background: var(--surface-field);
   color: var(--text);
   font: inherit;
   text-align: left;
@@ -139,7 +139,7 @@
 
 .item[data-selected] {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-label);
 }
 
 .item[data-focused] {

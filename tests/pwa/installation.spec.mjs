@@ -55,8 +55,24 @@ test('offline navigation recovers online and never caches account requests', asy
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByRole('heading', { name: "You're offline" })).toBeVisible();
+  // The cached, self-contained page follows the OS and explicit app preferences.
+  for (const theme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.reload();
+    await expect(page.getByRole('link', { name: 'Try again' })).toHaveCSS('background-color', theme === 'dark' ? 'rgb(0, 193, 119)' : 'rgb(0, 135, 81)');
+  }
+  for (const theme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+    await page.evaluate(theme => localStorage.setItem('theme', theme), theme);
+    await page.reload();
+    await expect(page.locator('html')).toHaveCSS('background-color', theme === 'dark' ? 'rgb(23, 23, 26)' : 'rgb(226, 229, 227)');
+    await expect(page.getByRole('link', { name: 'Try again' })).toHaveCSS('background-color', theme === 'dark' ? 'rgb(0, 193, 119)' : 'rgb(0, 135, 81)');
+    await expect(page.getByRole('link', { name: 'Try again' })).toHaveCSS('color', theme === 'dark' ? 'rgb(11, 18, 32)' : 'rgb(255, 255, 255)');
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', theme === 'dark' ? '#00C177' : '#008751');
+  }
+  await page.evaluate(() => localStorage.removeItem('theme'));
   const cachedPaths = await page.evaluate(async () => {
-    const cache = await caches.open('will-do-it-offline-v4');
+    const cache = await caches.open('will-do-it-offline-v5');
     return (await cache.keys()).map((entry) => new URL(entry.url).pathname);
   });
   expect(cachedPaths).toEqual(['/offline.html']);
