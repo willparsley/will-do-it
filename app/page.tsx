@@ -572,7 +572,7 @@ export default function WillDoIt() {
 
       {/* One scroll container keeps sticky labels aligned on both axes, while
           the controls above take their natural height even when they wrap. */}
-      <div className="w-full min-h-0 overflow-x-auto overflow-y-auto px-4 sm:px-6 lg:px-8 pb-6 flex-1" role="region" aria-label="Task board" tabIndex={0}>
+      <div className="w-full min-h-0 overflow-x-auto overflow-y-auto scroll-pt-14 px-4 sm:px-6 lg:px-8 pb-6 flex-1" role="region" aria-label="Task board" tabIndex={0}>
         <DndContext
           sensors={sensors}
           // Tall rows can have centers farther away than a neighboring row.
