@@ -3,6 +3,7 @@
 import { Area } from '@/lib/types';
 import { AreaIndicator } from './AreaIndicator';
 import styles from './StreamArea.module.css';
+import { TooltipButton } from './TooltipButton';
 
 interface AreaFilterProps {
   value: Area | 'all';
@@ -19,9 +20,10 @@ export function AreaFilter({ value, onChange }: AreaFilterProps) {
   return (
     <div role="group" aria-label="Area filter" className="flex items-center gap-0.5 text-sm border border-line rounded-full p-0.5 bg-surface">
       {options.map(opt => (
-        <button
+        <TooltipButton
+          tooltip={opt.value === 'all' ? 'Show streams from all areas' : `Show ${opt.label.toLowerCase()} streams`}
           key={opt.value}
-          onClick={() => onChange(opt.value)}
+          onPress={() => onChange(opt.value)}
           type="button"
           data-area={opt.value}
           aria-pressed={value === opt.value}
@@ -29,7 +31,7 @@ export function AreaFilter({ value, onChange }: AreaFilterProps) {
         >
           {opt.value !== 'all' && opt.value !== 'neutral' && <AreaIndicator area={opt.value} />}
           {opt.label}
-        </button>
+        </TooltipButton>
       ))}
     </div>
   );
