@@ -43,7 +43,7 @@
   --status-priority_backlog: #a86408;
   --status-research: #8b5cf6;
   --status-waiting: #0f766e;
-  --status-in_progress: #2563eb;
+  --status-in_progress: #0066ff;
   --status-complete: #008751;
   --status-canceled: #71717a;
 
@@ -51,7 +51,7 @@
   --card-action-priority_backlog: #fbbf24;
   --card-action-research: #a78bfa;
   --card-action-waiting: #2dd4bf;
-  --card-action-in_progress: #7aa2f7;
+  --card-action-in_progress: #4d94ff;
   --card-action-complete: #34d399;
 
   color-scheme: light;
@@ -92,7 +92,7 @@
   --status-priority_backlog: #fbbf24;
   --status-research: #a78bfa;
   --status-waiting: #2dd4bf;
-  --status-in_progress: #7aa2f7;
+  --status-in_progress: #4d94ff;
   --status-complete: #34d399;
   --status-canceled: #91919b;
 
