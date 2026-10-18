@@ -129,10 +129,12 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   const undo = page.getByRole('button', { name: 'Undo', exact: true });
   // Keep the same live notification while changing the app theme both ways.
   const themeToggle = page.getByRole('button', { name: /^Switch to (light|dark) mode$/ });
-  await themeToggle.click();
+  await themeToggle.focus();
+  await page.keyboard.press('Enter');
   await expect(toaster).toHaveAttribute('data-sonner-theme', theme === 'dark' ? 'light' : 'dark');
   await expect(undo).toBeVisible();
-  await themeToggle.click();
+  await themeToggle.focus();
+  await page.keyboard.press('Enter');
   await expect(toaster).toHaveAttribute('data-sonner-theme', theme);
   if (theme === 'dark') {
     await expect(undo).toHaveCSS('background-color', 'rgb(0, 193, 119)');
