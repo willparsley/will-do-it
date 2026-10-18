@@ -68,6 +68,11 @@ for (const theme of ['light', 'dark']) test(`all streams, grouping, and editing 
   await expect(sections.nth(0).locator('li')).toHaveText(['Alpha', 'zebraNotes for an empty stream', 'Uncategorized']);
   await expect(sections.nth(1).locator('li')).toHaveText(['Apple done', 'Zoo done']);
   await expect(page.getByRole('button', { name: 'Edit stream Uncategorized' })).toHaveCount(0);
+  const areaFilter = page.getByRole('group', { name: 'Area filter', exact: true });
+  for (const [title, area] of [['zebra', 'Work'], ['Alpha', 'Personal']]) {
+    const color = await areaFilter.getByRole('button', { name: area, exact: true }).locator('svg').evaluate(icon => getComputedStyle(icon).color);
+    await expect(page.getByRole('button', { name: `Edit stream ${title}`, exact: true }).getByRole('img', { name: area }).locator('svg')).toHaveCSS('color', color);
+  }
   const edit = page.getByRole('button', { name: 'Edit stream zebra', exact: true });
   await edit.focus();
   await page.keyboard.press('Enter');

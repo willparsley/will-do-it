@@ -2,11 +2,11 @@
   --area-foreground: var(--text-secondary);
   --area-background: var(--surface-sunken);
 }
-.area[data-area='work'] {
+.area[data-area='work'], .icon.work {
   --area-foreground: var(--area-work-foreground);
   --area-background: var(--area-work-background);
 }
-.area[data-area='personal'] {
+.area[data-area='personal'], .icon.personal {
   --area-foreground: var(--area-personal-foreground);
   --area-background: var(--area-personal-background);
 }
