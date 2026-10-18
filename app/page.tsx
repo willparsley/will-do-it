@@ -27,7 +27,9 @@ import { EditCardModal } from '@/components/EditCardModal';
 import { EditRecurrenceModal } from '@/components/EditRecurrenceModal';
 import { AddStreamModal } from '@/components/AddStreamModal';
 import { EditStreamModal } from '@/components/EditStreamModal';
-import { Plus, LogOut } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { AccountMenu } from '@/components/AccountMenu';
+import { TooltipButton } from '@/components/TooltipButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { toast } from 'sonner';
 import type { User } from '@supabase/supabase-js';
@@ -448,11 +450,6 @@ export default function WillDoIt() {
     }
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    window.location.replace('/login');
-  };
-
   const openRecurrenceEditor = (sourceId: string) => {
     setEditingCard(null);
     setEditingRecurrenceId(sourceId);
@@ -488,25 +485,25 @@ export default function WillDoIt() {
           <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />
 
-            <button
-              onClick={() => setCreationContext({ status: 'backlog' })}
+            <TooltipButton
+              tooltip="Add a new card"
+              onPress={() => setCreationContext({ status: 'backlog' })}
               className="btn btn-primary px-4 py-1.5 text-sm"
             >
               <Plus className="h-4 w-4" /> Quick Add
-            </button>
+            </TooltipButton>
 
-            <button
-              onClick={() => setShowStreamModal(true)}
+            <TooltipButton
+              tooltip="Create a stream to organize your cards"
+              onPress={() => setShowStreamModal(true)}
               className="btn btn-secondary px-3 py-1.5 text-sm"
             >
               New Stream
-            </button>
+            </TooltipButton>
 
             <ThemeToggle />
 
-            <button onClick={handleSignOut} className="btn btn-ghost p-2">
-              <LogOut className="h-4 w-4" />
-            </button>
+            <AccountMenu email={user.email} />
           </div>
         </div>
       </header>
