@@ -7,10 +7,21 @@ import { loadTypeScript } from './helpers/load-typescript.mjs';
 const { hydrateRecurringCards, displayStreamId, cardsForStream, archiveGroups, dueBadge, statusesForView } = loadTypeScript('lib/card-views.ts');
 const { dateTimeLocal, dateTimeInstant, withCalendarDay } = loadTypeScript('lib/dates.ts');
 const { CardView } = loadTypeScript('components/Card.tsx');
+const { STATUS_FLOW, nextStatus } = loadTypeScript('lib/types.ts');
 const { ArchiveCards } = loadTypeScript('components/ArchiveCards.tsx');
 const source = { id:'source',stream_id:'new-stream',base_title:'Take a walk',last_completed_at:'2026-10-14T12:00:00Z',recurrence_timezone:'America/New_York' };
 const base = { id:'card',title:'Take a walk - 2026-10-15',stream_id:'old-stream',user_id:'user',position:0,status:'waiting',is_recurring:true,recurrence_source_id:'source',due_at:'2026-10-15T04:00:00Z' };
 const now = new Date('2026-10-15T16:00:00Z');
+
+test('status progression completes directly from In Progress and exposes seven columns in All', () => {
+  assert.deepEqual(STATUS_FLOW, ['backlog', 'priority_backlog', 'research', 'waiting', 'in_progress', 'complete']);
+  assert.equal(nextStatus('in_progress'), 'complete');
+  assert.equal(nextStatus('complete'), null);
+  assert.equal(nextStatus('canceled'), null);
+  assert.deepEqual(statusesForView('all'), [...STATUS_FLOW, 'canceled']);
+  const html = renderToStaticMarkup(React.createElement(CardView, { card: { ...base, status: 'in_progress' }, onAdvance() {} }));
+  assert.match(html, /Advance to Complete/);
+});
 
 test('hydration supplies last completion, timezone, and current stream without rewriting stored stream', () => {
   const [active, archived] = hydrateRecurringCards([base,{...base,id:'old',status:'complete'}],[source]);
@@ -71,7 +82,7 @@ test('archive groups by source identity, preserving individual occurrences and s
 test('Backlog includes Research, while Active and Archive have their designed status columns', () => {
   assert.deepEqual(statusesForView('backlog'),['backlog','priority_backlog','research']);
   assert.equal(cardsForStream([{...base,status:'research'}],'old-stream','backlog','month',now).length,1);
-  assert.deepEqual(statusesForView('activated'),['research','waiting','in_progress','review']);
+  assert.deepEqual(statusesForView('activated'),['research','waiting','in_progress']);
   assert.deepEqual(statusesForView('archive'),['complete','canceled']);
 });
 

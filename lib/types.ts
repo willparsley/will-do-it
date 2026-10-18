@@ -5,7 +5,6 @@ export type CardStatus =
   | 'research'
   | 'waiting'
   | 'in_progress'
-  | 'review'
   | 'complete'
   | 'canceled';
 
@@ -117,7 +116,7 @@ export interface RecurrenceSource {
   last_completed_at?: string;
 }
 
-export const ACTIVE_STATUSES: CardStatus[] = ['research', 'waiting', 'in_progress', 'review'];
+export const ACTIVE_STATUSES: CardStatus[] = ['research', 'waiting', 'in_progress'];
 export const BACKLOG_STATUSES: CardStatus[] = ['backlog', 'priority_backlog'];
 export const ARCHIVE_STATUSES: CardStatus[] = ['complete', 'canceled'];
 
@@ -131,7 +130,6 @@ export const STATUS_FLOW: CardStatus[] = [
   'research',
   'waiting',
   'in_progress',
-  'review',
   'complete',
 ];
 
@@ -148,7 +146,6 @@ export const STATUS_LABELS: Record<CardStatus, string> = {
   research: 'Research',
   waiting: 'Waiting',
   in_progress: 'In Progress',
-  review: 'Review',
   complete: 'Complete',
   canceled: 'Canceled',
 };

@@ -268,7 +268,7 @@ for (const operation of ['create', 'edit', 'drag']) {
         if (operation === 'drag') {
           await nodes(tree, n => typeof n.props?.onDragEnd === 'function')[0].props.onDragEnd({ active: { id: card.id }, over: { id: `new-stream::${initial}` } });
         } else {
-          if (operation === 'create') nodes(tree, n => n.type === 'button' && text(n).includes('Quick Add'))[0].props.onClick();
+          if (operation === 'create') nodes(tree, n => n.props?.tooltip === 'Add a new card')[0].props.onPress();
           else nodes(tree, n => n.props.card?.id === card.id)[0].props.onClick();
           tree = ui.render();
           const callback = operation === 'create' ? 'onCardCreated' : 'onCardUpdated';

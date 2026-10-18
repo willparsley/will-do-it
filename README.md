@@ -43,6 +43,12 @@ Migrations preserve existing cards, including duplicate history.
 `supabase/audit_recurrence_duplicates.sql` provides read-only queries for reviewing
 existing copies. Refresh older open app tabs after deploying the matching UI.
 
+Apply `202610180001_remove_review_status.sql` before deploying the UI without
+Review. It moves any remaining Review cards to In Progress, invalidates private
+Undo snapshots containing Review, and removes Review from the allowed statuses.
+Old app windows attempting to use Review must refresh. Advancing In Progress
+now completes the card through the normal completion and Undo path.
+
 Generation is serialized per source and keyed by an immutable schedule revision and occurrence date.
 Non-stacking sources keep one pending instance; stacking sources catch up distinct
 missed dates and keep one future instance (at most 1000 dates per refresh).
@@ -83,7 +89,7 @@ pending month when allowed by the interval; other pattern changes assign pending
 cards distinct dates in order. Reminder offsets and local times follow the new
 due dates. Automatically promoted Waiting cards return to their original backlog
 status when both new dates are in the future; manual or legacy/unknown Waiting
-cards retain their status, as do Research, In Progress, and Review cards.
+cards retain their status, as do Research and In Progress cards.
 Turning off stacking requires completing/canceling extra pending occurrences.
 Stopping or setting an end date retains existing cards and limits new generation.
 

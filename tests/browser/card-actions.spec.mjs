@@ -17,7 +17,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   page.setDefaultTimeout(10000);
   let cards = [
     { id: 'first', title: 'First task', status: 'waiting' },
-    { id: 'second', title: 'Second task', status: 'review' },
+    { id: 'second', title: 'Second task', status: 'in_progress' },
     { id: 'finished', title: 'Finished task', status: 'complete' },
     { id: 'canceled', title: 'Canceled task', status: 'canceled' },
   ].map(card => ({ ...card, user_id: user.id, stream_id: '0', position: 0, is_recurring: false, completed_at: new Date().toISOString() }));
@@ -128,11 +128,13 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await expect(toaster).toHaveAttribute('data-sonner-theme', theme);
   const undo = page.getByRole('button', { name: 'Undo', exact: true });
   // Keep the same live notification while changing the app theme both ways.
-  const themeToggle = page.getByRole('button', { name: 'Toggle dark mode' });
-  await themeToggle.click();
+  const themeToggle = page.getByRole('button', { name: /^Switch to (light|dark) mode$/ });
+  await themeToggle.focus();
+  await page.keyboard.press('Enter');
   await expect(toaster).toHaveAttribute('data-sonner-theme', theme === 'dark' ? 'light' : 'dark');
   await expect(undo).toBeVisible();
-  await themeToggle.click();
+  await themeToggle.focus();
+  await page.keyboard.press('Enter');
   await expect(toaster).toHaveAttribute('data-sonner-theme', theme);
   if (theme === 'dark') {
     await expect(undo).toHaveCSS('background-color', 'rgb(0, 193, 119)');

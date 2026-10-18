@@ -39,21 +39,19 @@
   --area-personal-foreground: #a7553c;
   --area-personal-background: #efded3;
 
-  --status-backlog: #a1a1aa;
-  --status-priority_backlog: #f59e0b;
+  --status-backlog: #71717a;
+  --status-priority_backlog: #a86408;
   --status-research: #8b5cf6;
-  --status-waiting: #0ea5e9;
-  --status-in_progress: #2563eb;
-  --status-review: #14b8a6;
-  --status-complete: #10b981;
-  --status-canceled: #a1a1aa;
+  --status-waiting: #0f766e;
+  --status-in_progress: #0066ff;
+  --status-complete: #008751;
+  --status-canceled: #71717a;
 
   /* Card promotion buttons use the dark-mode palette in both themes. */
   --card-action-priority_backlog: #fbbf24;
   --card-action-research: #a78bfa;
-  --card-action-waiting: #38bdf8;
-  --card-action-in_progress: #7aa2f7;
-  --card-action-review: #2dd4bf;
+  --card-action-waiting: #2dd4bf;
+  --card-action-in_progress: #4d94ff;
   --card-action-complete: #34d399;
 
   color-scheme: light;
@@ -90,14 +88,13 @@
   --area-personal-foreground: #e5a48f;
   --area-personal-background: #392b29;
 
-  --status-backlog: #71717a;
+  --status-backlog: #91919b;
   --status-priority_backlog: #fbbf24;
   --status-research: #a78bfa;
-  --status-waiting: #38bdf8;
-  --status-in_progress: #7aa2f7;
-  --status-review: #2dd4bf;
+  --status-waiting: #2dd4bf;
+  --status-in_progress: #4d94ff;
   --status-complete: #34d399;
-  --status-canceled: #71717a;
+  --status-canceled: #91919b;
 
   color-scheme: dark;
 }
@@ -128,7 +125,6 @@
   --color-status-research: var(--status-research);
   --color-status-waiting: var(--status-waiting);
   --color-status-in_progress: var(--status-in_progress);
-  --color-status-review: var(--status-review);
   --color-status-complete: var(--status-complete);
   --color-status-canceled: var(--status-canceled);
 }
@@ -271,7 +267,6 @@ textarea::placeholder {
 .status-dot-research { background: var(--status-research); }
 .status-dot-waiting { background: var(--status-waiting); }
 .status-dot-in_progress { background: var(--status-in_progress); }
-.status-dot-review { background: var(--status-review); }
 .status-dot-complete { background: var(--status-complete); }
 .status-dot-canceled { background: var(--status-canceled); }
 
