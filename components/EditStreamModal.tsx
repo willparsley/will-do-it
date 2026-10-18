@@ -1,5 +1,6 @@
 'use client';
 
+import { Dialog, Modal, ModalOverlay } from 'react-aria-components';
 import { AppSelect } from '@/components/AppSelect';
 
 import React, { useState } from 'react';
@@ -125,21 +126,30 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div
-        className="modal-panel max-w-md p-6 max-h-[90dvh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalOverlay isOpen isDismissable={!loading} isKeyboardDismissDisabled={loading}
+      onOpenChange={open => { if (!open) onClose(); }} className="modal-backdrop">
+      <Modal className="modal-panel max-w-md p-6 max-h-[90dvh] overflow-y-auto">
+      <Dialog aria-label="Edit Stream" className="outline-none">
+      <div onKeyDownCapture={event => {
+        // An open dropdown consumes Escape first; a closed select must allow dismissal.
+        if (event.key === 'Escape' && !loading && !event.currentTarget.querySelector('[aria-expanded="true"]')) {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}>
         <h2 className="text-xl font-semibold mb-4 text-ink">
           Edit Stream
         </h2>
 
         <div className="space-y-4">
           <div>
-            <label className="field-label">
+            <label className="field-label" htmlFor="stream-title">
               Title
             </label>
             <input
+              id="stream-title"
+              autoFocus
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -294,6 +304,8 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
           )}
         </div>
       </div>
-    </div>
+      </Dialog>
+      </Modal>
+    </ModalOverlay>
   );
 }

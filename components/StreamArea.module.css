@@ -1,0 +1,65 @@
+.area {
+  --area-foreground: var(--text-secondary);
+  --area-background: var(--surface-sunken);
+}
+.area[data-area='work'] {
+  --area-foreground: var(--area-work-foreground);
+  --area-background: var(--area-work-background);
+}
+.area[data-area='personal'] {
+  --area-foreground: var(--area-personal-foreground);
+  --area-background: var(--area-personal-background);
+}
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--area-foreground);
+}
+.filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--area-background);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  cursor: pointer;
+}
+.filter:hover { border-color: color-mix(in srgb, var(--area-foreground) 40%, transparent); }
+.filter[aria-pressed='true'] { border-color: var(--area-foreground); }
+.titleCell {
+  align-self: stretch;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 8px;
+  color: var(--text);
+}
+.titleCell[data-area='work'],
+.titleCell[data-area='personal'] { background: var(--area-background); }
+.heading { display: flex; align-items: flex-start; gap: 8px; }
+.heading > .icon { margin-top: 4px; }
+.edit {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 100%;
+  border-radius: 3px;
+  text-align: left;
+  font-weight: 500;
+  cursor: pointer;
+}
+.edit:hover { text-decoration: underline; }
+.pencil {
+  flex-shrink: 0;
+  margin-top: 5px;
+  color: var(--text-secondary);
+  opacity: 0;
+}
+.edit:hover .pencil,
+.edit:focus-visible .pencil { opacity: 1; }

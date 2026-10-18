@@ -18,6 +18,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Card, CardStatus, RecurrenceSource, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { AreaFilter } from '@/components/AreaFilter';
+import { StreamTitle } from '@/components/StreamTitle';
 import { AddCardModal } from '@/components/AddCardModal';
 import { Card as CardComponent } from '@/components/Card';
 import { DroppableCell } from '@/components/DroppableCell';
@@ -514,7 +515,7 @@ export default function WillDoIt() {
           horizontally when the number of columns changes between views. */}
       <div className="sticky top-14 z-40 border-b border-line bg-surface/80 backdrop-blur">
         <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:gap-6 items-center justify-center">
-          <div className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
+          <div role="group" aria-label="Board view" className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
             {VIEWS.map((v) => (
               <button
                 key={v.id}
@@ -603,21 +604,7 @@ export default function WillDoIt() {
                       className="grid gap-3"
                       style={{ gridTemplateColumns: gridColumns }}
                     >
-                      <div className="pr-4">
-                        <div className="font-medium flex flex-wrap items-center gap-2 text-ink">
-                          <span className="cursor-pointer hover:underline break-words min-w-0" onClick={() => stream.title !== "Uncategorized" && setEditingStream(stream)}>{stream.title}</span>
-                          {stream.area !== 'neutral' && (
-                            <span className="text-[10px] px-1.5 py-px rounded bg-sunken text-ink-muted">
-                              {stream.area}
-                            </span>
-                          )}
-                          {stream.state !== 'in_progress' && (
-                            <span className="text-[10px] px-1.5 py-px rounded bg-sunken text-ink-muted">
-                              {stream.state === 'complete' ? 'Complete' : 'Canceled'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                      <StreamTitle stream={stream} onEdit={() => setEditingStream(stream)} />
 
                       {columns.map((status) => {
                         const cellCards = streamCards.filter((c) => c.status === status);
