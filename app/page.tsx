@@ -4,6 +4,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { AppSelect } from '@/components/AppSelect';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { 
   DndContext, 
   pointerWithin,
@@ -27,7 +28,7 @@ import { EditCardModal } from '@/components/EditCardModal';
 import { EditRecurrenceModal } from '@/components/EditRecurrenceModal';
 import { AddStreamModal } from '@/components/AddStreamModal';
 import { EditStreamModal } from '@/components/EditStreamModal';
-import { Plus } from 'lucide-react';
+import { ArrowUpRight, Plus } from 'lucide-react';
 import { AccountMenu } from '@/components/AccountMenu';
 import { TooltipButton } from '@/components/TooltipButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -585,7 +586,9 @@ export default function WillDoIt() {
               data-status-headers
               style={{ gridTemplateColumns: gridColumns }}
             >
-              <div className="font-medium text-sm px-3 text-ink-soft">Stream</div>
+              <Link href="/streams" aria-label="View all streams" className="font-medium text-sm px-3 min-h-11 flex items-center gap-2 rounded text-ink-soft hover:text-ink hover:underline focus-ring">
+                Stream <ArrowUpRight size={14} aria-hidden="true" />
+              </Link>
               {columns.map((status) => (
                 <div key={status} className="status-column">
                   <StatusHeader status={status} />
