@@ -28,10 +28,10 @@ for(const theme of ['light','dark']) for(const action of ['logout','switch-accou
       return route.fulfill({json:url.pathname.includes('/rpc/')?0:current?.id===user.id?(url.pathname.endsWith('/streams')?streams:url.pathname.endsWith('/cards')?cards:[]):(current && url.pathname.endsWith('/streams')?[{...streams[1],id:'other-unc',user_id:current.id}]:[])});
     }
     if(url.hostname!=='app.test')return route.abort();
-    const publicFile=url.pathname.startsWith('/branding/')?'/public'+url.pathname:null;
+    const publicFile=url.pathname.startsWith('/branding/')?'/public'+url.pathname:['/apple-icon.png','/icon.svg','/favicon.ico'].includes(url.pathname)?'/app'+url.pathname:null;
     const rsc=route.request().headers()['rsc']==='1';
     const asset=url.pathname.startsWith('/_next/static/')?'/'+url.pathname.slice('/_next/'.length):'/server/app/'+(url.pathname==='/'?'index':url.pathname.slice(1))+(rsc?'.rsc':'.html');
-    const contentType=rsc?'text/x-component':url.pathname.endsWith('.css')?'text/css':url.pathname.endsWith('.js')?'application/javascript':url.pathname.endsWith('.woff2')?'font/woff2':url.pathname.endsWith('.svg')?'image/svg+xml':'text/html';
+    const contentType=rsc?'text/x-component':url.pathname.endsWith('.css')?'text/css':url.pathname.endsWith('.js')?'application/javascript':url.pathname.endsWith('.woff2')?'font/woff2':url.pathname.endsWith('.svg')?'image/svg+xml':url.pathname.endsWith('.png')?'image/png':url.pathname.endsWith('.ico')?'image/x-icon':'text/html';
     return route.fulfill({body:await readFile(root+(publicFile||'/.next'+asset)),contentType});
   });
   const pages=[];
