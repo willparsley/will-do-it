@@ -5,7 +5,7 @@
 
 /* ------------------------------------------------------------------ */
 /* Design tokens                                                       */
-/* Light: soft gray canvas, white cards, one blue accent               */
+/* Light: soft gray canvas, white cards, one green accent               */
 /* Dark:  deep charcoal canvas, slightly lighter cards, tuned accents  */
 /* ------------------------------------------------------------------ */
 :root {
@@ -22,10 +22,10 @@
   --card-blocked-title: #74747d;
   --card-blocked-label: #a45454;
 
-  --accent: #2563eb;
+  --accent: #008751;
   --accent-ink: #ffffff;
-  --accent-soft: #eff6ff;
-  --accent-ring: rgba(37, 99, 235, 0.35);
+  --accent-soft: #edf8f2;
+  --accent-ring: rgba(0, 135, 81, 0.35);
 
   --area-work-foreground: #3f648e;
   --area-work-background: #e1ebf6;
@@ -66,10 +66,10 @@
   --card-blocked-title: #9a9aa3;
   --card-blocked-label: #ce9191;
 
-  --accent: #7aa2f7;
+  --accent: #00c177;
   --accent-ink: #0b1220;
-  --accent-soft: #1e2537;
-  --accent-ring: rgba(122, 162, 247, 0.4);
+  --accent-soft: #193228;
+  --accent-ring: rgba(0, 193, 119, 0.4);
 
   --area-work-foreground: #9bbce0;
   --area-work-background: #26313e;

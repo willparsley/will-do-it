@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import sharp from 'sharp';
 
 test('installation metadata and icons are public and valid', async ({ page, request }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.goto('/login');
   const manifestPath = await page.locator('link[rel="manifest"]').getAttribute('href');
   const response = await request.get(manifestPath);
@@ -10,12 +11,12 @@ test('installation metadata and icons are public and valid', async ({ page, requ
   const manifest = await response.json();
   expect(manifest).toMatchObject({
     id: '/', name: 'Will Do It', start_url: '/', scope: '/', display: 'standalone',
-    theme_color: '#00995B', background_color: '#00995B',
+    theme_color: '#008751', background_color: '#008751',
   });
   await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /viewport-fit=auto/);
   await expect(page.locator('meta[name="color-scheme"]')).toHaveAttribute('content', 'light dark');
   for (const meta of await page.locator('meta[name="theme-color"]').all()) {
-    await expect(meta).toHaveAttribute('content', '#00995B');
+    await expect(meta).toHaveAttribute('content', '#008751');
   }
   expect(manifest.icons.map((icon) => icon.sizes)).toEqual(['192x192', '512x512', '512x512']);
   expect(manifest.icons.find((icon) => icon.purpose === 'maskable')).toBeTruthy();
@@ -78,6 +79,7 @@ test('app theme changes reapply logo green to every system theme tag', async ({ 
       document.documentElement.classList.toggle('dark', dark);
     }, dark);
     await expect.poll(() => page.locator('meta[name="theme-color"]').evaluateAll(tags => tags.map(meta => meta.content)))
-      .toEqual(['#00995B', '#00995B']);
+      .toEqual(dark ? ['#00C177', '#00C177'] : ['#008751', '#008751']);
+    await expect(page.getByRole('button', { name: 'Send magic link' })).toHaveCSS('background-color', dark ? 'rgb(0, 193, 119)' : 'rgb(0, 135, 81)');
   }
 });
