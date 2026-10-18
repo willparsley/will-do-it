@@ -17,6 +17,7 @@ import {
   DragOverlay,
 } from '@dnd-kit/core';
 import { createClient } from '@/lib/supabase/client';
+import { watchAccount } from '@/lib/supabase/account-boundary';
 import { Stream, Card, CardStatus, RecurrenceSource, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { AreaFilter } from '@/components/AreaFilter';
 import { StreamTitle } from '@/components/StreamTitle';
@@ -55,6 +56,7 @@ export default function WillDoIt() {
   const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('week');
   const [hideRecurring, setHideRecurring] = useState(false);
   const loadSequence = useRef(0);
+  const accountActive = useRef(true);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
   const [view, setView] = useState<View>('activated');
   const [initialLoading, setInitialLoading] = useState(true);
@@ -81,18 +83,21 @@ export default function WillDoIt() {
   );
 
   const loadData = useCallback(async (userId: string, processTasks = true) => {
+    if (!accountActive.current) return;
     const sequence = ++loadSequence.current;
     // Keep the workspace mounted during mutation-triggered refreshes. Only the
     // first load needs a full-screen placeholder; later loads update it in place.
     try {
       const { data: streamsData, error: streamsError } = await supabase
         .from('streams').select('*').eq('user_id', userId).order('position', { ascending: true });
+      if (sequence !== loadSequence.current) return;
       if (streamsError) throw streamsError;
       let loadedStreams = (streamsData || []) as Stream[];
       if (!loadedStreams.some(s => s.title === 'Uncategorized')) {
         const { data: uncategorized, error } = await supabase.from('streams').insert({
           user_id: userId, title: 'Uncategorized', state: 'in_progress', area: 'neutral', position: 999,
         }).select().single<Stream>();
+        if (sequence !== loadSequence.current) return;
         if (error) throw error;
         loadedStreams = [...loadedStreams, uncategorized];
       }
@@ -107,14 +112,17 @@ export default function WillDoIt() {
       const legacyIds = loadedStreams.filter(s => String(s.state) === 'backlog').map(s => s.id);
       if (legacyIds.length > 0) {
         const { error } = await supabase.from('streams').update({ state: 'in_progress' }).in('id', legacyIds);
+        if (sequence !== loadSequence.current) return;
         if (error) throw error;
         loadedStreams = loadedStreams.map(s => legacyIds.includes(s.id) ? { ...s, state: 'in_progress' } : s);
       }
       if (processTasks) {
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const { error: recurrenceError } = await supabase.rpc('generate_recurring_instances', { p_timezone: timezone });
+        if (sequence !== loadSequence.current) return;
         if (recurrenceError) toast.error(errorMessage(recurrenceError, 'Could not refresh recurring tasks'));
         const { error: promotionError } = await supabase.rpc('promote_due_cards', { p_timezone: timezone });
+        if (sequence !== loadSequence.current) return;
         if (promotionError) toast.error(errorMessage(promotionError, 'Could not refresh reminders'));
       }
 
@@ -137,12 +145,33 @@ export default function WillDoIt() {
   }, []);
 
   useEffect(() => {
+    accountActive.current = true;
+    const cancelLoads = () => { accountActive.current = false; ++loadSequence.current; };
+    const boundary = watchAccount(supabase, signedOut => {
+      accountActive.current = false;
+      ++loadSequence.current;
+      setUser(null);
+      setCards([]);
+      setStreams([]);
+      setRecurrenceSources([]);
+      setCreationContext(null);
+      setEditingCard(null);
+      setEditingRecurrenceId(null);
+      setShowStreamModal(false);
+      setEditingStream(null);
+      setSelectedCardId(null);
+      setActiveDragCard(null);
+      toast.dismiss();
+      window.location.replace(signedOut ? '/login' : '/');
+    });
     const init = async () => {
       const { data: { user }, error } = await supabase.auth.getUser();
+      if (!boundary.active) return;
       if (error || !user) {
         window.location.replace('/login');
         return;
       }
+      if (!boundary.acceptUser(user.id)) return;
       try {
         const preferences = JSON.parse(localStorage.getItem(`will-do-it:workspace:${user.id}`) || 'null');
         if (preferences && typeof preferences === 'object') {
@@ -159,6 +188,10 @@ export default function WillDoIt() {
       await loadData(user.id);
     };
     void init();
+    return () => {
+      cancelLoads();
+      boundary.dispose();
+    };
   }, [loadData]);
 
   const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod; hideRecurring: boolean }>) => {
@@ -251,24 +284,27 @@ export default function WillDoIt() {
   };
 
   const showUndoToast = (message: string, undoId: string) => {
+    if (!accountActive.current) return;
     let undoing = false;
     const toastId = toast.success(message, {
       duration: 8000,
       action: {
         label: 'Undo',
         onClick: async () => {
-          if (undoing || !user) return;
+          if (undoing || !user || !accountActive.current) return;
           undoing = true;
           // Sonner dismisses the action toast after this callback returns.
           // Use a separate toast for the asynchronous result.
           const pendingId = toast.loading('Undoing…');
           try {
             const { error } = await supabase.rpc('undo_card_action', { p_undo_id: undoId });
+            if (!accountActive.current) return;
             if (error) throw error;
             // Preserve the restored status until the next normal refresh.
             await loadData(user.id, false);
             toast.success('Undone', { id: pendingId });
           } catch (error) {
+            if (!accountActive.current) return;
             toast.error(errorMessage(error, 'Could not undo'), { id: pendingId });
             await loadData(user.id, false);
           } finally {
@@ -291,6 +327,7 @@ export default function WillDoIt() {
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    if (!accountActive.current) return;
     setActiveDragCard(null);
 
     const { active, over } = event;
@@ -338,6 +375,7 @@ export default function WillDoIt() {
       });
       await loadData(user.id, false);
     } catch (err) {
+      if (!accountActive.current) return;
       console.error(err);
       setCards(cards);
       toast.error(errorMessage(err, 'Move failed'));
@@ -346,11 +384,13 @@ export default function WillDoIt() {
   };
 
   const handleCardCreated = async (newCard: Card) => {
+    if (!accountActive.current) return;
     setCards((prev) => [...prev, newCard]);
     if (user) await loadData(user.id);
   };
 
   const handleCardUpdated = async (updatedCard: Card) => {
+    if (!accountActive.current) return;
     setCards((prev) =>
       prev.map((c) => (c.id === updatedCard.id ? hydrateRecurringCards([updatedCard], recurrenceSources)[0] : c))
     );
@@ -360,10 +400,12 @@ export default function WillDoIt() {
   };
 
   const handleCardDeleted = (cardId: string) => {
+    if (!accountActive.current) return;
     setCards((prev) => prev.filter((c) => c.id !== cardId));
   };
 
   const handleStreamCreated = (newStream: Stream) => {
+    if (!accountActive.current) return;
     setStreams((prev) => {
       const unc = prev.find((s) => s.title === 'Uncategorized');
       const others = prev.filter((s) => s.title !== 'Uncategorized');
@@ -374,6 +416,7 @@ export default function WillDoIt() {
   };
 
   const handleStreamUpdated = async (updatedStream: Stream) => {
+    if (!accountActive.current) return;
     setStreams((prev) =>
       prev.map((s) => (s.id === updatedStream.id ? updatedStream : s))
     );
@@ -381,6 +424,7 @@ export default function WillDoIt() {
   };
 
   const handleStreamDeleted = async (streamId: string, targetStreamId?: string) => {
+    if (!accountActive.current) return;
     if (targetStreamId) {
       setCards((prev) =>
         prev.map((c) =>
@@ -393,6 +437,7 @@ export default function WillDoIt() {
   };
 
   const handleCompleteCard = async (cardId: string) => {
+    if (!accountActive.current) return;
     setSelectedCardId(null);
     const card = cards.find(c => c.id === cardId);
     if (!card) return;
@@ -410,6 +455,7 @@ export default function WillDoIt() {
       if (user) await loadData(user.id, false);
       showUndoToast('Card completed', result.undo_id);
     } catch (err) {
+      if (!accountActive.current) return;
       console.error(err);
       setCards(prev => prev.map(c => c.id === cardId ? card : c));
       toast.error(errorMessage(err, 'Failed to complete'));
@@ -418,6 +464,7 @@ export default function WillDoIt() {
   };
 
   const handleAdvanceCard = async (cardId: string) => {
+    if (!accountActive.current) return;
     setSelectedCardId(null);
     const card = cards.find(c => c.id === cardId);
     if (!card) return;
@@ -441,6 +488,7 @@ export default function WillDoIt() {
       if (user) await loadData(user.id, false);
       showUndoToast(`Moved to ${STATUS_LABELS[next]}`, result.undo_id);
     } catch (err) {
+      if (!accountActive.current) return;
       console.error(err);
       // Revert on failure
       setCards(prev => prev.map(c =>

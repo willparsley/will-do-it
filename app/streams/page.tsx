@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import { ArrowLeft, Pencil } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { watchAccount } from '@/lib/supabase/account-boundary';
+import { toast } from 'sonner';
 import { errorMessage } from '@/lib/errors';
 import { streamsForDisplay, UNCATEGORIZED_TITLE, type Area, type Stream } from '@/lib/types';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -31,14 +33,21 @@ export default function StreamsPage() {
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
   const [showStreamModal, setShowStreamModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
+  const boundaryRef = useRef<ReturnType<typeof watchAccount> | null>(null);
+  const loadSequence = useRef(0);
 
   const load = useCallback(async () => {
+    const boundary = boundaryRef.current;
+    if (!boundary?.active) return;
+    const sequence = ++loadSequence.current;
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (!boundary.active || sequence !== loadSequence.current) return;
       if (authError || !user) {
         window.location.replace('/login');
         return;
       }
+      if (!boundary.acceptUser(user.id)) return;
       setUser(user);
       try {
         const preferences = JSON.parse(localStorage.getItem(`will-do-it:workspace:${user.id}`) || 'null');
@@ -47,18 +56,34 @@ export default function StreamsPage() {
         // Unavailable storage must not prevent loading streams.
       }
       const { data, error } = await supabase.from('streams').select('*').eq('user_id', user.id);
+      if (!boundary.active || sequence !== loadSequence.current) return;
       if (error) throw error;
       // Older accounts may still contain the retired stream backlog state.
       setStreams((data || []).map((stream: Stream) => String(stream.state) === 'backlog'
         ? { ...stream, state: 'in_progress' } : stream));
     } catch (error) {
-      setError(errorMessage(error, 'Could not load your streams'));
+      if (boundary.active && sequence === loadSequence.current) setError(errorMessage(error, 'Could not load your streams'));
     } finally {
-      setLoading(false);
+      if (boundary.active && sequence === loadSequence.current) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void Promise.resolve().then(load); }, [load]);
+  useEffect(() => {
+    const cancelLoads = () => { ++loadSequence.current; };
+    const boundary = watchAccount(supabase, signedOut => {
+      ++loadSequence.current;
+      setUser(null);
+      setStreams([]);
+      setEditingStream(null);
+      setShowStreamModal(false);
+      setError(null);
+      toast.dismiss();
+      window.location.replace(signedOut ? '/login' : '/streams');
+    });
+    boundaryRef.current = boundary;
+    void Promise.resolve().then(load);
+    return () => { boundary.dispose(); cancelLoads(); };
+  }, [load]);
 
   const changeArea = (area: Area | 'all') => {
     setActiveFilter(area);

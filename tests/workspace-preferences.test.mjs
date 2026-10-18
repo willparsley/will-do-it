@@ -4,7 +4,7 @@ import { driver, nodes, button } from './helpers/react-driver.mjs';
 
 async function workspace(userId='user') {
   const supabase={
-    auth:{async getUser(){return {data:{user:{id:userId}}};}},
+    auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user:{id:userId}}};}},
     async rpc(){return {data:0};},
     from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:[]});},async order(){return {data:[{id:'unc',title:'Uncategorized',state:'in_progress',area:'neutral',position:999}]};}};},
   };
