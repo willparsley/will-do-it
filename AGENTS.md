@@ -139,6 +139,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 ## Git Workflow
 - Feature branches (`feat/`, `fix/`, `chore/`, etc.)
 - Conventional Commits
+- **User review before PRs.** After implementing and validating changes, always ask the user to review them and wait for explicit approval before drafting or creating a PR, including a draft PR. Approval to implement changes is not approval to draft a PR. If the user requests further changes, complete them and ask for review again before proceeding with the PR.
 - PRs for changes (even solo) for review + clean history. Vercel automatic deployments currently run only for `main`; preview deployments are disabled in `vercel.json`. Run local checks before merging.
 - Squash merge to main preferred for clean main history
 - **Commit early and often.** Commit each self-contained change as soon as it
