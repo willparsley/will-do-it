@@ -526,7 +526,7 @@ export default function WillDoIt() {
                 key={v.id}
                 onClick={() => { setView(v.id); savePreferences({ view: v.id }); }}
                 aria-pressed={view === v.id}
-                className={`${blackJack.className} px-4 sm:px-6 py-2 text-xl leading-7 transition-colors whitespace-nowrap ${
+                className={`${blackJack.className} px-4 sm:px-6 py-2 text-xl leading-7 uppercase transition-colors whitespace-nowrap ${
                   view === v.id
                     ? 'bg-accent text-accent-ink'
                     : 'text-ink-soft hover:text-ink hover:bg-sunken'
