@@ -5,32 +5,35 @@
 
 /* ------------------------------------------------------------------ */
 /* Design tokens                                                       */
-/* Light: soft gray canvas, white cards, one green accent               */
+/* Light: soft neutral canvas, off-white cards, one green accent      */
 /* Dark:  deep charcoal canvas, slightly lighter cards, tuned accents  */
 /* ------------------------------------------------------------------ */
 :root {
-  --canvas: #eeeeef;
-  --surface: #ffffff;
-  --surface-sunken: #f7f7f8;
+  --canvas: #e2e5e3;
+  --surface: #f7f8f6;
+  --surface-sunken: #eceeec;
+  --surface-chrome: #e9ece9;
+  --surface-field: #eef0ed;
 
-  --border-subtle: #e4e4e7;
-  --border-strong: #d4d4d8;
+  --border-subtle: #d3d8d3;
+  --border-strong: #aeb8af;
 
-  --text: #18181b;
-  --text-secondary: #52525b;
-  --text-muted: #a1a1aa;
+  --text: #252b28;
+  --text-secondary: #505b53;
+  --text-muted: #5d6960;
   --card-blocked-title: #74747d;
   --card-blocked-label: #a45454;
 
   --accent: #008751;
+  --accent-label: #007044;
   --accent-ink: #ffffff;
   --accent-soft: #edf8f2;
   --accent-ring: rgba(0, 135, 81, 0.35);
 
   --area-work-foreground: #3f648e;
-  --area-work-background: #e1ebf6;
+  --area-work-background: #dae4ec;
   --area-personal-foreground: #a7553c;
-  --area-personal-background: #f7e5dc;
+  --area-personal-background: #efded3;
 
   --status-backlog: #a1a1aa;
   --status-priority_backlog: #f59e0b;
@@ -56,6 +59,8 @@
   --canvas: #17171a;
   --surface: #232327;
   --surface-sunken: #1d1d21;
+  --surface-chrome: #232327;
+  --surface-field: #232327;
 
   --border-subtle: #2c2c31;
   --border-strong: #3f3f46;
@@ -67,6 +72,7 @@
   --card-blocked-label: #ce9191;
 
   --accent: #00c177;
+  --accent-label: #00c177;
   --accent-ink: #0b1220;
   --accent-soft: #193228;
   --accent-ring: rgba(0, 193, 119, 0.4);
@@ -94,6 +100,8 @@
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-sunken: var(--surface-sunken);
+  --color-chrome: var(--surface-chrome);
+  --color-field: var(--surface-field);
 
   --color-line: var(--border-subtle);
   --color-line-strong: var(--border-strong);
@@ -103,6 +111,7 @@
   --color-ink-muted: var(--text-muted);
 
   --color-accent: var(--accent);
+  --color-accent-label: var(--accent-label);
   --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
 
@@ -293,7 +302,7 @@ textarea::placeholder {
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
   border: 1px solid var(--border-strong);
-  background: var(--surface);
+  background: var(--surface-field);
   color: var(--text);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }

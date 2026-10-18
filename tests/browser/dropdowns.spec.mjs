@@ -52,6 +52,7 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
  assert.ok(modal.x >= 16 && modal.x + modal.width <= page.viewportSize().width - 16);
  assert.ok(modal.y >= 16 && modal.y + modal.height <= page.viewportSize().height - 16);
  assert.equal(triggerBox.height,42);assert.equal(triggerBox.height,inputBox.height);
+ for (const control of [trigger, input]) await expect(control).toHaveCSS('background-color', theme === 'dark' ? 'rgb(35, 35, 39)' : 'rgb(238, 240, 237)');
  assert.equal(await trigger.evaluate(el=>getComputedStyle(el).display),'flex');
  async function assertValueCentered(control) {
    const alignment = await control.evaluate(el => {
@@ -72,7 +73,7 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
  await trigger.click();await page.getByRole('listbox').waitFor();
  const menu=page.locator('[data-trigger="Select"]');
  const menuStyle=await menu.evaluate(el=>{const s=getComputedStyle(el);return {background:s.backgroundColor,border:s.borderWidth,shadow:s.boxShadow,font:s.fontFamily}});
- assert.equal(menuStyle.background,theme==='dark'?'rgb(35, 35, 39)':'rgb(255, 255, 255)');
+ assert.equal(menuStyle.background,theme==='dark'?'rgb(35, 35, 39)':'rgb(247, 248, 246)');
  assert.equal(menuStyle.border,'1px');assert.notEqual(menuStyle.shadow,'none');assert.match(menuStyle.font,/Geist/);
  const menuBox=await menu.boundingBox();assert.ok(menuBox.width >= triggerBox.width && menuBox.width >= Math.min(192, page.viewportSize().width - 24));
  assert.ok(menuBox.x>=0&&menuBox.x+menuBox.width<=page.viewportSize().width&&menuBox.y+menuBox.height<=page.viewportSize().height);
