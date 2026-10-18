@@ -478,8 +478,8 @@ export default function WillDoIt() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b border-line bg-chrome/80 backdrop-blur sticky top-0 z-50">
+    <div className="h-dvh overflow-hidden flex flex-col">
+      <header className="relative shrink-0 border-b border-line bg-chrome/80 backdrop-blur z-50">
         <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-3">
             <h1 className="shrink-0"><BrandLogo /></h1>
@@ -513,7 +513,7 @@ export default function WillDoIt() {
 
       {/* View switcher lives in its own stable bar so it never shifts
           horizontally when the number of columns changes between views. */}
-      <div className="sticky top-14 z-40 border-b border-line bg-chrome/80 backdrop-blur">
+      <div className="relative shrink-0 z-40 border-b border-line bg-chrome/80 backdrop-blur">
         <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:gap-6 items-center justify-center">
           <div role="group" aria-label="Board view" className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
             {VIEWS.map((v) => (
@@ -570,7 +570,9 @@ export default function WillDoIt() {
         </div>
       </div>
 
-      <div className="w-full overflow-x-auto px-4 sm:px-6 lg:px-8 py-6 flex-1">
+      {/* One scroll container keeps sticky labels aligned on both axes, while
+          the controls above take their natural height even when they wrap. */}
+      <div className="w-full min-h-0 overflow-x-auto overflow-y-auto scroll-pt-14 px-4 sm:px-6 lg:px-8 pb-6 flex-1" role="region" aria-label="Task board" tabIndex={0}>
         <DndContext
           sensors={sensors}
           // Tall rows can have centers farther away than a neighboring row.
@@ -582,7 +584,8 @@ export default function WillDoIt() {
         >
           <div className="space-y-3 mx-auto" style={{ maxWidth: matrixMaxWidth, minWidth: 34 + streamColWidth + columns.length * 180 + columns.length * GRID_GAP }}>
             <div
-              className="grid gap-3 px-4 border border-transparent"
+              className="sticky top-0 z-20 grid gap-3 items-center px-4 py-2 bg-canvas border border-transparent border-b-line shadow-sm"
+              data-status-headers
               style={{ gridTemplateColumns: gridColumns }}
             >
               <div className="font-medium text-sm px-3 text-ink-soft">Stream</div>
