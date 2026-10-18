@@ -71,7 +71,9 @@ for (const theme of ['light', 'dark']) test(`cell add defaults, saves, focus, an
         const style = getComputedStyle(document.documentElement);
         const token = name => style.getPropertyValue(name).trim();
         const luminance = hex => {
-          const rgb = hex.slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255)
+          const digits = hex.slice(1);
+          const expanded = digits.length === 3 ? [...digits].map(channel => channel + channel).join('') : digits;
+          const rgb = expanded.match(/../g).map(channel => parseInt(channel, 16) / 255)
             .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
           return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
         };
