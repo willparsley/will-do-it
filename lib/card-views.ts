@@ -47,9 +47,15 @@ export function cardsForStream(cards: Card[], streamId: string, view: View, peri
     if (displayStreamId(card) !== streamId || !statuses.includes(card.status)) return false;
     if (!isTerminal(card) || !cutoff) return true;
     return !!card.completed_at && new Date(card.completed_at).getTime() >= cutoff.getTime();
-  }).sort((a, b) => view === 'archive'
-    ? new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime()
-    : a.position - b.position);
+  }).sort((a, b) => {
+    const aTerminal = isTerminal(a);
+    const bTerminal = isTerminal(b);
+    // Columns render separately; keep a consistent order between the two sets.
+    if (aTerminal !== bTerminal) return aTerminal ? -1 : 1;
+    return aTerminal
+      ? new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime()
+      : a.position - b.position;
+  });
 }
 
 export interface ArchiveGroup {
