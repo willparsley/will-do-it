@@ -29,6 +29,11 @@ async function setup(page, theme, signedIn = true, fail = false) {
     if (url.origin === new URL(supabaseUrl).origin) {
       if (url.pathname.endsWith('/logout')) return route.fulfill({ json: {} });
       if (url.pathname.endsWith('/streams')) {
+        if (route.request().method() === 'POST') {
+          const stream = { ...route.request().postDataJSON(), id: 'new-stream' };
+          fixtures.push(stream);
+          return route.fulfill({ json: stream });
+        }
         if (fail) { fail = false; return route.fulfill({ status: 400, json: { message: 'Streams unavailable' } }); }
         return route.fulfill({ json: fixtures });
       }
@@ -99,4 +104,35 @@ test('signed-out streams redirects to sign-in', async ({ page }) => {
   await page.goto('http://app.test/streams');
   await expect(page).toHaveURL('http://app.test/login');
   await expect(page.locator('main section')).toHaveCount(0);
+});
+
+for (const theme of ['light', 'dark']) test(`area filtering and new streams in ${theme}`, async ({ page }, testInfo) => {
+  await setup(page, theme);
+  await page.goto('http://app.test/streams');
+  const filter = page.getByRole('group', { name: 'Area filter', exact: true });
+  const sections = page.locator('main section');
+  await expect(sections).toHaveCount(3);
+  await filter.getByRole('button', { name: 'Work', exact: true }).click();
+  await expect(sections.locator('h2')).toHaveText(['Active (2)', 'Complete (2)', 'Canceled (0)']);
+  await expect(page.getByRole('button', { name: 'Edit stream Alpha', exact: true })).toHaveCount(0);
+  await expect(sections.nth(0).getByText('Uncategorized', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(filter.getByRole('button', { name: 'Work', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await filter.getByRole('button', { name: 'Personal', exact: true }).click();
+  await expect(sections.locator('h2')).toHaveText(['Active (2)', 'Complete (1)', 'Canceled (1)']);
+  await expect(page.getByRole('button', { name: 'Edit stream zebra', exact: true })).toHaveCount(0);
+  await filter.getByRole('button', { name: 'Work', exact: true }).click();
+  await page.getByRole('button', { name: 'New Stream', exact: true }).click();
+  await page.getByPlaceholder('e.g. Personal Projects, Work Q4').fill('Brand new plans');
+  await page.getByRole('button', { name: 'Create Stream', exact: true }).click();
+  await expect(page.getByPlaceholder('e.g. Personal Projects, Work Q4')).toHaveCount(0);
+  // A personal stream created from the Work filter becomes visible immediately.
+  await expect(filter.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(sections.nth(0).locator('li')).toHaveText(['Alpha', 'Brand new plans', 'zebraNotes for an empty stream', 'Uncategorized']);
+  await filter.getByRole('button', { name: 'Personal', exact: true }).click();
+  await expect(sections.nth(0).locator('li')).toHaveText(['Alpha', 'Brand new plans', 'Uncategorized']);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('streams-controls.png'), fullPage: true });
+  await page.getByRole('link', { name: 'Back to workspace' }).click();
+  await expect(filter.getByRole('button', { name: 'Personal', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });

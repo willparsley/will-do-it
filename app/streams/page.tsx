@@ -6,12 +6,15 @@ import type { User } from '@supabase/supabase-js';
 import { ArrowLeft, Pencil } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { errorMessage } from '@/lib/errors';
-import { streamsForDisplay, UNCATEGORIZED_TITLE, type Stream } from '@/lib/types';
+import { streamsForDisplay, UNCATEGORIZED_TITLE, type Area, type Stream } from '@/lib/types';
 import { BrandLogo } from '@/components/BrandLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AccountMenu } from '@/components/AccountMenu';
 import { AreaIndicator } from '@/components/AreaIndicator';
 import { EditStreamModal } from '@/components/EditStreamModal';
+import { AddStreamModal } from '@/components/AddStreamModal';
+import { AreaFilter } from '@/components/AreaFilter';
+import { TooltipButton } from '@/components/TooltipButton';
 
 const supabase = createClient();
 const sections = [
@@ -26,6 +29,8 @@ export default function StreamsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
+  const [showStreamModal, setShowStreamModal] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
 
   const load = useCallback(async () => {
     try {
@@ -35,6 +40,12 @@ export default function StreamsPage() {
         return;
       }
       setUser(user);
+      try {
+        const preferences = JSON.parse(localStorage.getItem(`will-do-it:workspace:${user.id}`) || 'null');
+        if (preferences && ['all', 'work', 'personal'].includes(preferences.area)) setActiveFilter(preferences.area);
+      } catch {
+        // Unavailable storage must not prevent loading streams.
+      }
       const { data, error } = await supabase.from('streams').select('*').eq('user_id', user.id);
       if (error) throw error;
       // Older accounts may still contain the retired stream backlog state.
@@ -49,6 +60,19 @@ export default function StreamsPage() {
 
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
 
+  const changeArea = (area: Area | 'all') => {
+    setActiveFilter(area);
+    if (!user) return;
+    try {
+      const key = `will-do-it:workspace:${user.id}`;
+      let preferences = {};
+      try { preferences = JSON.parse(localStorage.getItem(key) || '{}'); } catch { /* Replace invalid saved preferences. */ }
+      localStorage.setItem(key, JSON.stringify({ ...preferences, area }));
+    } catch {
+      // Filtering still works when storage is unavailable.
+    }
+  };
+
   if (!user && !error) return <main className="min-h-dvh flex items-center justify-center text-ink-soft">Loading your streams...</main>;
 
   return (
@@ -56,7 +80,12 @@ export default function StreamsPage() {
       <header className="border-b border-line bg-chrome/80">
         <div className="px-4 sm:px-6 lg:px-8 min-h-14 py-1 flex flex-wrap items-center justify-between gap-2">
           <Link href="/" aria-label="Will Do It workspace" className="focus-ring rounded"><BrandLogo /></Link>
-          <div className="flex items-center gap-2"><ThemeToggle /><AccountMenu email={user?.email} /></div>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+            <AreaFilter value={activeFilter} onChange={changeArea} />
+            <TooltipButton tooltip="Create a stream to organize your cards" onPress={() => setShowStreamModal(true)}
+              isDisabled={!user || loading || !!error} className="btn btn-secondary px-3 py-1.5 text-sm">New Stream</TooltipButton>
+            <ThemeToggle /><AccountMenu email={user?.email} />
+          </div>
         </div>
       </header>
       <main className="max-w-3xl mx-auto px-4 py-8 sm:py-12">
@@ -72,7 +101,8 @@ export default function StreamsPage() {
         </div> : loading ? <p role="status" className="text-ink-soft">Loading your streams...</p> : (
           <div className="space-y-8">
             {sections.map(({ state, label }) => {
-              const items = streamsForDisplay(streams.filter(stream => stream.state === state));
+              const items = streamsForDisplay(streams.filter(stream => stream.state === state &&
+                (activeFilter === 'all' || stream.area === activeFilter || stream.area === 'neutral')));
               return <section key={state} aria-labelledby={`streams-${state}`}>
                 <h2 id={`streams-${state}`} className="flex items-center gap-2 text-lg font-semibold mb-3">
                   {label} <span className="text-sm font-normal text-ink-soft">({items.length})</span>
@@ -102,6 +132,11 @@ export default function StreamsPage() {
           </div>
         )}
       </main>
+      {showStreamModal && <AddStreamModal streams={streams} onClose={() => setShowStreamModal(false)}
+        onStreamCreated={stream => {
+          setStreams(current => [...current, stream]);
+          if (activeFilter !== 'all' && stream.area !== activeFilter && stream.area !== 'neutral') changeArea('all');
+        }} />}
       {editingStream && <EditStreamModal stream={editingStream} streams={streams} onClose={() => setEditingStream(null)}
         onStreamUpdated={updated => setStreams(current => current.map(stream => stream.id === updated.id ? updated : stream))}
         onStreamDeleted={id => setStreams(current => current.filter(stream => stream.id !== id))} />}
