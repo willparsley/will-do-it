@@ -19,6 +19,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
     { id: 'first', title: 'First task', status: 'waiting' },
     { id: 'second', title: 'Second task', status: 'review' },
     { id: 'finished', title: 'Finished task', status: 'complete' },
+    { id: 'canceled', title: 'Canceled task', status: 'canceled' },
   ].map(card => ({ ...card, user_id: user.id, stream_id: '0', position: 0, is_recurring: false, completed_at: new Date().toISOString() }));
   let undoCard;
   const calls = [];
@@ -57,6 +58,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await page.goto('http://app.test');
 
   const first = page.locator('.card[data-card-id="first"]');
+  await expect(first).toHaveCSS('background-color', theme === 'dark' ? 'rgb(41, 41, 46)' : 'rgb(247, 248, 246)');
   const second = page.locator('.card[data-card-id="second"]');
   const editDialog = page.getByRole('dialog', { name: 'Edit Card', exact: true });
   const press = button => isMobile ? button.tap() : button.click();
@@ -122,6 +124,20 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await press(actions.getByRole('button', { name: 'Advance to In Progress', exact: true }));
   await expect(first).not.toHaveAttribute('data-selected');
   await expect(page.getByText('Moved to In Progress', { exact: true })).toBeVisible();
+  const toaster = page.locator('[data-sonner-toaster]');
+  await expect(toaster).toHaveAttribute('data-sonner-theme', theme);
+  const undo = page.getByRole('button', { name: 'Undo', exact: true });
+  // Keep the same live notification while changing the app theme both ways.
+  const themeToggle = page.getByRole('button', { name: 'Toggle dark mode' });
+  await themeToggle.click();
+  await expect(toaster).toHaveAttribute('data-sonner-theme', theme === 'dark' ? 'light' : 'dark');
+  await expect(undo).toBeVisible();
+  await themeToggle.click();
+  await expect(toaster).toHaveAttribute('data-sonner-theme', theme);
+  if (theme === 'dark') {
+    await expect(undo).toHaveCSS('background-color', 'rgb(0, 193, 119)');
+    await expect(undo.locator('..')).toHaveCSS('background-color', 'rgb(25, 50, 40)');
+  }
   expect(calls.filter(call => call.path.endsWith('/save_card_with_undo'))).toHaveLength(1);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(page.getByText('Undone', { exact: true })).toBeVisible();
@@ -138,6 +154,12 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await page.getByRole('group', { name: 'Board view', exact: true }).locator('button[aria-pressed]').filter({ hasText: /^All$/ }).focus();
   await page.keyboard.press('Enter');
   const finished = page.locator('.card[data-card-id="finished"]');
+  const metadata = finished.locator('.card-metadata');
+  await expect(metadata).toHaveCSS('font-size', theme === 'dark' ? '12px' : '10px');
+  await expect(metadata).toHaveCSS('color', theme === 'dark' ? 'rgb(145, 145, 155)' : 'rgb(93, 105, 96)');
+  const canceledRail = page.locator('.card[data-card-id="canceled"] .card-canceled-rail');
+  await expect(canceledRail).toHaveCSS('background-color', theme === 'dark' ? 'rgb(57, 38, 40)' : 'rgb(127, 29, 29)');
+  await expect(canceledRail.locator('svg')).toHaveCSS('color', theme === 'dark' ? 'rgb(217, 148, 148)' : 'rgb(248, 113, 113)');
   await select(finished);
   await expect(finished.getByRole('group').getByRole('button')).toHaveCount(1);
   if (isMobile) await page.touchscreen.tap(5, 5);

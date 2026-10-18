@@ -68,13 +68,13 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
         </p>}
 
         {!isFinished && card.is_recurring && card.last_completed_at && (
-          <div className="text-[10px] text-ink-muted mt-1">
+          <div className="card-metadata text-ink-muted mt-1">
             Last completed on {new Date(card.last_completed_at).toLocaleDateString(undefined, { timeZone: card.recurrence_timezone })}
           </div>
         )}
 
         {isFinished && card.completed_at && (
-          <div className="text-[10px] text-ink-muted mt-1">
+          <div className="card-metadata text-ink-muted mt-1">
             {isComplete ? 'Completed' : 'Canceled'} {new Date(card.completed_at).toLocaleDateString()}
           </div>
         )}
@@ -154,7 +154,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
       {isFinished && (
         <div
           className={`w-9 self-stretch flex items-center justify-center rounded-r-lg ${
-            isComplete ? 'bg-[#285748]' : 'bg-[#7f1d1d]'
+            isComplete ? 'bg-[#285748]' : 'card-canceled-rail'
           }`}
         >
           {isComplete ? (
@@ -168,7 +168,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
             </svg>
           ) : (
             <svg
-              className="h-8 w-8 text-[#f87171]"
+              className="h-8 w-8"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
