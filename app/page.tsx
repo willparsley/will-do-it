@@ -2,6 +2,7 @@
 
 import { BrandLogo } from '@/components/BrandLogo';
 import { AppSelect } from '@/components/AppSelect';
+import localFont from 'next/font/local';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
@@ -38,6 +39,13 @@ import { ArchivePeriod, HISTORY_PERIODS, View, cardsForStream, displayStreamId, 
 import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
+
+const caviarDreams = localFont({
+  src: '../fonts/CaviarDreams_Bold.ttf',
+  weight: '700',
+  style: 'normal',
+  display: 'swap',
+});
 
 const VIEWS = [
   { id: 'activated', label: 'Active' },
@@ -518,7 +526,7 @@ export default function WillDoIt() {
                 key={v.id}
                 onClick={() => { setView(v.id); savePreferences({ view: v.id }); }}
                 aria-pressed={view === v.id}
-                className={`px-4 sm:px-6 py-2 text-base transition-colors whitespace-nowrap ${
+                className={`${caviarDreams.className} px-4 sm:px-6 py-2 text-base leading-6 transition-colors whitespace-nowrap ${
                   view === v.id
                     ? 'bg-accent text-accent-ink'
                     : 'text-ink-soft hover:text-ink hover:bg-sunken'
