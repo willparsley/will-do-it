@@ -49,6 +49,14 @@ Undo snapshots containing Review, and removes Review from the allowed statuses.
 Old app windows attempting to use Review must refresh. Advancing In Progress
 now completes the card through the normal completion and Undo path.
 
+Apply `202610180002_stream_ownership.sql` before deploying the account-isolation
+changes. It requires cards and recurrence sources to reference streams belonging
+to the same user, including direct Data API writes. It stops without changing
+data if existing links cross accounts; repair those links explicitly before
+retrying. Sign-out in another tab clears private pages and drafts; switching
+accounts reloads those pages for the new account. Routine token refreshes keep
+the current workspace and drafts intact.
+
 Generation is serialized per source and keyed by an immutable schedule revision and occurrence date.
 Non-stacking sources keep one pending instance; stacking sources catch up distinct
 missed dates and keep one future instance (at most 1000 dates per refresh).

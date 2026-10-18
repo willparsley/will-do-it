@@ -102,7 +102,7 @@ test('stream deletion uses only the atomic RPC and leaves the modal open on reho
 
 test('weekly intervals remain visible after switching from every-N-days and recurring creation is one atomic request', async () => {
   const notices=notifications(),calls=[];
-  const supabase={auth:{async getUser(){return {data:{user}};}},rpc(name,args){calls.push({name,args});return {async single(){return {data:{...base,title:args.p_title},error:null};}};}};
+  const supabase={auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user}};}},rpc(name,args){calls.push({name,args});return {async single(){return {data:{...base,title:args.p_title},error:null};}};}};
   const ui=driver('components/AddCardModal.tsx','AddCardModal',{streams,onClose(){},onCardCreated(){}},
     {'@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module});
   let tree=ui.render();
@@ -129,7 +129,7 @@ test('workspace refresh calls conditional promotion and hydrates cards before di
   const notices=notifications(),calls=[];
   const source={id:'source',stream_id:'new-stream',base_title:'Walk',last_completed_at:new Date().toISOString(),recurrence_timezone:'America/New_York'};
   const card={...base,status:'complete',completed_at:new Date().toISOString()};
-  const supabase={auth:{async getUser(){return {data:{user},error:null};}},async rpc(name){calls.push(name);return {data:0,error:null};},from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[card]:[source],error:null});},async order(){return {data:streams,error:null};}};}};
+  const supabase={auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user},error:null};}},async rpc(name){calls.push(name);return {data:0,error:null};},from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[card]:[source],error:null});},async order(){return {data:streams,error:null};}};}};
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module,
     '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
@@ -156,7 +156,7 @@ for (const refreshFails of [false,true]) test(`workspace stays visible during a 
   let reads=0,releaseInitial,releaseRefresh;
   let storedCard={...base};
   const supabase={
-    auth:{async getUser(){return {data:{user}};}},
+    auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user}};}},
     async rpc(){return {data:0};},
     from(table){return {
       select(){return this;},
@@ -192,7 +192,7 @@ for(const action of ['complete','advance','drag']) test(`failed stale ${action} 
   const notices=notifications();
   let persisted={...base};
   const source={id:'source',stream_id:'old-stream',base_title:'Walk',recurrence_timezone:'America/New_York'};
-  const supabase={auth:{async getUser(){return {data:{user}};}},rpc(name){
+  const supabase={auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user}};}},rpc(name){
     if(name==='save_card_with_undo') {
       persisted={...base,status:'complete',completed_at:new Date().toISOString()};
       return Promise.resolve({error:{message:'This card changed elsewhere. Refresh and try again.'}});
@@ -232,7 +232,7 @@ for (const operation of ['create', 'edit', 'drag']) {
           due_at: null, remind_at: null, [field]: future.toISOString() };
         let persisted = operation === 'create' ? [] : [card];
         const supabase = {
-          auth: { async getUser() { return { data: { user } }; } },
+          auth: { onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; }, async getUser() { return { data: { user } }; } },
           rpc(name, args) {
             calls.push(name);
             if (name === 'save_card_with_undo') {
@@ -293,7 +293,7 @@ for (const action of ['complete','advance']) for (const fails of [false,true]) {
     let persisted={...base,is_recurring:false,recurrence_source_id:null,status:action==='advance'?'research':'waiting'};
     let before;
     const supabase={
-      auth:{async getUser(){return {data:{user}};}},
+      auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user}};}},
       async rpc(name,args){
         calls.push(name);
         if(name==='save_card_with_undo') {

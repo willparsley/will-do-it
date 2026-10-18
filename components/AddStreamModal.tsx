@@ -67,9 +67,12 @@ export function AddStreamModal({ streams, onClose, onStreamCreated }: AddStreamM
         toast.success('Stream created');
         onClose();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Failed to create stream');
+      const message = typeof err === 'object' && err !== null && 'message' in err
+        && typeof err.message === 'string' && err.message
+        ? err.message : 'Failed to create stream';
+      toast.error(message);
     } finally {
       setLoading(false);
     }

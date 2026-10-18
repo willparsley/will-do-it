@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import { ArrowLeft, Mail, UserRound } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { watchAccount } from '@/lib/supabase/account-boundary';
 import { BrandLogo } from '@/components/BrandLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -13,13 +14,17 @@ export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-    void createClient().auth.getUser().then(({ data: { user }, error }) => {
-      if (!mounted) return;
-      if (error || !user) window.location.replace('/login');
-      else setUser(user);
+    const client = createClient();
+    const boundary = watchAccount(client, signedOut => {
+      setUser(null);
+      window.location.replace(signedOut ? '/login' : '/profile');
     });
-    return () => { mounted = false; };
+    void client.auth.getUser().then(({ data: { user }, error }) => {
+      if (!boundary.active) return;
+      if (error || !user) window.location.replace('/login');
+      else if (boundary.acceptUser(user.id)) setUser(user);
+    });
+    return () => boundary.dispose();
   }, []);
 
   if (!user) return <main className="min-h-dvh flex items-center justify-center text-ink-soft">Loading your profile...</main>;

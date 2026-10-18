@@ -119,7 +119,7 @@ test('edit card offers recurrence navigation and protects unsaved card edits', (
 
 test('both workspace entry points open the same source editor and saving runs generation and promotion', async () => {
   const calls=[];
-  const supabase={auth:{async getUser(){return {data:{user:{id:'user'}}};}},async rpc(name){calls.push(name);return {data:0};},from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[card]:[source]});},async order(){return {data:streams};}};}};
+  const supabase={auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user:{id:'user'}}};}},async rpc(name){calls.push(name);return {data:0};},from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[card]:[source]});},async order(){return {data:streams};}};}};
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices,
     '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
