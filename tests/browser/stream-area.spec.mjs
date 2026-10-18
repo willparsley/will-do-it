@@ -64,6 +64,22 @@ for (const theme of ['light', 'dark']) test(`stream area indicators and accessib
     expect(await style(areaCell)).toEqual(await style(button));
     expect((await style(button)).color).toBe(normalText);
     expect((await style(button)).background).not.toBe('rgba(0, 0, 0, 0)');
+    if (theme === 'light') {
+      // Prevent the area fills from disappearing into the surrounding pale row.
+      const contrast = await areaCell.evaluate(el => {
+        const luminance = color => {
+          const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => {
+            const channel = value / 255;
+            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+          });
+          return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+        };
+        const fill = luminance(getComputedStyle(el).backgroundColor);
+        const row = luminance(getComputedStyle(el.closest('.stream-row')).backgroundColor);
+        return (Math.max(fill, row) + 0.05) / (Math.min(fill, row) + 0.05);
+      });
+      expect(contrast).toBeGreaterThanOrEqual(1.1);
+    }
     const iconColor = await areaCell.locator('svg').first().evaluate(el => getComputedStyle(el).color);
     expect(await button.locator('svg').evaluate(el => getComputedStyle(el).color)).toBe(iconColor);
   }
