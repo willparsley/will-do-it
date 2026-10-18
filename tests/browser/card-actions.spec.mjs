@@ -84,7 +84,11 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
     expect(box.height).toBeGreaterThanOrEqual(44);
   }
   if (isMobile) await first.locator('.card-title button').tap();
+  else { await first.locator('.card-title button').focus(); await page.keyboard.press('Space'); }
+  await expect(first).not.toHaveAttribute('data-selected');
+  await expect(actions).toHaveCount(0);
   await expect(editDialog).toBeHidden();
+  await select(first);
   await page.screenshot({ path: testInfo.outputPath('selected-card.png'), scale: 'css' });
   if (isMobile) {
     const cdp = await page.context().newCDPSession(page);
