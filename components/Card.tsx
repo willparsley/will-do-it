@@ -131,16 +131,16 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
               <button
                 onClick={handleAdvance}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="h-full w-full flex items-center justify-center hover:brightness-[0.9] transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto hover:shadow-[inset_0_3px_5px_rgba(0,0,0,0.45)]"
+                className="h-full w-full flex items-center justify-center hover:brightness-[0.72] transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto hover:shadow-[inset_0_3px_5px_rgba(0,0,0,0.45)]"
                 style={{ backgroundColor: promoteColor }}
                 type="button" aria-label={`Advance to ${next ? STATUS_LABELS[next] : ''}`} title={`Advance to ${next ? STATUS_LABELS[next] : ''}`}
               >
                 <svg
-                  className="h-6 w-6"
+                  className="h-6 w-6 group-hover:brightness-[1.4]"
                   viewBox="300 87 62 46"
                   fill="currentColor"
                   preserveAspectRatio="xMidYMid meet"
-                  style={{ color: 'var(--card-action-ink)' }}
+                  style={{ color: `color-mix(in srgb, ${promoteColor} 55%, black)` }}
                 >
                   <path d="M337.76,102.48c0.14-0.27,0.09-0.512,0.09-0.744 c0.004-3.43,0.003-6.858,0.003-10.287c0-0.193,0.004-0.389,0.002-0.582c-0.005-0.439,0.113-0.814,0.554-1.005 c0.445-0.192,0.81-0.007,1.115,0.292c0.832,0.813,16.838,16.805,18.977,18.965c0.87,0.879,0.858,1.221-0.017,2.098 c-6.264,6.27-12.53,12.534-18.797,18.799c-0.344,0.344-0.713,0.666-1.251,0.453c-0.572-0.227-0.586-0.73-0.585-1.244 c0.005-3.58,0.004-7.16,0.002-10.74c0-0.277,0.039-0.561-0.106-0.9c-0.967-0.293-2.01-0.43-3.049-0.574 c-7.589-1.055-14.792,0.398-21.77,3.341c-3.104,1.309-6.113,2.804-9.056,4.437c-0.485,0.269-0.953,0.355-1.356-0.076 c-0.384-0.412-0.276-0.873,0.011-1.307c0.059-0.091,0.116-0.182,0.175-0.272c1.858-2.843,3.986-5.468,6.403-7.855 c4.515-4.459,9.616-8.042,15.564-10.339c3.979-1.537,8.096-2.383,12.374-2.37c0.173,0.001,0.346-0.005,0.517-0.018 C337.622,102.545,337.679,102.51,337.76,102.48z" />
                 </svg>

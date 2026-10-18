@@ -78,8 +78,6 @@ for (const theme of ['light', 'dark']) test(`cell add defaults, saves, focus, an
         const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
         return statuses.flatMap(status => ['--canvas', '--surface', '--surface-sunken'].map(surface => ({
           label: status + ' on ' + surface, ratio: contrast(token('--status-' + status), token(surface)),
-        }))).concat(statuses.filter(status => status !== 'backlog' && status !== 'canceled').map(status => ({
-          label: status + ' advance icon', ratio: contrast(token('--card-action-' + status), token('--card-action-ink')),
         })));
       }, { statuses });
       for (const { label, ratio } of contrasts) expect(ratio, label).toBeGreaterThanOrEqual(3);

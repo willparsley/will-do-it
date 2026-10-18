@@ -47,8 +47,7 @@
   --status-complete: #008751;
   --status-canceled: #71717a;
 
-  /* Filled promotion tabs use bright fills with a contrasting dark icon. */
-  --card-action-ink: #17211e;
+  /* Card promotion buttons use the dark-mode palette in both themes. */
   --card-action-priority_backlog: #fbbf24;
   --card-action-research: #a78bfa;
   --card-action-waiting: #2dd4bf;
