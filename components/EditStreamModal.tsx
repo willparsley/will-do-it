@@ -32,6 +32,12 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
   // Delete rehome flow
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState('');
+  const [deleteHasCards, setDeleteHasCards] = useState(false);
+  const [deleteHasSources, setDeleteHasSources] = useState(false);
+  const deleteNeedsTarget = deleteHasCards || deleteHasSources;
+  const deleteContents = deleteHasCards
+    ? (deleteHasSources ? 'cards and recurrences' : 'cards')
+    : 'recurrences';
 
   const isUncategorized = stream.title === 'Uncategorized';
 
@@ -81,18 +87,34 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
       return;
     }
 
-    // Enter delete confirmation mode with rehome choice
-    const defaultTarget = streams.find(s => s.title === 'Uncategorized' && s.id !== stream.id)?.id 
-      || streams.find(s => s.id !== stream.id)?.id 
-      || '';
+    setLoading(true);
+    try {
+      // Check stored contents, including cards hidden by the current board filters.
+      const [cards, sources] = await Promise.all([
+        supabase.from('cards').select('id', { count: 'exact', head: true }).eq('stream_id', stream.id),
+        supabase.from('recurrence_sources').select('id', { count: 'exact', head: true }).eq('stream_id', stream.id),
+      ]);
+      if (cards.error) throw cards.error;
+      if (sources.error) throw sources.error;
+      setDeleteHasCards((cards.count ?? 0) > 0);
+      setDeleteHasSources((sources.count ?? 0) > 0);
 
-    setDeleteTargetId(defaultTarget);
-    setShowDeleteConfirm(true);
+      const defaultTarget = moveTargets.find(s => s.title === 'Uncategorized')?.id
+        || moveTargets[0]?.id
+        || '';
+      setDeleteTargetId(defaultTarget);
+      setShowDeleteConfirm(true);
+    } catch (err: unknown) {
+      console.error(err);
+      toast.error(errorMessage(err, 'Failed to check stream contents'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const confirmDeleteWithRehome = async () => {
     if (!deleteTargetId) {
-      toast.error('Please choose a stream to move cards to');
+      toast.error('Please choose an active destination stream');
       return;
     }
 
@@ -109,7 +131,9 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
       if (error) throw error;
 
       onStreamDeleted(stream.id, deleteTargetId);
-      toast.success(`Stream deleted. Cards moved to "${targetStream.title}".`);
+      toast.success(deleteNeedsTarget
+        ? `Stream deleted. ${deleteHasCards ? 'Cards' : 'Recurrences'} moved to "${targetStream.title}".`
+        : 'Stream deleted');
       onClose();
     } catch (err: unknown) {
       console.error(err);
@@ -265,12 +289,12 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
           {showDeleteConfirm && (
             <div className="border border-line rounded-lg p-4 space-y-3 bg-sunken">
               <div className="text-sm font-medium text-ink-soft">
-                Delete stream and move its cards?
+                {deleteNeedsTarget ? `Delete stream and move its ${deleteContents}?` : 'Delete this empty stream?'}
               </div>
 
-              <div>
+              {deleteNeedsTarget && <div>
                 <label className="block text-xs font-medium mb-1 text-ink-soft">
-                  Move cards to
+                  Move {deleteContents} to
                 </label>
                 <AppSelect
                   value={deleteTargetId}
@@ -278,10 +302,10 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
                   className="w-full"
                   size="small"
                   disabled={loading}
-                  aria-label="Move cards to"
-                  options={streamsForSelect(streams).filter(s => s.id !== stream.id).map(s => ({ value: s.id, label: s.title + (s.title === 'Uncategorized' ? ' (recommended)' : '') }))}
+                  aria-label={`Move ${deleteContents} to`}
+                  options={moveTargets.map(s => ({ value: s.id, label: s.title + (s.title === 'Uncategorized' ? ' (recommended)' : '') }))}
                 />
-              </div>
+              </div>}
 
               <div className="flex gap-3 pt-1">
                 <button
@@ -297,7 +321,7 @@ export function EditStreamModal({ stream, streams, onClose, onStreamUpdated, onS
                   disabled={loading || !deleteTargetId}
                   className="btn btn-danger flex-1 py-2 text-sm"
                 >
-                  {loading ? 'Deleting...' : 'Delete & Move Cards'}
+                  {loading ? 'Deleting...' : deleteNeedsTarget ? `Delete & Move ${deleteHasCards ? 'Cards' : 'Recurrences'}` : 'Delete Stream'}
                 </button>
               </div>
             </div>
