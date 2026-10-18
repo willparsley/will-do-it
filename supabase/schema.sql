@@ -34,7 +34,6 @@ create table cards (
     'research', 
     'waiting', 
     'in_progress', 
-    'review', 
     'complete', 
     'canceled'
   )),

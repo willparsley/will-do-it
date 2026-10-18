@@ -13,12 +13,12 @@ function form(props) {
 const select = (tree, label) => nodes(tree, node => node.props?.['aria-label'] === label && node.props?.onValueChange)[0];
 
 test('creation defaults are clean, editable, and stable while board props refresh', () => {
-  const props = { streams: [stream('one'), stream('unc', 'Uncategorized')], defaultStreamId: 'one', defaultStatus: 'review', onClose() {}, onCardCreated() {} };
+  const props = { streams: [stream('one'), stream('unc', 'Uncategorized')], defaultStreamId: 'one', defaultStatus: 'in_progress', onClose() {}, onCardCreated() {} };
   const ui = form(props);
   let tree = ui.render();
   assert.equal(tree.props.dirty, false);
   assert.equal(select(tree, 'Stream').props.value, 'one');
-  assert.equal(select(tree, 'Status').props.value, 'review');
+  assert.equal(select(tree, 'Status').props.value, 'in_progress');
   select(tree, 'Status').props.onValueChange('waiting');
   tree = ui.render();
   assert.equal(tree.props.dirty, true);
@@ -28,7 +28,7 @@ test('creation defaults are clean, editable, and stable while board props refres
   tree = ui.render();
   assert.equal(select(tree, 'Stream').props.value, 'one');
   assert.equal(select(tree, 'Status').props.value, 'waiting');
-  select(tree, 'Status').props.onValueChange('review');
+  select(tree, 'Status').props.onValueChange('in_progress');
   assert.equal(ui.render().props.dirty, false, 'Dirty comparison retains the original defaults');
   const nextOpening = form(props).render();
   assert.equal(select(nextOpening, 'Stream').props.value, 'other');

@@ -43,7 +43,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 ### cards
 - id, user_id, stream_id
 - title, notes
-- status: backlog | priority_backlog | research | waiting | in_progress | review | complete | canceled
+- status: backlog | priority_backlog | research | waiting | in_progress | complete | canceled
 - due_at, remind_at
 - position (within cell)
 - is_recurring
@@ -75,11 +75,10 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Research
 - Waiting
 - In Progress
-- Review
 - Complete
 - Canceled
 
-**Main Activated View:** Research | Waiting | In Progress | Review
+**Main Activated View:** Research | Waiting | In Progress
 
 **Backlog View:** Backlog | Priority Backlog | Research (3 columns for easy promotion)
 
@@ -103,7 +102,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Mouse/touch drag targets use pointer containment within a status cell. Center-distance targeting can select the neighboring stream near the top/bottom of tall rows; dropping outside cells cancels the move.
 - Quick-add allows choosing stream + status.
 - Each visible cell in an active stream has a compact dashed plus button below its cards, including Complete/Canceled. It opens Add Card with that stream/status prefilled and editable; Quick Add still defaults to Uncategorized/Backlog. Desktop cell hover or keyboard focus reveals the button, touch keeps it faintly visible, and dragging hides/disables it without removing its space. Dialog dismissal restores focus to the initiating button. Initial defaults are captured per opening so refreshes preserve drafts and untouched prefills are not dirty. Closed/hidden streams gain no creation controls.
-- On hover, a card shows two quick actions (stacked, top-right): a green check to complete it, and an arrow to advance it one step along `STATUS_FLOW` (backlog → priority_backlog → research → waiting → in_progress → review → complete). Advancing into Complete runs the full completion path (stamps `completed_at`, handles recurrence).
+- On hover, a card shows two quick actions (stacked, top-right): a green check to complete it, and an arrow to advance it one step along `STATUS_FLOW` (backlog → priority_backlog → research → waiting → in_progress → complete). Advancing into Complete runs the full completion path (stamps `completed_at`, handles recurrence).
 
 ### Recurring Tasks
 - Configurable per source: frequency patterns (daily, every N days, specific weekdays, monthly 1st/last, etc.).
@@ -166,6 +165,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Email/SMS for reminders
 
 ## Decisions Log
+- Review is retired. Active has Research, Waiting, and In Progress; advancing In Progress completes through the normal completion/recurrence/Undo path. Apply `202610180001_remove_review_status.sql` before deploying: existing Review cards move to In Progress, affected Undo snapshots are invalidated, and stale Review writes are rejected (old clients need a refresh). Waiting reuses Review’s teal (darker in light mode), distinct from blue In Progress. Light status dots/rails use deeper amber, gray, and green; dark neutral dots use the muted text gray. Filled advance tabs retain bright colors in both themes with a dark icon for contrast.
 - The board's Stream column header links to `/streams`, an authenticated directory including streams without cards, independent of card view/history/recurrence filters. Its header retains All/Work/Personal filtering (including neutral streams, with the area preference shared with the board) and New Stream. Creation updates the list immediately; creating outside the selected area switches to All so the new stream is visible. Sections are Active, Complete, then Canceled; each is alphabetical (case-insensitive), with Uncategorized last in Active and noneditable. Stream titles open the existing editor for notes, area, status, rename, and deletion; saved edits immediately update the directory grouping.
 - The header Account menu shows the signed-in email, Profile, and Log out, replacing the standalone logout icon. `/profile` requires sign-in and displays the current account email read-only; customization will follow later. Header creation actions, area filters, theme toggle, and account control have React Aria tooltips on hover and keyboard focus. Menus support keyboard navigation, Escape, outside dismissal, and touch targets of at least 44px.
 - Dark mode uses brighter muted text (`#91919b`) and 12px card history/last-completed metadata (11px future-date badges). Cards use `#29292e`, fields `#202024`, dialogs `#26262b`, popovers `#2c2c32`, and stronger control borders `#50505a`; the canvas, stream rows, green accent, status colors, and area tints retain their palette. Canceled-card rails use quiet `#392628`/`#d99494` background/icon colors. Native dark-mode checkboxes/radios use the app green. Notifications follow the resolved root theme, including live theme toggles, with matching dark surfaces and green Undo buttons. Light-mode surfaces and card metadata sizes retain their existing values.

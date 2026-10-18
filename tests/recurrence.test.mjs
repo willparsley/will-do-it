@@ -50,6 +50,32 @@ beforeEach(async () => {
 });
 after(async () => { await db.close(); });
 
+test('retiring Review preserves unfinished cards, removes affected Undo snapshots, and rejects stale writes', async () => {
+  await fixture({ active: true });
+  await db.exec('reset role; alter table cards drop constraint cards_status_check');
+  await query("update cards set status = 'review', notes = 'Keep these notes' where id = $1", [original]);
+  const [before] = await query('select * from cards where id = $1', [original]);
+  const [settings] = await query('select * from recurrence_sources where id = $1', [source]);
+  const tokens = [];
+  for (const [beforeStatus, afterStatus] of [['review', 'complete'], ['waiting', 'review'], ['waiting', 'in_progress']]) {
+    const [token] = await query(`insert into card_action_undos(user_id, card_id, before_cards, after_cards)
+      values ($1, $2, $3::jsonb, $4::jsonb) returning id`,
+    [user, original, JSON.stringify([{ status: beforeStatus }]), JSON.stringify([{ status: afterStatus }])]);
+    tokens.push(token.id);
+  }
+  const migration = await readFile(new URL('../supabase/migrations/202610180001_remove_review_status.sql', import.meta.url), 'utf8');
+  await db.exec(migration);
+  await db.exec(migration);
+  const [afterCard] = await query('select * from cards where id = $1', [original]);
+  assert.equal(afterCard.status, 'in_progress');
+  assert.deepEqual({ ...afterCard, status: before.status, updated_at: before.updated_at }, before);
+  assert.deepEqual((await query('select * from recurrence_sources where id = $1', [source]))[0], settings);
+  assert.deepEqual((await query('select id from card_action_undos')).map(row => row.id), [tokens[2]]);
+  await db.exec('set role authenticated');
+  await assert.rejects(saveCard(original, 'in_progress', { status: 'review' }), /cards_status_check/);
+  await assert.rejects(query("insert into cards(user_id, stream_id, title, status) values ($1, $2, 'Stale creation', 'review')", [user, stream]), /cards_status_check/);
+});
+
 async function fixture({ stack = false, daysAgo = 0, active = false, frequency = 'daily', interval = 1, monthDay = null, weekdays = null } = {}) {
   await query(`insert into recurrence_sources
     (id, user_id, stream_id, base_title, frequency, interval, stack_missed, created_at, month_day, weekdays)
@@ -220,9 +246,9 @@ test('manual status changes clear promotion provenance and recurrence edits pres
   assert.equal((await query('select auto_promoted_from from cards'))[0].auto_promoted_from, null);
   await editRecurrence({ frequency: 'every_n_days', interval: 5 });
   assert.equal((await query('select status from cards'))[0].status, 'waiting');
-  await saveCard(original, 'waiting', { status: 'review' });
+  await saveCard(original, 'waiting', { status: 'in_progress' });
   await editRecurrence({ interval: 10 });
-  assert.equal((await query('select status from cards'))[0].status, 'review');
+  assert.equal((await query('select status from cards'))[0].status, 'in_progress');
 });
 
 test('initial and catch-up generated Waiting cards record automatic promotion without marking manual Waiting', async () => {
@@ -772,7 +798,7 @@ test('ended stacking schedules with missing periods still require resolution and
 });
 
 for (const recurring of [false, true]) {
-  for (const initial of ['backlog', 'priority_backlog', 'research', 'waiting', 'in_progress', 'review', 'complete', 'canceled']) {
+  for (const initial of ['backlog', 'priority_backlog', 'research', 'waiting', 'in_progress', 'complete', 'canceled']) {
     for (const field of ['due_at', 'remind_at']) {
       for (const offset of [-1, 0, 1]) {
         test(`${recurring ? 'recurring' : 'ordinary'} ${initial}: ${field} day ${offset} promotes only an eligible backlog`, async () => {
@@ -850,7 +876,7 @@ test('Undo recurring drag restores source stream and pending siblings, preservin
   const target = '00000000-0000-0000-0000-000000000009';
   await query("insert into streams(id,user_id,title,state,area) values($1,$2,'Next','in_progress','personal')", [target,user]);
   const before = await cardSnapshot();
-  const result = await quickAction(original,'in_progress',{stream_id:target,status:'review',position:12});
+  const result = await quickAction(original,'in_progress',{stream_id:target,status:'research',position:12});
   assert.equal((await recurrenceSettings()).stream_id,target);
   await undoAction(result.undo_id);
   assert.equal((await recurrenceSettings()).stream_id,stream);
@@ -885,7 +911,7 @@ test('Undo tokens are private, expire, and cannot be used by another user',async
   const action=await quickAction(original,'in_progress',{status:'complete'});
   await query("select set_config('request.jwt.claim.sub',$1,false)",[other]);
   await assert.rejects(undoAction(action.undo_id),/no longer available/);
-  await assert.rejects(quickAction(original,'complete',{status:'review'}),/Card not found/);
+  await assert.rejects(quickAction(original,'complete',{status:'in_progress'}),/Card not found/);
   assert.equal((await query('select * from card_action_undos')).length,0);
   await query("select set_config('request.jwt.claim.sub',$1,false)",[user]);
   await db.exec('reset role');

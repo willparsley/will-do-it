@@ -11,7 +11,7 @@ const card={id:'dns',title:'Update DNS',status:'research',prerequisite_card_id:'
 
 test('only Complete satisfies a prerequisite; terminal cards hide the blocked indicator',()=>{
   assert.equal(isCardBlocked({...card,prerequisite_card_id:null}),false);
-  for(const status of ['backlog','priority_backlog','research','waiting','in_progress','review','canceled']) {
+  for(const status of ['backlog','priority_backlog','research','waiting','in_progress','canceled']) {
     assert.equal(isCardBlocked(card,{...prerequisite,status}),true);
   }
   assert.equal(isCardBlocked(card,{...prerequisite,status:'complete'}),false);
