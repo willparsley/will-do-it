@@ -486,7 +486,7 @@ export default function WillDoIt() {
             <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />
 
             <TooltipButton
-              tooltip="Add a card to Uncategorized / Backlog"
+              tooltip="Add a new card"
               onPress={() => setCreationContext({ status: 'backlog' })}
               className="btn btn-primary px-4 py-1.5 text-sm"
             >
