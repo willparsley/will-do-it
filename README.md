@@ -24,6 +24,20 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Testing mobile locally
+
+You do not need to merge to main to review mobile changes.
+
+- Start `npm run dev`, open `http://localhost:3000`, sign in, then open Chrome DevTools and toggle the device toolbar with **Ctrl+Shift+M** (Mac: **Cmd+Shift+M**). Choose a phone preset and refresh to simulate touch input. Try widths of 360px and 412px, both themes, and landscape. [Chrome device-mode guide](https://developer.chrome.com/docs/devtools/device-mode).
+- For your actual phone, run `npm run dev -- --hostname 0.0.0.0` and open `http://YOUR-COMPUTER-LAN-IP:3000` on the same Wi-Fi. Allow the port through your local firewall if needed. WSL may require Windows networking/port forwarding.
+- The app requests magic links back to the address you opened. Add `http://localhost:3000/` and, for phone testing, the exact LAN URL to **Supabase → Authentication → URL Configuration → Redirect URLs** if they are not already allowed. Keep the production Site URL. Open the link in the same browser/device that requested it. [Supabase redirect configuration](https://supabase.com/docs/guides/auth/redirect-urls).
+
+Local development uses the Supabase project in `.env.local`; edits affect that project's data. LAN HTTP is suitable for layout testing, while installed PWA/service-worker behavior needs trusted HTTPS on the phone. Device emulation does not reproduce the native keyboard or OS installation UI.
+
+Below 768px, the workspace defaults to **By status**, with **By stream** and **Board** available from the layout selector. Layout preference is saved per account and does not change the desktop board. Filters apply in every layout. Tap a list card to reveal Edit, Move, Complete, and Advance; Move offers all statuses and active streams (plus the card's current stream). Use Edit for notes, dates, prerequisites, and recurrence settings.
+
+Run `npm run build` then `npx playwright test --config tests/browser/playwright.config.mjs mobile-layouts` for the mobile layout checks. These use production assets and intercepted Supabase traffic, with no live account writes.
+
 ## Database migrations and recurrence
 
 For a fresh database, run `supabase/schema.sql`, then apply the SQL files in

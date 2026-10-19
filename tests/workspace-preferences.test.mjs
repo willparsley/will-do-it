@@ -102,3 +102,25 @@ test('history control appears only in All and Archive and shares its saved selec
     assert.equal(control()[0].props.value,'quarter');
   });
 });
+
+test('mobile layout is validated, remembered per user, and retained when other filters change', async () => {
+  const storage = memoryStorage();
+  const layoutControl = ui => nodes(ui.render(), node => typeof node.props?.onLayout === 'function')[0];
+  await withStorage(storage, async () => {
+    let ui = await workspace();
+    assert.equal(layoutControl(ui).props.layout, 'status');
+    layoutControl(ui).props.onLayout('stream');
+    ui = await workspace();
+    assert.equal(layoutControl(ui).props.layout, 'stream');
+    button(ui.render(), 'Backlog').props.onClick();
+    ui = await workspace();
+    assert.equal(layoutControl(ui).props.layout, 'stream');
+    assert.equal(button(ui.render(), 'Backlog').props['aria-pressed'], true);
+    assert.equal(layoutControl(await workspace('other')).props.layout, 'status');
+    layoutControl(ui).props.onLayout('status');
+    ui = await workspace();
+    assert.equal(layoutControl(ui).props.layout, 'status');
+    storage.setItem('will-do-it:workspace:user', JSON.stringify({ mobileLayout: 'invalid' }));
+    assert.equal(layoutControl(await workspace()).props.layout, 'status');
+  });
+});

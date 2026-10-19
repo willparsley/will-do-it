@@ -474,3 +474,20 @@ textarea::placeholder {
   background: var(--accent);
   color: var(--accent-ink);
 }
+
+/* Mobile workspace keeps readable type and uses full-width lists by default. */
+@media (max-width: 767px) {
+  .workspace-header > div { flex-wrap: nowrap; gap: .25rem; padding-inline: .75rem; }
+  .workspace-header > div > div:last-child { flex-wrap: nowrap; gap: .25rem; }
+  .workspace-header [aria-label="Account menu"] { min-width: 44px; }
+  .workspace-header [aria-label="Account menu"] > span,
+  .workspace-header [aria-label="Account menu"] > svg:last-child { display: none; }
+  .workspace-board { padding-inline: .75rem; }
+  .mobile-matrix [data-status-headers] > a { display: none; }
+  .mobile-matrix .stream-row > div > div:first-child { grid-column: 1 / -1; padding: .5rem .75rem; }
+  .card[data-compact] { cursor: pointer; }
+  .card[data-compact] .card-title button { min-height: 28px; }
+  .card[data-compact]:not([data-selected]) .card-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card[data-compact] .card-touch-action { flex-direction: column; gap: .125rem; font-size: .75rem; }
+  .card[data-compact] .card-metadata { font-size: 11px; }
+}
