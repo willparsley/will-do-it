@@ -87,9 +87,9 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
         <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
           {badge && <span className={`badge badge-${badge.kind}`}>{badge.label}</span>}
           {card.is_recurring && (
-            card.recurrence_source_id && onEditRecurrence && !compact ? (
+            card.recurrence_source_id && onEditRecurrence && (!compact || selected) ? (
               <button type="button" aria-label="Edit recurrence" title="Edit recurrence"
-                className="inline-flex items-center justify-center rounded p-1 -m-1 text-ink-soft hover:text-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent"
+                className={`inline-flex items-center justify-center rounded ${compact ? 'min-h-11 min-w-11' : 'p-1 -m-1'} text-ink-soft hover:text-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent`}
                 onPointerDown={e => e.stopPropagation()}
                 onMouseDown={e => e.stopPropagation()}
                 onTouchStart={e => e.stopPropagation()}

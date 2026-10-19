@@ -127,6 +127,7 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
   await filters.getByRole('switch', { name: 'Hide recurring' }).click();
   await filters.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByText('Clean kitchen', { exact: true })).toHaveCount(0);
+  await fits();
   await page.getByRole('button', { name: 'Show recurring', exact: true }).click();
   await expect(page.getByText('Clean kitchen', { exact: true })).toBeVisible();
   await view('Active');
@@ -140,6 +141,8 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
   await expect(page.locator('[data-status-headers]')).toBeVisible();
   await page.setViewportSize({ width: 360, height: 740 });
   await expect(page.locator('[data-mobile-layout="status"]')).toBeVisible();
+  await fits();
+  await page.setViewportSize({ width: 320, height: 640 });
   await fits();
   expect(errors).toEqual([]);
 });

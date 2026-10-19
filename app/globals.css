@@ -482,6 +482,7 @@ textarea::placeholder {
   .workspace-header [aria-label="Account menu"] { min-width: 44px; }
   .workspace-header [aria-label="Account menu"] > span,
   .workspace-header [aria-label="Account menu"] > svg:last-child { display: none; }
+  [aria-label="Board view"] > button { min-height: 44px; padding-inline: .75rem; font-size: .875rem; }
   .workspace-board { padding-inline: .75rem; }
   .mobile-matrix [data-status-headers] > a { display: none; }
   .mobile-matrix .stream-row > div > div:first-child { grid-column: 1 / -1; padding: .5rem .75rem; }
