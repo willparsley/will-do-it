@@ -347,7 +347,7 @@ for (const theme of ['light', 'dark']) test(`hide recurring filters the workspac
  await expect(toggle).not.toBeChecked();
 });
 
-for (const theme of ['light','dark']) test(`prerequisite links and softened blocked styling in ${theme} mode`, async ({page},testInfo)=>{
+for (const theme of ['light','dark']) test(`prerequisite links and softened blocked styling in ${theme} mode`, async ({page,isMobile},testInfo)=>{
  page.setDefaultTimeout(10000);
  let cards=[
    {id:'buy',user_id:user.id,stream_id:'1',title:'Buy domain name',status:'research',position:0,is_recurring:false},
@@ -388,7 +388,20 @@ for (const theme of ['light','dark']) test(`prerequisite links and softened bloc
  await mobileBoard(page);
  const dns=page.locator('.card').filter({has:page.getByText('Update DNS settings',{exact:true})});
  await expect(dns).toHaveClass(/card-blocked/);
- await expect(dns.getByText('Blocked by: Buy domain name',{exact:true})).toBeVisible();
+ const blockedDetails=dns.getByText('Blocked by: Buy domain name',{exact:true});
+ if(isMobile) await expect(blockedDetails).toBeVisible();
+ else {
+   await expect(dns.getByText('Blocked',{exact:true})).toBeVisible();
+   await expect(blockedDetails).toHaveCount(0);
+   await dns.click({position:{x:8,y:8}});
+   await expect(blockedDetails).toBeVisible();
+   await expect(page.getByRole('dialog',{name:'Edit Card',exact:true})).toHaveCount(0);
+   await dns.focus();
+   await page.keyboard.press('Space');
+   await expect(dns.getByText('Blocked',{exact:true})).toBeVisible();
+   await expect(blockedDetails).toHaveCount(0);
+   await dns.evaluate(element=>element.blur());
+ }
  assert.equal(await dns.evaluate(el=>getComputedStyle(el).outlineStyle),'none');
  assert.equal(await dns.locator('.card-title').evaluate(el=>getComputedStyle(el).color),theme==='dark'?'rgb(154, 154, 163)':'rgb(116, 116, 125)');
  assert.equal(await dns.locator('.card-blocked-label').evaluate(el=>getComputedStyle(el).color),theme==='dark'?'rgb(206, 145, 145)':'rgb(164, 84, 84)');
