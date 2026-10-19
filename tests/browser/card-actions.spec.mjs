@@ -1,3 +1,4 @@
+import { mobileBoard } from './workspace-controls.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
@@ -56,6 +57,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
     await route.abort();
   });
   await page.goto('http://app.test');
+  await mobileBoard(page);
 
   const first = page.locator('.card[data-card-id="first"]');
   await expect(first).toHaveCSS('background-color', theme === 'dark' ? 'rgb(41, 41, 46)' : 'rgb(247, 248, 246)');
@@ -79,7 +81,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await expect(editDialog).toBeHidden();
   await expect(first).toHaveCSS('outline-width', '2px');
   const actions = first.getByRole('group', { name: 'Actions for First task', exact: true });
-  await expect(actions.getByRole('button')).toHaveCount(3);
+  await expect(actions.getByRole('button')).toHaveCount(isMobile ? 4 : 3);
   for (const button of await actions.getByRole('button').all()) {
     const box = await button.boundingBox();
     expect(box.width).toBeGreaterThanOrEqual(44);
@@ -163,7 +165,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await expect(canceledRail).toHaveCSS('background-color', theme === 'dark' ? 'rgb(57, 38, 40)' : 'rgb(127, 29, 29)');
   await expect(canceledRail.locator('svg')).toHaveCSS('color', theme === 'dark' ? 'rgb(217, 148, 148)' : 'rgb(248, 113, 113)');
   await select(finished);
-  await expect(finished.getByRole('group').getByRole('button')).toHaveCount(1);
+  await expect(finished.getByRole('group').getByRole('button')).toHaveCount(isMobile ? 2 : 1);
   if (isMobile) await page.touchscreen.tap(5, 5);
   else await page.mouse.click(5, 5);
   await expect(finished).not.toHaveAttribute('data-selected');

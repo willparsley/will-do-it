@@ -1,3 +1,4 @@
+import { mobileBoard, openFilters, closeFilters } from './workspace-controls.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
@@ -46,6 +47,8 @@ for (const theme of ['light', 'dark']) test(`stream area indicators and accessib
     await route.abort();
   });
   await page.goto('http://app.test');
+  await mobileBoard(page);
+  await openFilters(page);
 
   const filter = page.getByRole('group', { name: 'Area filter', exact: true });
   const cell = title => page.locator('.stream-row [data-area]').filter({ hasText: title });
@@ -58,8 +61,8 @@ for (const theme of ['light', 'dark']) test(`stream area indicators and accessib
   const style = locator => locator.evaluate(el => {
     const s = getComputedStyle(el); return { background: s.backgroundColor, color: s.color };
   });
-  await expect(workCell.getByRole('img', { name: 'Work', exact: true })).toHaveCount(1);
-  await expect(personalCell.getByRole('img', { name: 'Personal', exact: true })).toHaveCount(1);
+  await expect(workCell.getByRole('img', { name: 'Work', exact: true, includeHidden: true })).toHaveCount(1);
+  await expect(personalCell.getByRole('img', { name: 'Personal', exact: true, includeHidden: true })).toHaveCount(1);
   for (const [areaCell, button] of [[workCell, workFilter], [personalCell, personalFilter]]) {
     expect(await style(areaCell)).toEqual(await style(button));
     expect((await style(button)).color).toBe(normalText);
@@ -96,16 +99,19 @@ for (const theme of ['light', 'dark']) test(`stream area indicators and accessib
   expect((await workFilter.boundingBox()).width).toBe(before.width);
   expect(await style(workCell)).toEqual(await style(workFilter));
   await page.reload();
+  await openFilters(page);
   await expect(workFilter).toHaveAttribute('aria-pressed', 'true');
   await personalFilter.click();
   await expect(workCell).toHaveCount(0);
   await expect(personalCell).toHaveCount(1);
   await allFilter.click();
   await expect(workCell).toHaveCount(1);
+  await closeFilters(page);
   // The tint stretches alongside tall task cells without changing status-cell backgrounds.
   const row = workCell.locator('..');
   const neighboringCell = row.locator('.status-column').first();
-  expect(Math.abs((await workCell.boundingBox()).height - (await neighboringCell.boundingBox()).height)).toBeLessThanOrEqual(1);
+  if (!isMobile) expect(Math.abs((await workCell.boundingBox()).height - (await neighboringCell.boundingBox()).height)).toBeLessThanOrEqual(1);
+  else expect((await workCell.boundingBox()).y).toBeLessThan((await neighboringCell.boundingBox()).y);
   await expect(neighboringCell).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   const title = workCell.getByRole('button', { name: `Edit stream ${streams[0].title}`, exact: true });
   await title.scrollIntoViewIfNeeded();
@@ -150,6 +156,7 @@ for (const theme of ['light', 'dark']) test(`stream area indicators and accessib
   await expect(title).toBeFocused();
   const headerBox = await page.getByRole('banner').boundingBox();
   expect(headerBox.width).toBe(page.viewportSize().width);
+  await openFilters(page);
   const filterBox = await filter.boundingBox();
   expect(filterBox.x).toBeGreaterThanOrEqual(0);
   expect(filterBox.x + filterBox.width).toBeLessThanOrEqual(page.viewportSize().width);

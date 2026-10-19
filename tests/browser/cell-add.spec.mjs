@@ -1,3 +1,4 @@
+import { addCard, mobileBoard } from './workspace-controls.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
@@ -52,6 +53,7 @@ for (const theme of ['light', 'dark']) test(`cell add defaults, saves, focus, an
     await route.abort();
   });
   await page.goto('http://app.test');
+ await mobileBoard(page);
   const addButton = (stream, status) => page.getByRole('button', { name: `Add card to ${stream} — ${status}.`, exact: true, includeHidden: true });
   await expect(page.locator('.status-dot')).toHaveCount(3);
   await expect(page.locator('.card[data-card-id="0in_progress"]')).toBeVisible();
@@ -100,7 +102,7 @@ for (const theme of ['light', 'dark']) test(`cell add defaults, saves, focus, an
     }
   }
   expect(confirmations).toBe(0);
-  await page.getByRole('button', { name: 'Quick Add', exact: true }).click();
+  await addCard(page);
   await expect(streamSelect()).toContainText('Uncategorized');
   await expect(statusSelect()).toContainText('Backlog');
   await page.keyboard.press('Escape');

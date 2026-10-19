@@ -87,7 +87,7 @@ test('closing a stream discovers sources without pending cards and requires sepa
 test('stream deletion uses only the atomic RPC and leaves the modal open on rehome failure', async () => {
   const notices=notifications(),calls=[];
   let closed=false,deleted=false;
-  const supabase={async rpc(name,args){calls.push({name,args});return {error:{message:'Rehome failed'}};}};
+  const supabase={from(){return {select(){return this;},async eq(){return {count:1,error:null};}};},async rpc(name,args){calls.push({name,args});return {error:{message:'Rehome failed'}};}};
   const ui=driver('components/EditStreamModal.tsx','EditStreamModal',{
     stream:streams[0],streams,onClose(){closed=true;},onStreamUpdated(){},onStreamDeleted(){deleted=true;},
   },{'@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module});

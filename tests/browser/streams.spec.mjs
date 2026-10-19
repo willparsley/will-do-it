@@ -1,3 +1,4 @@
+import { openFilters } from './workspace-controls.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
@@ -60,7 +61,9 @@ for (const theme of ['light', 'dark']) test(`all streams, grouping, and editing 
   await setup(page, theme);
   await page.goto('http://app.test');
   await expect(page.getByText('No streams with cards in this view.')).toBeVisible();
-  await page.getByRole('link', { name: 'View all streams' }).click();
+  const directoryLink = page.getByRole('link', { name: 'View all streams' });
+  if (await directoryLink.isVisible()) await directoryLink.click();
+  else { await openFilters(page); await page.getByRole('link', { name: 'All streams', exact: true }).click(); }
   await expect(page).toHaveURL('http://app.test/streams');
   await expect(page.getByRole('heading', { level: 1, name: 'Streams', exact: true })).toBeVisible();
   const sections = page.locator('main section');
