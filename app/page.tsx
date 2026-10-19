@@ -524,13 +524,16 @@ export default function WillDoIt() {
       ? <span className="flex items-center gap-1.5"><AreaIndicator area={stream?.area || 'neutral'} />{stream?.title}</span>
       : <span>{STATUS_LABELS[card.status]}</span>;
     return (
-    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={compact || touchMode} compact={compact}
+    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={compact || touchMode} desktop={!mobileViewport} compact={compact}
       context={compact ? context : undefined}
       onMove={mobileViewport ? () => { setSelectedCardId(null); setMovingCard(card); } : undefined}
-      onEdit={() => { setSelectedCardId(null); setEditingCard(card); }}
+      onEdit={event => {
+        if (activeDragCard || (suppressCardClick.current && event.detail !== 0)) return;
+        setSelectedCardId(null); setEditingCard(card);
+      }}
       onClick={event => {
         if (activeDragCard || (suppressCardClick.current && event?.detail !== 0)) return;
-        if (compact || touchInput.current || event?.detail === 0) setSelectedCardId(current => current === card.id ? null : card.id);
+        if (!mobileViewport || compact || touchInput.current || event.detail === 0) setSelectedCardId(current => current === card.id ? null : card.id);
         else { setSelectedCardId(null); setEditingCard(card); }
       }}
       onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />

@@ -19,9 +19,10 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   let cards = [
     { id: 'first', title: 'First task', status: 'waiting' },
     { id: 'second', title: 'Second task', status: 'in_progress' },
+    { id: 'recurring', title: 'Recurring task', status: 'research', recurrence_source_id: 'source' },
     { id: 'finished', title: 'Finished task', status: 'complete' },
     { id: 'canceled', title: 'Canceled task', status: 'canceled' },
-  ].map(card => ({ ...card, user_id: user.id, stream_id: '0', position: 0, is_recurring: false, completed_at: new Date().toISOString() }));
+  ].map(card => ({ ...card, user_id: user.id, stream_id: '0', position: 0, is_recurring: !!card.recurrence_source_id, completed_at: new Date().toISOString() }));
   let undoCard;
   const calls = [];
   const errors = [];
@@ -33,7 +34,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin === new URL(supabaseUrl).origin) {
-      let data = url.pathname.endsWith('/user') ? user : url.pathname.endsWith('/streams') ? streams : url.pathname.endsWith('/cards') ? cards : url.pathname.endsWith('/recurrence_sources') ? [] : 0;
+      let data = url.pathname.endsWith('/user') ? user : url.pathname.endsWith('/streams') ? streams : url.pathname.endsWith('/cards') ? cards : url.pathname.endsWith('/recurrence_sources') ? [{ id: 'source', stream_id: '0', last_completed_at: '2026-10-01T12:00:00Z', recurrence_timezone: 'America/New_York' }] : 0;
       if (route.request().method() === 'POST') {
         const body = route.request().postDataJSON();
         calls.push({ path: url.pathname, body });
@@ -67,13 +68,30 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   const select = async card => {
     await card.scrollIntoViewIfNeeded();
     if (isMobile) await card.locator('.card-title button').tap();
-    else { await card.locator('.card-title button').focus(); await page.keyboard.press('Enter'); }
+    else await card.click({ position: { x: 8, y: 8 } });
     await expect(card).toHaveAttribute('data-selected', 'true');
   };
   if (!isMobile) {
-    await first.locator('.card-title').click();
+    const title = first.getByRole('button', { name: 'Edit First task', exact: true });
+    await expect(title.locator('.card-title-pencil')).toHaveCSS('opacity', '0');
+    await title.hover();
+    await expect(title.locator('.card-title-pencil')).toHaveCSS('opacity', '1');
+    await title.click();
     await expect(editDialog).toBeVisible();
     await page.keyboard.press('Escape');
+    await title.focus();
+    await expect(title.locator('.card-title-pencil')).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Enter');
+    await expect(editDialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    const recurring = page.locator('.card[data-card-id="recurring"]');
+    await expect(recurring.getByText(/^Last completed on/)).toHaveCount(0);
+    await select(recurring);
+    await expect(recurring.getByText(/^Last completed on/)).toBeVisible();
+    await recurring.focus();
+    await page.keyboard.press('Enter');
+    await expect(recurring).not.toHaveAttribute('data-selected');
+    await expect(recurring.getByText(/^Last completed on/)).toHaveCount(0);
     await first.hover();
     await expect(first.getByRole('button', { name: 'Mark complete' })).toHaveCSS('opacity', '1');
   }
@@ -88,7 +106,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
     expect(box.height).toBeGreaterThanOrEqual(44);
   }
   if (isMobile) await first.locator('.card-title button').tap();
-  else { await first.locator('.card-title button').focus(); await page.keyboard.press('Space'); }
+  else { await first.focus(); await page.keyboard.press('Space'); }
   await expect(first).not.toHaveAttribute('data-selected');
   await expect(actions).toHaveCount(0);
   await expect(editDialog).toBeHidden();
@@ -165,7 +183,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await expect(canceledRail).toHaveCSS('background-color', theme === 'dark' ? 'rgb(57, 38, 40)' : 'rgb(127, 29, 29)');
   await expect(canceledRail.locator('svg')).toHaveCSS('color', theme === 'dark' ? 'rgb(217, 148, 148)' : 'rgb(248, 113, 113)');
   await select(finished);
-  await expect(finished.getByRole('group').getByRole('button')).toHaveCount(isMobile ? 2 : 1);
+  await expect(finished.getByRole('group', { name: 'Actions for Finished task', exact: true }).getByRole('button')).toHaveCount(isMobile ? 2 : 1);
   if (isMobile) await page.touchscreen.tap(5, 5);
   else await page.mouse.click(5, 5);
   await expect(finished).not.toHaveAttribute('data-selected');

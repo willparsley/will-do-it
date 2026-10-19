@@ -10,12 +10,13 @@ interface CardViewProps {
   card: CardType;
   prerequisite?: CardType;
   onClick?: (event: React.MouseEvent) => void;
-  onEdit?: () => void;
+  onEdit?: (event: React.MouseEvent) => void;
   onMove?: () => void;
   compact?: boolean;
   context?: React.ReactNode;
   selected?: boolean;
   touchMode?: boolean;
+  desktop?: boolean;
   onComplete?: (id: string) => void;
   onAdvance?: (id: string) => void;
   onEditRecurrence?: (sourceId: string) => void;
@@ -25,7 +26,7 @@ interface CardViewProps {
  * Presentational card. Used both for the real, draggable card and for the
  * DragOverlay preview (so the preview doesn't register a duplicate draggable).
  */
-export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected = false, touchMode = false, compact = false, context, onMove }: CardViewProps) {
+export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected = false, touchMode = false, desktop = false, compact = false, context, onMove }: CardViewProps) {
   const blocked = isCardBlocked(card, prerequisite);
   const isFinished = isTerminal(card);
   const hasReminder = !isFinished && !!card.remind_at;
@@ -52,6 +53,15 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
   return (
     <div
       onClick={onClick}
+      tabIndex={desktop && onClick ? 0 : undefined}
+      role={desktop && onClick ? 'group' : undefined}
+      aria-label={desktop && onClick ? `Select ${card.title}` : undefined}
+      onKeyDown={event => {
+        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          event.currentTarget.click();
+        }
+      }}
       data-card-id={card.id}
       data-selected={selected || undefined}
       data-compact={compact || undefined}
@@ -62,7 +72,12 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
       <div className={compact ? "px-3 py-2.5" : "p-3"}>
         {context && <div className="mb-1 text-xs text-ink-soft">{context}</div>}
         <div className="card-title font-medium leading-tight text-ink min-w-0">
-          {onClick ? <button type="button" className="block w-full text-left break-words min-w-0 focus-visible:outline-2 focus-visible:outline-accent"
+          {desktop && onEdit ? <button type="button" className="card-title-edit focus-ring"
+            aria-label={`Edit ${card.title}`}
+            onClick={event => { event.stopPropagation(); event.currentTarget.focus(); onEdit(event); }}>
+            <span className="min-w-0 break-words">{card.title}</span>
+            <Pencil size={14} className="card-title-pencil" aria-hidden="true" />
+          </button> : onClick ? <button type="button" className="block w-full text-left break-words min-w-0 focus-visible:outline-2 focus-visible:outline-accent"
             aria-label={`Actions for ${card.title}`} aria-expanded={selected}>{card.title}</button>
             : <span className="break-words min-w-0">{card.title}</span>}
         </div>
@@ -72,7 +87,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
           <span className="break-words min-w-0">Blocked by: {prerequisite?.title || 'unavailable prerequisite'}</span>
         </p>}
 
-        {!isFinished && (!compact || selected) && card.is_recurring && card.last_completed_at && (
+        {!isFinished && ((!desktop && !compact) || selected) && card.is_recurring && card.last_completed_at && (
           <div className="card-metadata text-ink-muted mt-1">
             Last completed on {new Date(card.last_completed_at).toLocaleDateString(undefined, { timeZone: card.recurrence_timezone })}
           </div>
@@ -84,7 +99,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
           </div>
         )}
 
-        <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
+        {(!desktop || badge || card.is_recurring || hasReminder) && <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
           {badge && <span className={`badge badge-${badge.kind}`}>{badge.label}</span>}
           {card.is_recurring && (
             card.recurrence_source_id && onEditRecurrence && (!compact || selected) ? (
@@ -103,7 +118,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
               🔔
             </span>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Right column: action rail for active cards, or static visual flair for finished cards */}
@@ -209,7 +224,7 @@ interface CardProps extends CardViewProps {
   overlay?: boolean;
 }
 
-export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected, touchMode, compact, context, onMove, overlay = false }: CardProps) {
+export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected, touchMode, desktop, compact, context, onMove, overlay = false }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     disabled: overlay || compact,
@@ -232,7 +247,7 @@ export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEdi
       tabIndex={undefined}
       className={isDragging ? 'opacity-40' : ''}
     >
-      <CardView card={card} prerequisite={prerequisite} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} selected={selected} touchMode={touchMode} onEdit={onEdit} compact={compact} context={context} onMove={onMove} />
+      <CardView card={card} prerequisite={prerequisite} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} selected={selected} touchMode={touchMode} desktop={desktop} onEdit={onEdit} compact={compact} context={context} onMove={onMove} />
     </div>
   );
 }
