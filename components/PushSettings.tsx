@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { ensureReminderPreferences } from '@/lib/reminder-preferences';
 import { disablePush } from '@/lib/push';
 
 export function PushSettings({ userId }: { userId: string }) {
@@ -40,6 +41,7 @@ export function PushSettings({ userId }: { userId: string }) {
       if (enabled) { await disablePush(); setEnabled(false); return; }
       // Permission must be requested directly from this user gesture (iOS).
       if (await Notification.requestPermission() !== 'granted') throw new Error('Notifications are blocked. Allow them in your browser or device settings to continue.');
+      await ensureReminderPreferences(userId);
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
       if (!registration.active) {
         await Promise.race([navigator.serviceWorker.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('Notification setup is still updating. Please try again.')), 15000))]);
@@ -61,7 +63,7 @@ export function PushSettings({ userId }: { userId: string }) {
 
   return <section aria-labelledby="push-heading" className="rounded-xl border border-line bg-surface p-6 mt-6">
     <h2 id="push-heading" className="font-semibold mb-3">Push notifications</h2>
-    <p className="text-sm text-ink-soft mb-3">Receive a notification at the reminder time, or the due time if no reminder is set. Dates without a time use midnight. Delivery normally takes about a minute and can be delayed by your device or connection.</p>
+    <p className="text-sm text-ink-soft mb-3">Receive a notification at the reminder time, or the due time if no reminder is set. Dates without a time use your default reminder time (9:00 AM initially), set in Reminder preferences. Delivery normally takes about a minute and can be delayed by your device or connection.</p>
     <p className="text-sm text-ink-soft mb-3">On iPhone or iPad, install to your Home Screen and open the installed app first. Notifications show a private, generic message and open your workspace.</p>
     {!supported ? <p className="text-sm">Push is unavailable in this browser. Try the installed app or a supported browser.</p>
       : !key ? <p className="text-sm">Push notifications have not been configured for this app yet.</p>

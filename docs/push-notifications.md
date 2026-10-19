@@ -10,8 +10,18 @@ by a Vercel Git deployment alone. Existing visual/day-based promotion is unchang
   only after tapping. HTTPS is required (localhost also works for testing).
 - Each subscribed device receives one notification at `remind_at`, or `due_at`
   when no reminder exists. An explicit reminder replaces the due notification.
-- Exact stored instants are respected: never send early; check every minute.
-  Date-only inputs currently store local midnight, so they notify at midnight.
+- Explicit times keep their exact stored instants; the scheduler checks every minute.
+  Date-only values remain stored at midnight for generation and promotion, but
+  push delivery defaults to **9:00 AM**. Profile → Reminder preferences changes
+  the default across devices. Ordinary cards use the saved profile timezone;
+  recurring cards use the source's pinned timezone. DST is handled on the date
+  being notified. Midnight retains the date picker's existing "no time" meaning.
+- Profile initializes the account timezone from the first device, preserving it
+  on other devices; it is displayed beside the profile time setting.
+  Existing subscriptions must open Profile once after this upgrade; ordinary
+  pushes are withheld until the timezone is known, avoiding midnight guesses.
+- Changing the default reschedules unsent notifications but does not send a card
+  again if its current reminder/due date has already been delivered.
 - All unfinished statuses can notify, including Waiting and In Progress.
   Complete/Canceled cards and removed/rescheduled reminders are excluded at claim.
 - Enabling skips dates before opt-in. Outages catch up at most 24 hours.
@@ -20,8 +30,8 @@ by a Vercel Git deployment alone. Existing visual/day-based promotion is unchang
 - The service-only claim RPC generates subscribed accounts' recurring cards using
   the existing row-locked generator. Existing source timezones are respected;
   legacy sources without a pinned timezone get UTC. Current recurrence generation
-  creates future occurrences at midnight and does not copy reminder times, so
-  timed pushes for future occurrences need a future source-level time setting.
+  creates future occurrences at midnight; their push notifications use the
+  profile default. Per-source custom reminder times remain future work.
 - Delivery is at least once: a process failure after the provider accepts a push
   may retry it. Stable notification tags replace duplicates still on screen.
   Transport failures retry after five minutes, up to eight attempts. Expired
@@ -32,7 +42,8 @@ by a Vercel Git deployment alone. Existing visual/day-based promotion is unchang
 
 ## Deployment
 
-1. Apply `supabase/migrations/202610190001_push_reminders.sql` after earlier migrations.
+1. Apply `supabase/migrations/202610190001_push_reminders.sql`, then
+   `supabase/migrations/202610190002_default_reminder_time.sql` after earlier migrations.
 2. Generate a VAPID key pair once, e.g. `npx web-push generate-vapid-keys`.
    Keep the private key server-side. Retain the pair across deployments; changing
    it requires devices to disable and re-enable notifications.
@@ -72,7 +83,9 @@ now() - interval '7 days'` daily. No card history is deleted.
 
 Run `npm test`, `npx tsc --noEmit`, `npm run lint`, and `npm run build`.
 Check the Edge Function separately with `deno check --node-modules-dir=none supabase/functions/send-reminders/index.ts`.
-On a deployed HTTPS build, enable push on Profile, create an ordinary card with
+On a deployed HTTPS build, save a default reminder time on Profile and verify
+a date-only reminder waits until that time (including a recurrence and a DST date).
+Then enable push on Profile, create an ordinary card with
 an explicit reminder two minutes ahead, close the app, and verify it arrives
 no earlier than that instant. Repeat with a due time and no reminder, then with
 completion, rescheduling, disable, logout, multiple devices, and account switching.
