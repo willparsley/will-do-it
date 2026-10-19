@@ -2,7 +2,8 @@ import { BriefcaseBusiness, House } from 'lucide-react';
 import type { Area } from '@/lib/types';
 import styles from './StreamArea.module.css';
 
-export function AreaIndicator({ area, labelled = false }: { area: Exclude<Area, 'neutral'>; labelled?: boolean }) {
+export function AreaIndicator({ area, labelled = false }: { area: Area; labelled?: boolean }) {
+  if (area === 'neutral') return null;
   const label = area === 'work' ? 'Work' : 'Personal';
   const Icon = area === 'work' ? BriefcaseBusiness : House;
   return <span className={`${styles.icon} ${styles[area]}`} title={label} role={labelled ? 'img' : undefined}

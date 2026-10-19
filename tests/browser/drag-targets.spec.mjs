@@ -1,3 +1,4 @@
+import { mobileBoard } from './workspace-controls.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
@@ -48,20 +49,23 @@ test('dragging near the top of a tall stream targets the cell under the pointer'
     await route.abort();
   });
   await page.goto('http://app.test');
+  await mobileBoard(page);
 
   const card = page.locator('.card[data-card-id="tall-0"]');
   await card.scrollIntoViewIfNeeded();
-  if (isMobile) await page.locator('.overflow-x-auto').evaluate(el => { el.scrollLeft = 240; });
+  if (isMobile) await page.locator('.overflow-x-auto').evaluate(el => { el.scrollLeft = 100; });
   const source = await card.boundingBox();
   const row = page.locator('.stream-row').filter({ has: card });
   const destination = row.locator('[data-dragging]').nth(1);
   // Target the top of the tall row, where closest-center incorrectly selects Above.
   const cell = await row.locator('.status-column').nth(1).boundingBox();
-  const start = { x: source.x + 25, y: source.y + 15 };
-  const target = { x: cell.x + cell.width / 2, y: start.y };
+  const start = { x: Math.max(24, source.x + 25), y: source.y + 15 };
+  const target = { x: Math.min(page.viewportSize().width - 24, cell.x + cell.width / 2), y: start.y };
   let cdp;
   async function begin(point) {
     if (isMobile) {
+      point.x = Math.max(24, Math.min(page.viewportSize().width - 24, point.x));
+      expect(await page.evaluate(point => document.elementFromPoint(point.x, point.y)?.closest('[data-card-id]')?.getAttribute('data-card-id'), point)).toBeTruthy();
       cdp ??= await page.context().newCDPSession(page);
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
       await expect(page.locator('[data-dragging="true"]')).not.toHaveCount(0);
@@ -98,12 +102,12 @@ test('dragging near the top of a tall stream targets the cell under the pointer'
   // Scrolling down the tall row must preserve the same containment behavior.
   const bottomCard = page.locator('.card[data-card-id="tall-9"]');
   await bottomCard.scrollIntoViewIfNeeded();
-  if (isMobile) await page.locator('.overflow-x-auto').evaluate(el => { el.scrollLeft = 240; });
+  if (isMobile) await page.locator('.overflow-x-auto').evaluate(el => { el.scrollLeft = 100; });
   const bottom = await bottomCard.boundingBox();
   const bottomRow = page.locator('.stream-row').filter({ has: bottomCard });
   const bottomCell = await bottomRow.locator('.status-column').nth(1).boundingBox();
-  await begin({ x: bottom.x + 25, y: bottom.y + 15 });
-  await move({ x: bottomCell.x + bottomCell.width / 2, y: bottom.y + 15 });
+  await begin({ x: Math.max(24, bottom.x + 25), y: bottom.y + 15 });
+  await move({ x: Math.min(page.viewportSize().width - 24, bottomCell.x + bottomCell.width / 2), y: bottom.y + 15 });
   await expect(bottomRow.locator('[data-dragging]').nth(1)).toHaveCSS('border-style', 'dashed');
   await end();
   await expect.poll(() => calls.filter(call => call.path.endsWith('/save_card_with_undo')).length).toBe(3);

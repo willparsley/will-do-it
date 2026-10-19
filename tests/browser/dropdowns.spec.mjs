@@ -1,3 +1,4 @@
+import { addCard, addStream, mobileBoard, openFilters, closeFilters, selectArea } from './workspace-controls.mjs';
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
@@ -43,7 +44,8 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
   await route.abort();
  });
  await page.goto('http://app.test');
- await page.getByRole('button',{name:'Quick Add',exact:true}).click();
+ await mobileBoard(page);
+ await addCard(page);
  await page.getByRole('heading',{name:'Add New Card'}).waitFor();
  const trigger=page.locator('button[aria-haspopup="listbox"][aria-label="Stream"]');
  const input=page.getByPlaceholder('What needs to be done?');
@@ -86,7 +88,7 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
  await page.screenshot({ path: testInfo.outputPath('selected-value.png'), scale: 'css' });
  await trigger.click();await page.keyboard.press('Escape');assert.equal(await page.getByRole('listbox').count(),0);
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
- await page.getByRole('button',{name:'New Stream',exact:true}).evaluate(el=>el.click());
+ await addStream(page);
  await assertValueCentered(page.getByRole('button',{name:/Area/}));
  await page.getByRole('button',{name:/Area/}).click();
  assert.equal(await page.getByRole('option').count(),3);
@@ -95,7 +97,7 @@ for (const theme of ['light', 'dark']) test(`dropdown layout and surfaces in ${t
  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
  availableStreams = [...streams, ...Array.from({ length: 45 }, (_, i) => ({ ...streams[0], id: `extra-${i}`, title: `Stream ${i}` }))];
  await page.reload();
- await page.getByRole('button', { name: 'Quick Add', exact: true }).click();
+ await addCard(page);
  await page.locator('button[aria-label="Stream"]').click();
  assert.ok(await page.locator('[data-trigger="Select"]').evaluate(el => el.scrollHeight > el.clientHeight));
  const longMenu = await page.locator('[data-trigger="Select"]').boundingBox();
@@ -140,7 +142,8 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
    await route.abort();
  });
  await page.goto('http://app.test');
- const quickAdd=page.getByRole('button',{name:'Quick Add',exact:true});
+ await mobileBoard(page);
+ const quickAdd=page.getByRole('button',{name:isMobile ? 'Add' : 'Quick Add',exact:true});
  async function cancelWithoutWarning(dialog) {
    let confirmations=0;
    const unexpectedConfirmation=async prompt=>{confirmations++;await prompt.dismiss();};
@@ -151,10 +154,10 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
      assert.equal(confirmations,0,'Cancel must discard a dirty draft without confirmation');
    } finally { page.off('dialog',unexpectedConfirmation); }
  }
- await quickAdd.click();
+ await addCard(page);
  await page.getByLabel('Title',{exact:true}).fill('Discard this draft');
  await cancelWithoutWarning(page.getByRole('dialog',{name:'Add New Card'}));
- await quickAdd.click();
+ await addCard(page);
  let dialog=page.getByRole('dialog',{name:'Add New Card'});
  await dialog.waitFor();
  await page.getByLabel('Title',{exact:true}).fill('A recurring walk');
@@ -255,7 +258,7 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  await cancelWithoutWarning(page.getByRole('dialog',{name:'Edit Card'}));
  assert.equal(calls.length,writesBeforeCancel,'Cancel must not save the draft');
  // Ordinary creation also includes notes, using the existing insert path.
- await quickAdd.click();
+ await addCard(page);
  await page.getByLabel('Title',{exact:true}).fill('One-off task');
  await page.getByRole('dialog').locator('summary').filter({hasText:'Repeat'}).click();
  await page.getByRole('dialog').locator('summary').filter({hasText:'Repeat'}).click();
@@ -295,6 +298,8 @@ for (const theme of ['light', 'dark']) test(`hide recurring filters the workspac
   await route.abort();
  });
  await page.goto('http://app.test');
+ await mobileBoard(page);
+ await openFilters(page);
  const toggle = page.getByRole('switch', { name: 'Hide recurring' });
  await expect(toggle).not.toBeChecked();
  await expect(page.getByText('Routine waiting', { exact: true })).toBeVisible();
@@ -307,6 +312,7 @@ for (const theme of ['light', 'dark']) test(`hide recurring filters the workspac
  await toggle.focus();
  await page.keyboard.press('Space');
  await expect(toggle).toBeChecked();
+ await closeFilters(page);
  for (const [view, status] of [['Active', 'waiting'], ['Backlog', 'backlog'], ['All', 'waiting'], ['Archive', 'complete']]) {
   await page.getByRole('group', { name: 'Board view', exact: true }).getByRole('button', { name: view, exact: true }).click();
   await expect(page.getByText(`One-off ${status}`, { exact: true })).toBeVisible();
@@ -315,23 +321,29 @@ for (const theme of ['light', 'dark']) test(`hide recurring filters the workspac
   await expect(page.getByText(`Flagged ${status}`, { exact: true })).toHaveCount(0);
   await expect(page.getByText('Exercise', { exact: true })).toHaveCount(0);
  }
- await page.getByRole('button', { name: 'Work', exact: true }).click();
+ await selectArea(page, 'Work');
  await expect(page.getByText('One-off complete', { exact: true })).toBeVisible();
  await page.reload();
+ await openFilters(page);
  await expect(toggle).toBeChecked();
+ await closeFilters(page);
  await expect(page.getByText('One-off complete', { exact: true })).toBeVisible();
- assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), preferenceKey), { view: 'archive', area: 'work', archivePeriod: 'week', hideRecurring: true });
- await page.getByRole('button', { name: 'Personal', exact: true }).click();
+ assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), preferenceKey), { view: 'archive', area: 'work', archivePeriod: 'week', hideRecurring: true, ...(page.viewportSize().width < 768 ? { mobileLayout: 'board' } : {}) });
+ await selectArea(page, 'Personal');
  await expect(page.getByText('No non-recurring tasks in this view.', { exact: true })).toBeVisible();
  await page.getByRole('button', { name: 'Show recurring', exact: true }).click();
+ await openFilters(page);
  await expect(toggle).not.toBeChecked();
+ await closeFilters(page);
  // Archived occurrences are restored inside their collapsed recurrence group.
  await expect(page.locator('.card').getByText('Routine complete', { exact: true })).toBeAttached();
  await page.reload();
+ await openFilters(page);
  await expect(toggle).not.toBeChecked();
  // Invalid saved values must use the default, rather than treating a string as enabled.
  await page.evaluate(key => localStorage.setItem(key, JSON.stringify({ hideRecurring: 'true' })), preferenceKey);
  await page.reload();
+ await openFilters(page);
  await expect(toggle).not.toBeChecked();
 });
 
@@ -373,6 +385,7 @@ for (const theme of ['light','dark']) test(`prerequisite links and softened bloc
    await route.abort();
  });
  await page.goto('http://app.test');
+ await mobileBoard(page);
  const dns=page.locator('.card').filter({has:page.getByText('Update DNS settings',{exact:true})});
  await expect(dns).toHaveClass(/card-blocked/);
  await expect(dns.getByText('Blocked by: Buy domain name',{exact:true})).toBeVisible();
@@ -406,7 +419,7 @@ for (const theme of ['light','dark']) test(`prerequisite links and softened bloc
  await buy.getByTitle('Mark complete',{exact:true}).evaluate(el=>el.click());
  await expect(dns).not.toHaveClass(/card-blocked/);
  await expect(dns.getByText(/Blocked by/)).toHaveCount(0);
- await page.getByRole('button',{name:'Quick Add',exact:true}).click();
+ await addCard(page);
  await page.getByPlaceholder('What needs to be done?').fill('Check DNS records');
  await page.locator('button[aria-label="Status"]').click();
  await page.getByRole('option',{name:'Research',exact:true}).click();
@@ -450,6 +463,7 @@ for (const theme of ['light','dark']) test(`supplied logos and favicon on worksp
    assert.ok(box.x>=0 && box.x+box.width<=page.viewportSize().width);
  }
  await page.goto('http://app.test');
+ await mobileBoard(page);
  await checkLogo(theme);
  const header=page.locator('header');
  await header.screenshot({path:testInfo.outputPath(`header-${theme}.png`),scale:'css'});
@@ -457,7 +471,7 @@ for (const theme of ['light','dark']) test(`supplied logos and favicon on worksp
  const favicon=await page.evaluate(async()=>{const response=await fetch(document.querySelector('link[rel="icon"][type="image/svg+xml"]').href);return response.text()});
  assert.equal(favicon,await readFile(root+'/app/icon.svg','utf8'));
  const other=theme==='dark'?'light':'dark';
- await page.getByRole('button',{name:'Toggle dark mode'}).click();
+ await page.getByRole('button',{name:/^Switch to (light|dark) mode$/}).click();
  await checkLogo(other);
  await page.goto('http://app.test/login');
  await checkLogo(other);
@@ -505,9 +519,11 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  const tab=name=>page.getByRole('group', { name: 'Board view', exact: true }).getByRole('button',{name,exact:true});
  const group=(count,status)=>page.locator('details').filter({has:page.locator('summary').filter({hasText:`${count} ${status}`})});
  await page.goto('http://app.test');
+ await mobileBoard(page);
  await expect(page.locator('button[aria-label="Completed/canceled period"]')).toHaveCount(0);
  const activeTabBounds=await tab('Active').boundingBox();
  await tab('All').click();
+ await openFilters(page);
  const period=page.locator('button[aria-label="Completed/canceled period"]');
  await expect(period).toContainText('History: Past week');
  await expect(group(12,'completed')).toHaveCount(1);
@@ -515,13 +531,15 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  const bounds=await period.boundingBox();
  assert.ok(bounds.x>=0 && bounds.x+bounds.width<=page.viewportSize().width);
  const toggleBounds=await page.getByRole('switch',{name:'Hide recurring'}).boundingBox();
- const tabBounds=await tab('Active').boundingBox();
+ const tabBounds=activeTabBounds;
  const divider=period.locator('../..').locator(':scope > span[aria-hidden="true"]');
+ if(page.viewportSize().width>=768) {
  const dividerBounds=await divider.boundingBox();
  assert.ok(dividerBounds.width===1 && dividerBounds.height>=24,'Filters have a visible divider');
  assert.ok(dividerBounds.x-(toggleBounds.x+toggleBounds.width)>=8,'Divider has space after the switch');
  assert.ok(bounds.x-(dividerBounds.x+dividerBounds.width)>=8,'Divider has space before History');
- assert.ok(Math.abs((bounds.y+bounds.height/2)-(toggleBounds.y+toggleBounds.height/2))<=1,'History and Hide recurring share a row');
+ }
+ if(page.viewportSize().width>=768) assert.ok(Math.abs((bounds.y+bounds.height/2)-(toggleBounds.y+toggleBounds.height/2))<=1,'History and Hide recurring share a row');
  assert.ok(Math.abs(tabBounds.x-activeTabBounds.x)<=1,'View tabs stay anchored between views');
  if(page.viewportSize().width>=1024) {
    assert.ok(Math.abs((bounds.y+bounds.height/2)-(tabBounds.y+tabBounds.height/2))<=1,'Desktop controls share the tabs row');
@@ -535,6 +553,7 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  assert.ok(await period.locator(':scope > span').evaluate(el=>el.scrollWidth<=el.clientWidth),'Longest History value fits without clipping');
  await period.click();
  await page.getByRole('option',{name:'All time',exact:true}).click();
+ await closeFilters(page);
  const completed=group(14,'completed');
  await expect(completed).toHaveCount(1);
  await expect(completed.locator('summary')).toContainText('Daily walk');
@@ -565,22 +584,28 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  await summary.click();
  await expect(completed).not.toHaveAttribute('open','');
  await tab('Archive').click();
+ await openFilters(page);
  await expect(period).toContainText('All time');
  await period.click();
  await page.getByRole('option',{name:'Past month',exact:true}).click();
+ await closeFilters(page);
  const recentGroup=group(12,'completed');
  await expect(recentGroup).toHaveCount(1);
  await expect(recentGroup.locator('.card').first()).not.toBeVisible();
  await expect(group(2,'canceled')).toHaveCount(1);
+ await openFilters(page);
  await page.locator('button[aria-label="Completed/canceled period"]').click();
  await page.getByRole('option',{name:'All time',exact:true}).click();
+ await closeFilters(page);
  await expect(group(14,'completed')).toHaveCount(1);
- await page.getByRole('button',{name:'Work',exact:true}).click();
+ await selectArea(page,'Work');
  await expect(page.locator('details')).toHaveCount(0);
  await expect(page.getByText('One-off completed',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Personal',exact:true}).click();
+ await selectArea(page,'Personal');
  await expect(group(14,'completed')).toHaveCount(1); // History follows the source's current stream/area.
+ await openFilters(page);
  await page.getByRole('switch',{name:'Hide recurring'}).check();
+ await closeFilters(page);
  await expect(page.locator('details')).toHaveCount(0);
  await expect(page.getByText('No non-recurring tasks in this view.',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Show recurring',exact:true}).click();

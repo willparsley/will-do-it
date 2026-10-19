@@ -1,3 +1,4 @@
+import { addCard } from './workspace-controls.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
@@ -43,7 +44,7 @@ for(const theme of ['light','dark']) for(const action of ['logout','switch-accou
   await expect(board.getByText('Private card',{exact:true})).toBeVisible();
   await expect(directory.getByRole('button',{name:'Edit stream Private stream',exact:true})).toBeVisible();
   await expect(profile.locator('dd')).toHaveText(user.email);
-  await board.getByRole('button',{name:'Quick Add',exact:true}).click();
+  await addCard(board);
   await board.getByRole('dialog').getByLabel('Title',{exact:true}).fill('Private unsaved draft');
   await directory.getByRole('button',{name:'Edit stream Private stream',exact:true}).click();
   if(action==='logout'){

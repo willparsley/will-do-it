@@ -37,6 +37,9 @@ import { toast } from 'sonner';
 import type { User } from '@supabase/supabase-js';
 import { ArchiveCards } from '@/components/ArchiveCards';
 import { ArchivePeriod, HISTORY_PERIODS, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
+import { MobileAddMenu, MobileCards, MobileLayoutControls, MOBILE_LAYOUTS, type MobileLayout } from '@/components/MobileWorkspace';
+import { MoveCardModal } from '@/components/MoveCardModal';
+import { AreaIndicator } from '@/components/AreaIndicator';
 import { errorMessage } from '@/lib/errors';
 
 const supabase = createClient();
@@ -55,6 +58,10 @@ export default function WillDoIt() {
   const [recurrenceSources, setRecurrenceSources] = useState<RecurrenceSource[]>([]);
   const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('week');
   const [hideRecurring, setHideRecurring] = useState(false);
+  const [mobileLayout, setMobileLayout] = useState<MobileLayout>('status');
+  const [mobileViewport, setMobileViewport] = useState(false);
+  const [movingCard, setMovingCard] = useState<Card | null>(null);
+  const compact = mobileViewport && mobileLayout !== 'board';
   const loadSequence = useRef(0);
   const accountActive = useRef(true);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
@@ -156,6 +163,7 @@ export default function WillDoIt() {
       setRecurrenceSources([]);
       setCreationContext(null);
       setEditingCard(null);
+      setMovingCard(null);
       setEditingRecurrenceId(null);
       setShowStreamModal(false);
       setEditingStream(null);
@@ -179,6 +187,7 @@ export default function WillDoIt() {
           if (savedView) setView(savedView.id);
           if (['all', 'work', 'personal'].includes(preferences.area)) setActiveFilter(preferences.area);
           if (HISTORY_PERIODS.some(option => option.value === preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
+          if (MOBILE_LAYOUTS.some(option => option.value === preferences.mobileLayout)) setMobileLayout(preferences.mobileLayout);
           if (typeof preferences.hideRecurring === 'boolean') setHideRecurring(preferences.hideRecurring);
         }
       } catch {
@@ -194,10 +203,10 @@ export default function WillDoIt() {
     };
   }, [loadData]);
 
-  const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod; hideRecurring: boolean }>) => {
+  const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod; hideRecurring: boolean; mobileLayout: MobileLayout }>) => {
     if (!user) return;
     try {
-      localStorage.setItem(`will-do-it:workspace:${user.id}`, JSON.stringify({ view, area: activeFilter, archivePeriod, hideRecurring, ...changes }));
+      localStorage.setItem(`will-do-it:workspace:${user.id}`, JSON.stringify({ view, area: activeFilter, archivePeriod, hideRecurring, ...(mobileLayout !== 'status' ? { mobileLayout } : {}), ...changes }));
     } catch {
       // The selected view still works when browser storage is unavailable.
     }
@@ -205,6 +214,10 @@ export default function WillDoIt() {
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
+    const media = window.matchMedia('(max-width: 767px)');
+    const resize = () => setMobileViewport(media.matches);
+    resize();
+    media.addEventListener('change', resize);
     const pointer = (event: PointerEvent) => {
       touchInput.current = event.pointerType === 'touch' || event.pointerType === 'pen';
       setTouchMode(touchInput.current);
@@ -218,6 +231,7 @@ export default function WillDoIt() {
     document.addEventListener('pointerdown', pointer, true);
     document.addEventListener('keydown', escape);
     return () => {
+      media.removeEventListener('change', resize);
       document.removeEventListener('pointerdown', pointer, true);
       document.removeEventListener('keydown', escape);
     };
@@ -241,7 +255,7 @@ export default function WillDoIt() {
   }
 
   // Adjust transient selection before rendering a changed workspace context.
-  const selectionContext = [view, activeFilter, archivePeriod, hideRecurring, editingCard?.id,
+  const selectionContext = [mobileViewport, mobileLayout, movingCard?.id, view, activeFilter, archivePeriod, hideRecurring, editingCard?.id,
     editingRecurrenceId, !!creationContext, showStreamModal, editingStream?.id].join(':');
   const [previousSelectionContext, setPreviousSelectionContext] = useState(selectionContext);
   if (previousSelectionContext !== selectionContext) {
@@ -504,16 +518,24 @@ export default function WillDoIt() {
     setEditingRecurrenceId(sourceId);
   };
 
-  const renderCard = (card: Card) => (
-    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={touchMode}
+  const renderCard = (card: Card) => {
+    const stream = streams.find(stream => stream.id === displayStreamId(card));
+    const context = mobileLayout === 'status'
+      ? <span className="flex items-center gap-1.5"><AreaIndicator area={stream?.area || 'neutral'} />{stream?.title}</span>
+      : <span>{STATUS_LABELS[card.status]}</span>;
+    return (
+    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={compact || touchMode} compact={compact}
+      context={compact ? context : undefined}
+      onMove={mobileViewport ? () => { setSelectedCardId(null); setMovingCard(card); } : undefined}
       onEdit={() => { setSelectedCardId(null); setEditingCard(card); }}
       onClick={event => {
         if (activeDragCard || (suppressCardClick.current && event?.detail !== 0)) return;
-        if (touchInput.current || event?.detail === 0) setSelectedCardId(current => current === card.id ? null : card.id);
+        if (compact || touchInput.current || event?.detail === 0) setSelectedCardId(current => current === card.id ? null : card.id);
         else { setSelectedCardId(null); setEditingCard(card); }
       }}
       onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />
-  );
+    );
+  };
 
   if (initialLoading || !user) {
     return (
@@ -523,61 +545,8 @@ export default function WillDoIt() {
     );
   }
 
-  return (
-    <div className="h-dvh overflow-hidden flex flex-col">
-      <header className="relative shrink-0 border-b border-line bg-chrome/80 backdrop-blur z-50">
-        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <div className="flex items-center gap-3">
-            <h1 className="shrink-0"><BrandLogo /></h1>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-            <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />
-
-            <TooltipButton
-              tooltip="Add a new card"
-              onPress={() => setCreationContext({ status: 'backlog' })}
-              className="btn btn-primary px-4 py-1.5 text-sm"
-            >
-              <Plus className="h-4 w-4" /> Quick Add
-            </TooltipButton>
-
-            <TooltipButton
-              tooltip="Create a stream to organize your cards"
-              onPress={() => setShowStreamModal(true)}
-              className="btn btn-secondary px-3 py-1.5 text-sm"
-            >
-              New Stream
-            </TooltipButton>
-
-            <ThemeToggle />
-
-            <AccountMenu email={user.email} />
-          </div>
-        </div>
-      </header>
-
-      {/* View switcher lives in its own stable bar so it never shifts
-          horizontally when the number of columns changes between views. */}
-      <div className="relative shrink-0 z-40 border-b border-line bg-chrome/80 backdrop-blur">
-        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:gap-6 items-center justify-center">
-          <div role="group" aria-label="Board view" className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
-            {VIEWS.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => { setView(v.id); savePreferences({ view: v.id }); }}
-                aria-pressed={view === v.id}
-                className={`px-4 sm:px-6 py-2 text-base transition-colors whitespace-nowrap ${
-                  view === v.id
-                    ? 'bg-accent text-accent-ink'
-                    : 'text-ink-soft hover:text-ink hover:bg-sunken'
-                }`}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center justify-center gap-2 sm:gap-4 lg:min-w-[24rem] lg:justify-start">
+  const filterControls = (
+<div data-secondary-filters className="flex items-center justify-center gap-2 sm:gap-4 lg:min-w-[24rem] lg:justify-start">
             <button
               type="button"
               role="switch"
@@ -613,12 +582,71 @@ export default function WillDoIt() {
               </>
             )}
           </div>
+  );
+
+  return (
+    <div className="h-dvh overflow-hidden flex flex-col">
+      <header className="workspace-header relative shrink-0 border-b border-line bg-chrome/80 backdrop-blur z-50">
+        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex items-center gap-3">
+            <h1 className="shrink-0"><BrandLogo /></h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+            <div className="hidden md:block">{!mobileViewport && <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />}</div>
+
+            <div className="hidden md:flex gap-2 sm:gap-4"><TooltipButton
+              tooltip="Add a new card"
+              onPress={() => setCreationContext({ status: 'backlog' })}
+              className="btn btn-primary px-4 py-1.5 text-sm"
+            >
+              <Plus className="h-4 w-4" /> Quick Add
+            </TooltipButton>
+
+            <TooltipButton
+              tooltip="Create a stream to organize your cards"
+              onPress={() => setShowStreamModal(true)}
+              className="btn btn-secondary px-3 py-1.5 text-sm"
+            >
+              New Stream
+            </TooltipButton></div>
+            <div className="md:hidden"><MobileAddMenu onCard={() => setCreationContext({ status: 'backlog' })} onStream={() => setShowStreamModal(true)} /></div>
+
+            <ThemeToggle />
+
+            <AccountMenu email={user.email} />
+          </div>
+        </div>
+      </header>
+
+      {/* View switcher lives in its own stable bar so it never shifts
+          horizontally when the number of columns changes between views. */}
+      <div className="relative shrink-0 z-40 border-b border-line bg-chrome/80 backdrop-blur">
+        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:gap-6 items-center justify-center">
+          <div role="group" aria-label="Board view" className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
+            {VIEWS.map((v) => (
+              <button
+                key={v.id}
+                onClick={() => { setView(v.id); savePreferences({ view: v.id }); }}
+                aria-pressed={view === v.id}
+                className={`px-4 sm:px-6 py-2 text-base transition-colors whitespace-nowrap ${
+                  view === v.id
+                    ? 'bg-accent text-accent-ink'
+                    : 'text-ink-soft hover:text-ink hover:bg-sunken'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <div className="hidden md:block">{!mobileViewport && filterControls}</div>
+          <div className="w-full md:hidden"><MobileLayoutControls layout={mobileLayout} onLayout={layout => { setMobileLayout(layout); savePreferences({ mobileLayout: layout }); }} filterCount={(activeFilter !== 'all' ? 1 : 0) + (hideRecurring ? 1 : 0) + (columns.includes('complete') && archivePeriod !== 'week' ? 1 : 0)} filters={<><AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />{filterControls}</>} /></div>
         </div>
       </div>
 
       {/* One scroll container keeps sticky labels aligned on both axes, while
           the controls above take their natural height even when they wrap. */}
-      <div className="w-full min-h-0 overflow-x-auto overflow-y-auto scroll-pt-14 px-4 sm:px-6 lg:px-8 pb-6 flex-1" role="region" aria-label="Task board" tabIndex={0}>
+      <div className="workspace-board w-full min-h-0 overflow-x-auto overflow-y-auto scroll-pt-14 px-4 sm:px-6 lg:px-8 pb-6 flex-1" role="region" aria-label="Task board" tabIndex={0}>
         <DndContext
           sensors={sensors}
           // Tall rows can have centers farther away than a neighboring row.
@@ -628,11 +656,12 @@ export default function WillDoIt() {
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
         >
-          <div className="space-y-3 mx-auto" style={{ maxWidth: matrixMaxWidth, minWidth: 34 + streamColWidth + columns.length * 180 + columns.length * GRID_GAP }}>
-            <div
+          {compact && filteredStreams.length > 0 ? <MobileCards view={view} layout={mobileLayout as 'status' | 'stream'} streams={filteredStreams} columns={columns} cardsForStream={getCardsForStream} renderCard={renderCard} onAdd={setCreationContext} onEditStream={setEditingStream} /> :
+          <div className={`space-y-3 mx-auto ${mobileViewport ? 'mobile-matrix' : ''}`} style={{ maxWidth: matrixMaxWidth, minWidth: compact ? 0 : mobileViewport ? 34 + columns.length * 240 + (columns.length - 1) * GRID_GAP : 34 + streamColWidth + columns.length * 180 + columns.length * GRID_GAP }}>
+            {!compact && <div
               className="sticky top-0 z-20 grid gap-3 items-center px-4 py-2 bg-canvas border border-transparent border-b-line shadow-sm"
               data-status-headers
-              style={{ gridTemplateColumns: gridColumns }}
+              style={{ gridTemplateColumns: mobileViewport ? `repeat(${columns.length}, minmax(240px, 1fr))` : gridColumns }}
             >
               <Link href="/streams" aria-label="View all streams" className="font-medium text-sm px-3 min-h-11 flex items-center gap-2 rounded text-ink-soft hover:text-ink hover:underline focus-ring">
                 Stream <ArrowUpRight size={14} aria-hidden="true" />
@@ -642,7 +671,7 @@ export default function WillDoIt() {
                   <StatusHeader status={status} />
                 </div>
               ))}
-            </div>
+            </div>}
 
             {filteredStreams.length > 0 ? (
               filteredStreams.map((stream) => {
@@ -655,7 +684,7 @@ export default function WillDoIt() {
                   >
                     <div 
                       className="grid gap-3"
-                      style={{ gridTemplateColumns: gridColumns }}
+                      style={{ gridTemplateColumns: mobileViewport ? `repeat(${columns.length}, minmax(240px, 1fr))` : gridColumns }}
                     >
                       <StreamTitle stream={stream} onEdit={() => setEditingStream(stream)} />
 
@@ -697,7 +726,7 @@ export default function WillDoIt() {
                 ) : 'No streams with cards in this view.'}
               </div>
             )}
-          </div>
+          </div>}
 
           <DragOverlay dropAnimation={null}>
             {activeDragCard ? (
@@ -718,6 +747,15 @@ export default function WillDoIt() {
             onCardCreated={handleCardCreated}
           />
         )}
+
+        {movingCard && <MoveCardModal card={movingCard} streams={streams} onClose={() => setMovingCard(null)} onMove={async (streamId, status) => {
+          if (!user || !accountActive.current) return;
+          const position = Math.max(-1, ...cards.filter(card => card.id !== movingCard.id && card.stream_id === streamId && card.status === status).map(card => card.position || 0)) + 1;
+          const result = await saveQuickAction(movingCard, { stream_id: streamId, status, position });
+          if (!accountActive.current) return;
+          await loadData(user.id, false);
+          showUndoToast('Card moved', result.undo_id);
+        }} />}
 
         {editingCard && (
           <EditCardModal

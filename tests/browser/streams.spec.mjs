@@ -1,3 +1,4 @@
+import { openFilters } from './workspace-controls.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
@@ -55,12 +56,14 @@ async function setup(page, theme, signedIn = true, fail = false) {
 }
 
 
-for (const theme of ['light', 'dark']) test(`all streams, grouping, and editing in ${theme}`, async ({ page }, testInfo) => {
+for (const theme of ['light', 'dark']) test(`all streams, grouping, and editing in ${theme}`, async ({ page, isMobile }, testInfo) => {
   page.setDefaultTimeout(8000);
   await setup(page, theme);
   await page.goto('http://app.test');
   await expect(page.getByText('No streams with cards in this view.')).toBeVisible();
-  await page.getByRole('link', { name: 'View all streams' }).click();
+  const directoryLink = page.getByRole('link', { name: 'View all streams' });
+  if (await directoryLink.isVisible()) await directoryLink.click();
+  else { await openFilters(page); await page.getByRole('link', { name: 'All streams', exact: true }).click(); }
   await expect(page).toHaveURL('http://app.test/streams');
   await expect(page.getByRole('heading', { level: 1, name: 'Streams', exact: true })).toBeVisible();
   const sections = page.locator('main section');
@@ -92,7 +95,10 @@ for (const theme of ['light', 'dark']) test(`all streams, grouping, and editing 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('streams.png'), fullPage: true });
   await page.getByRole('link', { name: 'Back to workspace' }).click();
-  await expect(page.getByRole('link', { name: 'View all streams' })).toBeVisible();
+  if (isMobile) {
+    await expect(page.getByRole('dialog', { name: 'Filters', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Filters', exact: true })).toBeVisible();
+  } else await expect(page.getByRole('link', { name: 'View all streams' })).toBeVisible();
 });
 
 test('streams load failure can be retried', async ({ page }) => {
