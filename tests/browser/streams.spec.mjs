@@ -56,7 +56,7 @@ async function setup(page, theme, signedIn = true, fail = false) {
 }
 
 
-for (const theme of ['light', 'dark']) test(`all streams, grouping, and editing in ${theme}`, async ({ page }, testInfo) => {
+for (const theme of ['light', 'dark']) test(`all streams, grouping, and editing in ${theme}`, async ({ page, isMobile }, testInfo) => {
   page.setDefaultTimeout(8000);
   await setup(page, theme);
   await page.goto('http://app.test');
@@ -95,7 +95,10 @@ for (const theme of ['light', 'dark']) test(`all streams, grouping, and editing 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('streams.png'), fullPage: true });
   await page.getByRole('link', { name: 'Back to workspace' }).click();
-  await expect(page.getByRole('link', { name: 'View all streams' })).toBeVisible();
+  if (isMobile) {
+    await expect(page.getByRole('dialog', { name: 'Filters', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Filters', exact: true })).toBeVisible();
+  } else await expect(page.getByRole('link', { name: 'View all streams' })).toBeVisible();
 });
 
 test('streams load failure can be retried', async ({ page }) => {

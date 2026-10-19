@@ -45,7 +45,7 @@ export function MobileLayoutControls({ layout, onLayout, filters, filterCount }:
     {open && <CardFormDialog title="Filters" dirty={false} saving={false} onClose={() => setOpen(false)}>
       <div className={styles.filters}>{filters}</div>
       <div className="p-4 border-t border-line flex justify-between items-center">
-        <Link href="/streams" className="btn btn-ghost min-h-11 px-3">All streams</Link>
+        <Link href="/streams" onClick={() => setOpen(false)} className="btn btn-ghost min-h-11 px-3">All streams</Link>
         <button type="button" className="btn btn-primary min-h-11 px-5" onClick={() => setOpen(false)}>Done</button>
       </div>
     </CardFormDialog>}
