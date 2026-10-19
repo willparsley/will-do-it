@@ -734,7 +734,7 @@ export default function WillDoIt() {
           <DragOverlay dropAnimation={null}>
             {activeDragCard ? (
               <div className="w-64 max-w-full">
-                <CardComponent card={activeDragCard} prerequisite={cards.find(other => other.id === activeDragCard.prerequisite_card_id)} overlay touchMode={touchMode} />
+                <CardComponent card={activeDragCard} prerequisite={cards.find(other => other.id === activeDragCard.prerequisite_card_id)} overlay touchMode={touchMode} desktop={!mobileViewport} />
               </div>
             ) : null}
           </DragOverlay>

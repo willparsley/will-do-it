@@ -84,7 +84,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
 
         {blocked && <p className="card-blocked-label mt-2 flex items-start gap-1 text-xs">
           <LockKeyhole className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span className="break-words min-w-0">Blocked by: {prerequisite?.title || 'unavailable prerequisite'}</span>
+          <span className="break-words min-w-0">{desktop && !selected ? 'Blocked' : `Blocked by: ${prerequisite?.title || 'unavailable prerequisite'}`}</span>
         </p>}
 
         {!isFinished && ((!desktop && !compact) || selected) && card.is_recurring && card.last_completed_at && (
@@ -233,7 +233,7 @@ export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEdi
   if (overlay) {
     return (
       <div className="rotate-1 scale-[1.03] shadow-lg">
-        <CardView card={card} prerequisite={prerequisite} touchMode={touchMode} />
+        <CardView card={card} prerequisite={prerequisite} touchMode={touchMode} desktop={desktop} />
       </div>
     );
   }
