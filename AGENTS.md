@@ -24,10 +24,10 @@ Will Do It is a calm, visual personal productivity app for managing to-dos as ca
 - **Dates**: date-fns or native
 - **Forms**: React Hook Form + Zod (future)
 
-**PWA**: Installable web app. Reminders work via in-app visuals + auto-promotion. Push notifications planned as future enhancement.
+**PWA**: Installable web app. Reminders work via in-app visuals + auto-promotion. Opt-in push reminders are implemented; deployment requires the Supabase function, VAPID keys, and scheduler described in docs/push-notifications.md.
 
 ## Current Status (as of Oct 2026)
-Supabase-backed Streams/Cards CRUD, matrix drag-and-drop, transactional recurrence generation/lifecycle, reminders, grouped archive views, and mobile PWA installation metadata are implemented. Push notifications and offline workspace editing remain future work.
+Supabase-backed Streams/Cards CRUD, matrix drag-and-drop, transactional recurrence generation/lifecycle, reminders, grouped archive views, and mobile PWA installation metadata are implemented. Push reminders now have an opt-in implementation pending deployment setup and real-device verification. Offline workspace editing remains future work.
 
 ## Core Data Model (High Level)
 
@@ -159,13 +159,14 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 8. PWA + edge cases
 
 ## Future / Deferred
-- Push notifications
+- Source-level recurring reminder/due times
 - Richer notes
 - Advanced search/filters
 - Offline capabilities beyond PWA shell
 - Email/SMS for reminders
 
 ## Decisions Log
+- Push reminders opt in per device on Profile. The Supabase minute scheduler invokes a bearer-secret-protected Edge Function; a service-only RPC generates subscribed recurrence accounts and leases deduplicated deliveries. Push uses the exact `remind_at` instant, falling back to `due_at`; explicit reminders replace due pushes. Date-only values notify at local midnight. Existing day-based promotion remains unchanged. Generic notification text protects lock-screen titles. Deploy migration `202610190001_push_reminders.sql`, function, keys, and Cron/Vault setup from `docs/push-notifications.md` before enabling production. Future recurrence occurrences still use the generator’s midnight dates; source-level times remain deferred.
 - Desktop card titles are edit buttons, with a reserved pencil revealed on title hover or keyboard focus like stream titles. Clicking the card body selects/deselects it; focusing the card and pressing Enter/Space also toggles selection. Recurring last-completed metadata is hidden until selected, and empty badge rows take no space. Due/reminder badges and a compact lock + “Blocked” indicator remain visible; the blocking card’s title appears only while selected. Mobile title taps, blocked details, and selection behavior are unchanged. Existing selection dismissal and drag suppression apply on desktop too.
 - Below 768px, mobile defaults to a full-width By status list, with By stream and Board alternatives remembered per account independently of the desktop matrix. Existing view/area/recurrence/history filters apply across layouts; terminal recurrence groups retain current-source stream context and newest-first history. Sections collapse locally. In By stream / All, each stream places Complete and Canceled cards together beneath an initially collapsed “Complete / Canceled” disclosure with a filtered occurrence count; active cards remain outside it, and Archive continues to show history directly. Recurring groups remain separately expandable inside the disclosure. List cards retain due/blocked context, show their stream or status as needed, and reveal secondary metadata/actions on selection. Lists scroll normally without drag activation; the explicit Move dialog uses the existing transactional save/Undo path and explains source-wide recurring stream moves. Mobile Board places stream headings above horizontally scrolling status cells. Mobile Add offers cards/streams, Filters contains area/recurrence/history settings, and the stream directory remains accessible there. Local mobile testing instructions are in README.md; phone layout review does not require merging to main.
 - Stream deletion checks stored cards across all statuses and filters before showing a move destination. Empty streams show a simple delete confirmation; recurrence sources without cards still require a recurrence destination. Deletion retains the atomic rehoming RPC with Uncategorized as the default destination to preserve any contents added concurrently.
