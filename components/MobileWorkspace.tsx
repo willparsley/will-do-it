@@ -10,7 +10,7 @@ import { AreaIndicator } from './AreaIndicator';
 import { ArchiveCards } from './ArchiveCards';
 import { StatusHeader } from './StatusHeader';
 import { type Card, type CardStatus, type Stream, STATUS_LABELS } from '@/lib/types';
-import { displayStreamId } from '@/lib/card-views';
+import { type View, displayStreamId } from '@/lib/card-views';
 import styles from './MobileWorkspace.module.css';
 import menuStyles from './HeaderControls.module.css';
 
@@ -52,8 +52,8 @@ export function MobileLayoutControls({ layout, onLayout, filters, filterCount }:
   </div>;
 }
 
-export function MobileCards({ layout, streams, columns, cardsForStream, renderCard, onAdd, onEditStream }: {
-  layout: 'status' | 'stream'; streams: Stream[]; columns: CardStatus[];
+export function MobileCards({ layout, view, streams, columns, cardsForStream, renderCard, onAdd, onEditStream }: {
+  layout: 'status' | 'stream'; view: View; streams: Stream[]; columns: CardStatus[];
   cardsForStream: (id: string) => Card[]; renderCard: (card: Card) => ReactNode;
   onAdd: (context: { streamId?: string; status: CardStatus }) => void;
   onEditStream: (stream: Stream) => void;
@@ -78,6 +78,12 @@ export function MobileCards({ layout, streams, columns, cardsForStream, renderCa
     {sections.map(section => {
       const stream = 'stream' in section ? section.stream : undefined;
       const status = 'status' in section ? section.status : undefined;
+      const collapseHistory = layout === 'stream' && view === 'all';
+      const historyCards = section.cards.filter(card => card.status === 'complete' || card.status === 'canceled');
+      const renderColumns = (statuses: CardStatus[]) => statuses.map(status => {
+        const cards = section.cards.filter(card => card.status === status);
+        return cards.length > 0 ? <div key={status} className="space-y-2">{renderStatusCards(cards, status)}</div> : null;
+      });
       const canAdd = stream ? stream.state === 'in_progress' : streams.some(stream => stream.state === 'in_progress');
       return <details key={section.id} open className={styles.section}>
         <summary className={`${styles.heading} focus-ring`}>
@@ -87,7 +93,17 @@ export function MobileCards({ layout, streams, columns, cardsForStream, renderCa
         </summary>
         <div className={styles.sectionBody}>
           {stream && stream.title !== 'Uncategorized' && <button type="button" className="btn btn-ghost min-h-11 px-2 text-xs" onClick={() => onEditStream(stream)}>Stream details</button>}
-          {status ? renderStatusCards(section.cards, status) : columns.map(status => <div key={status} className="space-y-2">{renderStatusCards(section.cards.filter(card => card.status === status), status)}</div>)}
+          {status ? renderStatusCards(section.cards, status) : <>
+            {renderColumns(collapseHistory ? columns.filter(status => status !== 'complete' && status !== 'canceled') : columns)}
+            {collapseHistory && historyCards.length > 0 && <details className={styles.history} data-stream-history={section.id}>
+              <summary className="focus-ring">
+                <ChevronDown size={16} className={styles.chevron} aria-hidden="true" />
+                <span>Complete / Canceled</span>
+                <span className={styles.count} aria-label={`${historyCards.length} cards`}>{historyCards.length}</span>
+              </summary>
+              <div className="space-y-2 p-2 pt-0">{renderColumns(['complete', 'canceled'])}</div>
+            </details>}
+          </>}
           {section.cards.length === 0 && <p className="py-2 text-sm text-ink-muted">No cards in this status.</p>}
           {canAdd && <button type="button" className={styles.add} aria-label={`Add card to ${section.title}`} onClick={event => { event.currentTarget.focus(); onAdd({ streamId: stream?.id, status: status || columns[0] }); }}><Plus size={17} /> Add card</button>}
         </div>

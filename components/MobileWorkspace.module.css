@@ -16,3 +16,9 @@
 .sectionBody { padding: 0 .625rem .625rem; display: flex; flex-direction: column; gap: .5rem; }
 .add { display: flex; justify-content: center; align-items: center; gap: .5rem; min-height: 44px; width: 100%; border: 1px dashed var(--border-strong); border-radius: .5rem; color: var(--text-secondary); font-size: .8125rem; cursor: pointer; }
 .add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.history { border: 1px solid var(--border-subtle); border-radius: .5rem; }
+.history > summary { display: flex; align-items: center; gap: .5rem; min-height: 44px; padding: .5rem; font-size: .8125rem; font-weight: 500; color: var(--text-secondary); cursor: pointer; list-style: none; border-radius: .5rem; }
+.history > summary::-webkit-details-marker { display: none; }
+.history > summary > .count { margin-left: auto; }
+.history:not([open]) > summary .chevron { transform: rotate(-90deg); }

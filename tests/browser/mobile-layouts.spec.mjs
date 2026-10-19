@@ -24,6 +24,9 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
     { id: 'waiting', title: 'Confirm delivery date', stream_id: 'personal', status: 'waiting', due_at: new Date().toISOString() },
     { id: 'progress', title: 'Draft proposal', stream_id: 'work', status: 'in_progress' },
     { id: 'backlog', title: 'Choose paint', stream_id: 'personal', status: 'backlog' },
+    { id: 'ordinary-done', title: 'Finished cabinet choice', stream_id: 'personal', status: 'complete', completed_at: new Date().toISOString() },
+    { id: 'ordinary-canceled', title: 'Canceled installer visit', stream_id: 'personal', status: 'canceled', completed_at: new Date().toISOString() },
+    { id: 'work-done', title: 'Finished proposal outline', stream_id: 'work', status: 'complete', completed_at: new Date().toISOString() },
     { id: 'done', title: 'Old kitchen task', stream_id: 'work', status: 'complete', is_recurring: true, recurrence_source_id: 'repeat', completed_at: new Date().toISOString() },
     { id: 'done2', title: 'Another kitchen task', stream_id: 'personal', status: 'complete', is_recurring: true, recurrence_source_id: 'repeat', completed_at: new Date().toISOString() },
   ].map((card, i) => ({ user_id: user.id, position: i, is_recurring: false, ...card }));
@@ -117,7 +120,41 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
   expect(calls.filter(call => call.path.endsWith('/save_card_with_undo')).at(-1).body.p_changes).toMatchObject({ stream_id: 'work', status: 'in_progress' });
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(card('waiting')).toContainText('Waiting');
+  // All keeps active cards visible and nests each stream's terminal history.
+  await view('All');
+  const personalHistory = page.locator('[data-stream-history="personal"]');
+  const workHistory = page.locator('[data-stream-history="work"]');
+  await expect(personalHistory).not.toHaveAttribute('open');
+  await expect(personalHistory.locator(':scope > summary')).toContainText('Complete / Canceled');
+  await expect(personalHistory.locator(':scope > summary')).toContainText('4');
+  await expect(workHistory.locator(':scope > summary')).toContainText('1');
+  await expect(card('waiting')).toBeVisible();
+  await expect(card('backlog')).toBeVisible();
+  await expect(card('ordinary-done')).toBeHidden();
+  await expect(card('ordinary-canceled')).toBeHidden();
+  await expect(card('work-done')).toBeHidden();
+  await personalHistory.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(card('ordinary-done')).toBeVisible();
+  await expect(card('ordinary-canceled')).toBeVisible();
+  await expect(card('work-done')).toBeHidden();
+  // Recurring history keeps its own second level of expansion.
+  await expect(page.getByText('2 completed', { exact: true })).toBeVisible();
+  await expect(card('done')).toBeHidden();
+  await page.getByText('Clean kitchen', { exact: true }).click();
+  await expect(card('done')).toBeVisible();
+  await personalHistory.locator(':scope > summary').click();
+  await expect(card('ordinary-done')).toBeHidden();
+  await expect(card('waiting')).toBeVisible();
+  await page.reload();
+  await expect(personalHistory).not.toHaveAttribute('open');
+  await expect(card('ordinary-done')).toBeHidden();
+  await fits();
+  await page.screenshot({ path: testInfo.outputPath('stream-history-collapsed.png'), fullPage: true });
   await view('Archive');
+  await expect(page.locator('[data-stream-history]')).toHaveCount(0);
+  await expect(card('ordinary-done')).toBeVisible();
+  await expect(card('ordinary-canceled')).toBeVisible();
   await expect(page.getByText('2 completed', { exact: true })).toBeVisible();
   await expect(page.getByText('Clean kitchen', { exact: true })).toBeVisible();
   await layout('By status');
@@ -128,7 +165,10 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
   await filters.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByText('Clean kitchen', { exact: true })).toHaveCount(0);
   await fits();
-  await page.getByRole('button', { name: 'Show recurring', exact: true }).click();
+  await expect(card('ordinary-done')).toBeVisible();
+  await page.getByRole('button', { name: /Filters/ }).click();
+  await filters.getByRole('switch', { name: 'Hide recurring' }).click();
+  await filters.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByText('Clean kitchen', { exact: true })).toBeVisible();
   await view('Active');
   await layout('Board');
