@@ -67,7 +67,7 @@ export function PushSettings({ userId }: { userId: string }) {
     <p className="text-sm text-ink-soft mb-3">On iPhone or iPad, install to your Home Screen and open the installed app first. Notifications show a private, generic message and open your workspace.</p>
     {!supported ? <p className="text-sm">Push is unavailable in this browser. Try the installed app or a supported browser.</p>
       : !key ? <p className="text-sm">Push notifications have not been configured for this app yet.</p>
-      : <button className="btn btn-primary min-h-11" disabled={busy} onClick={() => void toggle()}>{busy ? 'Checking…' : enabled ? 'Disable on this device' : 'Enable on this device'}</button>}
+      : <button className="btn btn-primary focus-ring min-h-11 w-full px-5 py-2.5 text-sm leading-5 sm:w-auto" disabled={busy} onClick={() => void toggle()}>{busy ? 'Checking…' : enabled ? 'Disable on this device' : 'Enable on this device'}</button>}
     <p role="status" className="text-sm mt-3">{message}</p>
   </section>;
 }
