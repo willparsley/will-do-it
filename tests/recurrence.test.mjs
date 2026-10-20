@@ -26,7 +26,7 @@ before(async () => {
     create table auth.users (id uuid primary key);
     create function auth.uid() returns uuid language sql stable as
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-    create role authenticated;
+    create role authenticated; create role service_role; create role anon;
     grant usage on schema auth, public to authenticated;
     grant select on auth.users to authenticated;`);
   const schema = (await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'))
@@ -1016,4 +1016,19 @@ test('recurring creation links only the first occurrence and invalid links roll 
   const before=await query('select id from recurrence_sources');
   await assert.rejects(create(other),/Choose one of your cards/);
   assert.deepEqual(await query('select id from recurrence_sources'),before);
+});
+
+test('service push claim generates recurring cards for subscribed owners and restores caller identity', async () => {
+  await fixture({ stack: true, daysAgo: 2 });
+  await db.exec('reset role');
+  await query(`insert into push_subscriptions(user_id,endpoint,p256dh,auth,enabled_at)
+    values ($1,'https://fcm.googleapis.com/test',repeat('a',87),repeat('a',22),now()-interval '1 day')`, [user]);
+  await query("select set_config('request.jwt.claim.sub',$1,false)",[other]);
+  await query('select * from claim_push_reminders()');
+  const generated = await instances();
+  assert.ok(generated.length >= 2);
+  assert.ok(generated.every(card => card.user_id === user));
+  assert.equal((await query('select auth.uid() as id'))[0].id, other);
+  await query('select * from claim_push_reminders()');
+  assert.equal((await instances()).length, generated.length);
 });

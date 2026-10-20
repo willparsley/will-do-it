@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase/client';
 import { watchAccount } from '@/lib/supabase/account-boundary';
 import { BrandLogo } from '@/components/BrandLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { ReminderPreferences } from '@/components/ReminderPreferences';
+import { PushSettings } from '@/components/PushSettings';
 import { AccountMenu } from '@/components/AccountMenu';
 
 export default function ProfilePage() {
@@ -52,6 +54,8 @@ export default function ProfilePage() {
             <dd className="break-all">{user.email || 'No email address available'}</dd>
           </dl>
         </section>
+        <ReminderPreferences key={`reminders-${user.id}`} userId={user.id} />
+        <PushSettings key={user.id} userId={user.id} />
       </main>
     </div>
   );

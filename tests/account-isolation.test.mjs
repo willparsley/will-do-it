@@ -12,7 +12,7 @@ const q = async (sql,args=[]) => (await db.query(sql,args)).rows;
 try {
 await db.exec(`create schema auth; create table auth.users(id uuid primary key);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
- create role authenticated; create role anon;
+ create role authenticated; create role service_role; create role anon;
  grant usage on schema public,auth to authenticated,anon;
  grant execute on function auth.uid() to authenticated,anon;
  alter default privileges in schema public grant select,insert,update,delete on tables to authenticated,anon;`);

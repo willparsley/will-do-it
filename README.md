@@ -184,3 +184,7 @@ Apply `supabase/migrations/202610150002_card_creation_notes.sql` before deployin
 Apply `supabase/migrations/202610150003_card_prerequisites.sql` before deploying this version. Add or edit a card and expand **Prerequisite** to search cards by title or stream, then select one prerequisite. Choose **No prerequisite** to remove it.
 
 Unfinished cards have a softened title and a muted red “Blocked by” label (with separate shades for light and dark themes) until their prerequisite is Complete. Canceled prerequisites still block. This indicator is advisory; movement and completion remain available. Links use the full workspace regardless of view filters. A recurring card’s link belongs to that occurrence only. Circular links are rejected. Referenced cards cannot be deleted until their incoming links are removed.
+
+### Push notifications
+
+Per-device push reminders and exact-time background delivery are implemented but require server setup. See [Push notification setup](docs/push-notifications.md) for migration, VAPID secrets, Supabase function/scheduler deployment, and phone validation.
