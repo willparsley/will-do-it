@@ -59,7 +59,7 @@ for(const page of ['app/page.tsx','app/streams/page.tsx','app/profile/page.tsx']
         if(scenario==='late-data' && page==='app/page.tsx') {
           holdData=true;
           // Start a refresh through the real recurrence-update callback.
-          const card=nodes(ui.render(),n=>n.props?.card?.id==='card')[0];card.props.onClick();
+          const card=nodes(ui.render(),n=>n.props?.card?.id==='card')[0];card.props.onEdit({ detail: 0 });
           const editor=nodes(ui.render(),n=>typeof n.props?.onCardUpdated==='function')[0];
           void editor.props.onCardUpdated(cards[0]);await tick();
         }
