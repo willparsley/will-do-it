@@ -130,7 +130,7 @@ test('both workspace entry points open the same source editor and saving runs ge
   displayed.props.onEditRecurrence('source');tree=ui.render();
   let editor=nodes(tree,node=>node.props.sourceId==='source')[0];assert.ok(editor);
   editor.props.onClose();tree=ui.render();
-  nodes(tree,node=>node.props.card?.id==='card')[0].props.onClick();tree=ui.render();
+  nodes(tree,node=>node.props.card?.id==='card')[0].props.onEdit({ detail: 0 });tree=ui.render();
   const editCard=nodes(tree,node=>node.props.card?.id==='card' && node.props.onCardUpdated)[0];
   editCard.props.onEditRecurrence('source');tree=ui.render();
   assert.equal(nodes(tree,node=>node.props.onCardUpdated).length,0);

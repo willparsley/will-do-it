@@ -42,6 +42,7 @@ import { MobileAddMenu, MobileCards, MobileLayoutControls, MOBILE_LAYOUTS, type 
 import { MoveCardModal } from '@/components/MoveCardModal';
 import { AreaIndicator } from '@/components/AreaIndicator';
 import { errorMessage } from '@/lib/errors';
+import { clearOfflineWorkspace, saveOfflineWorkspace } from '@/lib/offline-workspace';
 
 const supabase = createClient();
 
@@ -53,6 +54,7 @@ const VIEWS = [
 ] as const;
 
 export default function WillDoIt() {
+  const [offlineSaveFailed, setOfflineSaveFailed] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
@@ -145,7 +147,9 @@ export default function WillDoIt() {
       const sources = (sourceResult.data || []) as RecurrenceSource[];
       setRecurrenceSources(sources);
       setStreams(loadedStreams);
-      setCards(hydrateRecurringCards((cardResult.data || []) as Card[], sources));
+      const loadedCards = hydrateRecurringCards((cardResult.data || []) as Card[], sources);
+      setCards(loadedCards);
+      setOfflineSaveFailed(!saveOfflineWorkspace(userId, loadedStreams, loadedCards));
     } catch (error) {
       if (sequence === loadSequence.current) toast.error(errorMessage(error, 'Could not load your workspace'));
     } finally {
@@ -177,7 +181,13 @@ export default function WillDoIt() {
     const init = async () => {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (!boundary.active) return;
+      if (error && (error.name === 'AuthRetryableFetchError' || error.status === 0 || navigator.onLine === false)) {
+        // A connection failure is not a sign-out. Keep the saved account copy.
+        window.location.replace('/offline.html');
+        return;
+      }
       if (error || !user) {
+        clearOfflineWorkspace();
         window.location.replace('/login');
         return;
       }
@@ -635,6 +645,8 @@ export default function WillDoIt() {
           </div>
         </div>
       </header>
+
+      {offlineSaveFailed && <p role="status" className="shrink-0 px-4 py-2 text-sm bg-sunken text-ink-soft">Offline viewing is unavailable because this browser could not save a local copy. Your online workspace still works.</p>}
 
       {/* View switcher lives in its own stable bar so it never shifts
           horizontally when the number of columns changes between views. */}

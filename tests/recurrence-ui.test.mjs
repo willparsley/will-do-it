@@ -173,7 +173,7 @@ for (const refreshFails of [false,true]) test(`workspace stays visible during a 
   assert.ok(text(ui.render()).includes('Loading your workspace'));
   releaseInitial({data:streams});await new Promise(resolve=>setTimeout(resolve,0));
   let tree=ui.render();
-  nodes(tree,n=>n.props.card?.id==='card')[0].props.onClick();tree=ui.render();
+  nodes(tree,n=>n.props.card?.id==='card')[0].props.onEdit({ detail: 0 });tree=ui.render();
   storedCard={...base,title:'Edited card'};
   const refresh=nodes(tree,n=>n.props.onCardUpdated)[0].props.onCardUpdated(storedCard);
   tree=ui.render();
@@ -269,7 +269,7 @@ for (const operation of ['create', 'edit', 'drag']) {
           await nodes(tree, n => typeof n.props?.onDragEnd === 'function')[0].props.onDragEnd({ active: { id: card.id }, over: { id: `new-stream::${initial}` } });
         } else {
           if (operation === 'create') nodes(tree, n => n.props?.tooltip === 'Add a new card')[0].props.onPress();
-          else nodes(tree, n => n.props.card?.id === card.id)[0].props.onClick();
+          else nodes(tree, n => n.props.card?.id === card.id)[0].props.onEdit({ detail: 0 });
           tree = ui.render();
           const callback = operation === 'create' ? 'onCardCreated' : 'onCardUpdated';
           await nodes(tree, n => typeof n.props?.[callback] === 'function')[0].props[callback](saved);
