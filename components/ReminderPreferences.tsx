@@ -48,7 +48,7 @@ export function ReminderPreferences({ userId }: { userId: string }) {
       <input id="default-reminder-time" type="time" required step="60" value={time} disabled={busy || !loaded}
         aria-describedby="default-reminder-help reminder-timezone" onChange={event => setTime(event.target.value)} className="control min-h-11" />
       <p id="reminder-timezone" className="text-sm text-ink-soft">{timezone ? `Timezone: ${timezone}. Recurring cards use their recurrence timezone.` : 'Loading timezone…'}</p>
-      <button type="submit" className="btn btn-primary min-h-11" disabled={busy || !loaded}>{busy ? 'Please wait…' : 'Save reminder preferences'}</button>
+      <button type="submit" className="btn btn-primary focus-ring min-h-11 w-full px-5 py-2.5 text-sm leading-5 sm:w-auto" disabled={busy || !loaded}>{busy ? 'Please wait…' : 'Save reminder preferences'}</button>
     </form>
     <p role="status" className="text-sm mt-3">{message}</p>
   </section>;
