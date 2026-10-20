@@ -5,16 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=auto">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#008751">
-    <title>You're offline · Will Do It</title>
+    <meta name="robots" content="noindex">
+    <title>Offline workspace · Will Do It</title>
     <style>
-      :root { color-scheme: light; font-family: system-ui, sans-serif; background: #e2e5e3; color: #252b28; --accent: #008751; --accent-ink: #ffffff; --secondary: #505b53; }
-      :root.dark { color-scheme: dark; background: #17171a; color: #ededed; --accent: #00c177; --accent-ink: #0b1220; --secondary: #a1a1aa; }
-      body { min-height: 100dvh; margin: 0; display: grid; place-items: center; }
-      main { max-width: 24rem; padding: 2rem; text-align: center; }
-      h1 { font-size: 1.5rem; font-weight: 600; }
-      p { line-height: 1.6; color: var(--secondary); }
-      a { display: inline-block; margin-top: 1rem; padding: .75rem 1.25rem; border-radius: .5rem; background: var(--accent); color: var(--accent-ink); text-decoration: none; }
-      a:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+      :root { color-scheme: light; font-family: system-ui, sans-serif; background: #e2e5e3; color: #252b28; --accent: #008751; --accent-ink: #fff; --secondary: #505b53; --surface: #f7f8f6; --row: #eceeec; --border: #bac3bc; }
+      :root.dark { color-scheme: dark; background: #17171a; color: #ededed; --accent: #00c177; --accent-ink: #0b1220; --secondary: #a1a1aa; --surface: #29292e; --row: #202024; --border: #50505a; }
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      main { max-width: 75rem; margin: auto; padding: 1rem; }
+      h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
+      h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
+      h3 { font-size: .9rem; color: var(--secondary); margin: 1rem 0 .5rem; }
+      p { line-height: 1.6; margin: .5rem 0; }
+      .muted, .metadata { color: var(--secondary); }
+      a, button, select, input { font: inherit; }
+      a, button { min-height: 44px; padding: .65rem 1rem; border-radius: .5rem; border: 1px solid var(--border); cursor: pointer; }
+      a { display: inline-flex; align-items: center; background: var(--accent); color: var(--accent-ink); text-decoration: none; border-color: var(--accent); }
+      :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+      header, .filters { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem 1rem; }
+      header { justify-content: space-between; margin-bottom: 1rem; }
+      .filters { margin: 1rem 0; padding: 1rem; border-radius: .75rem; background: var(--row); }
+      label { display: flex; align-items: center; gap: .5rem; min-height: 44px; }
+      select, input[type=search] { min-height: 44px; max-width: 100%; border: 1px solid var(--border); border-radius: .4rem; padding: .5rem; background: var(--surface); color: inherit; }
+      input[type=checkbox] { accent-color: var(--accent); width: 1.1rem; height: 1.1rem; }
+      .stream { background: var(--row); padding: 1rem; border-radius: .75rem; margin-bottom: 1rem; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: .75rem; align-items: start; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: .6rem; padding: .8rem; overflow-wrap: anywhere; }
+      summary { cursor: pointer; min-height: 44px; padding: .25rem 0; }
+      summary::marker { color: var(--secondary); }
+      .metadata { font-size: .8rem; }
+      .notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .overdue { color: #a62525; } .dark .overdue { color: #f0a0a0; }
+      .group { border: 1px solid var(--border); padding: .5rem .8rem; border-radius: .5rem; }
+      .group .card { margin: .5rem 0; }
+      [hidden] { display: none !important; }
+      #empty { max-width: 28rem; margin: 20vh auto 0; text-align: center; }
     </style>
     <script>
       (function () {
@@ -33,9 +58,165 @@
   </head>
   <body>
     <main>
-      <h1>You're offline</h1>
-      <p>Connect to the internet to open your Will Do It workspace. Your saved cards will be there when you reconnect.</p>
-      <a href="/">Try again</a>
+      <div id="empty">
+        <h1>You're offline</h1>
+        <p class="muted">No saved workspace is available on this device. Open your workspace online once to save your cards for offline viewing.</p>
+        <a href="/" target="_top">Try again</a>
+      </div>
+      <div id="workspace" hidden>
+        <header>
+          <div><h1>Will Do It · Offline</h1><p id="saved" class="muted"></p></div>
+          <a href="/" target="_top">Reconnect</a>
+        </header>
+        <p role="status">Read-only saved copy. Connect to the internet to make changes or refresh your tasks. Recurrences and status updates wait for a connection.</p>
+        <form class="filters" onsubmit="return false">
+          <label>View <select id="view" aria-label="View"><option value="activated">Active</option><option value="backlog">Backlog</option><option value="all">All</option><option value="archive">Archive</option></select></label>
+          <label>Area <select id="area" aria-label="Area"><option value="all">All</option><option value="work">Work</option><option value="personal">Personal</option></select></label>
+          <label id="history-control" hidden>History <select id="history" aria-label="History"><option value="week">Past week</option><option value="month">Past month</option><option value="quarter">Past 3 months</option><option value="year">Past year</option><option value="all">All time</option></select></label>
+          <label><input id="recurring" type="checkbox"> Hide recurring</label>
+          <label>Search <input id="search" type="search" placeholder="Titles and notes"></label>
+        </form>
+        <div id="board" role="region" aria-label="Saved task board"></div>
+        <p class="muted">This device stores a local copy of your cards and notes. Signing out or changing accounts clears it. Browser storage cleanup may remove it.</p>
+      </div>
     </main>
+    <script>
+      (function () {
+        'use strict';
+        var snapshot;
+        var labels = { backlog: 'Backlog', priority_backlog: 'Priority Backlog', research: 'Research', waiting: 'Waiting', in_progress: 'In Progress', complete: 'Complete', canceled: 'Canceled' };
+        var views = { activated: ['research', 'waiting', 'in_progress'], backlog: ['backlog', 'priority_backlog', 'research'], all: Object.keys(labels), archive: ['complete', 'canceled'] };
+        var el = function (id) { return document.getElementById(id); };
+        function node(tag, text, className) {
+          var result = document.createElement(tag);
+          if (text !== undefined) result.textContent = text;
+          if (className) result.className = className;
+          return result;
+        }
+        function terminal(card) { return card.status === 'complete' || card.status === 'canceled'; }
+        function date(value, timezone) {
+          if (!value) return '';
+          try { return new Date(value).toLocaleString(undefined, { timeZone: timezone }); } catch (_) { return value; }
+        }
+        function day(value, timezone) {
+          try {
+            var parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value));
+            return ['year', 'month', 'day'].map(function (type) { return parts.find(function (p) { return p.type === type; }).value; }).join('-');
+          } catch (_) { return ''; }
+        }
+        function cardNode(card) {
+          var item = node('details', undefined, 'card');
+          item.append(node('summary', card.title));
+          if (!terminal(card)) {
+            if (card.due_at) {
+              var overdue = day(card.due_at, card.recurrence_timezone) < day(new Date(), card.recurrence_timezone);
+              item.append(node('p', (overdue ? 'Overdue · ' : '') + 'Due: ' + date(card.due_at, card.recurrence_timezone), overdue ? 'metadata overdue' : 'metadata'));
+            }
+            if (card.remind_at) item.append(node('p', 'Reminder: ' + date(card.remind_at, card.recurrence_timezone), 'metadata'));
+            if (card.prerequisite_card_id) {
+              var prerequisite = snapshot.cards.find(function (c) { return c.id === card.prerequisite_card_id; });
+              if (prerequisite && prerequisite.status !== 'complete') item.append(node('p', 'Blocked by: ' + prerequisite.title, 'metadata'));
+            }
+            if (card.last_completed_at) item.append(node('p', 'Last completed: ' + date(card.last_completed_at, card.recurrence_timezone), 'metadata'));
+          } else if (card.completed_at) item.append(node('p', labels[card.status] + ': ' + date(card.completed_at), 'metadata'));
+          if (card.is_recurring || card.recurrence_source_id) item.append(node('p', 'Recurring', 'metadata'));
+          item.append(node('p', card.notes || 'No notes.', 'notes'));
+          return item;
+        }
+        function cutoff(period) {
+          if (period === 'all') return null;
+          var result = new Date();
+          if (period === 'week') result.setDate(result.getDate() - 7);
+          else if (period === 'year') result.setFullYear(result.getFullYear() - 1);
+          else {
+            // Clamp month subtraction at the last day, like the online history filter.
+            var originalDay = result.getDate();
+            result.setDate(1);
+            result.setMonth(result.getMonth() - (period === 'quarter' ? 3 : 1));
+            var end = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+            result.setDate(Math.min(originalDay, end));
+          }
+          return result.getTime();
+        }
+        function render() {
+          var board = el('board'); board.replaceChildren();
+          if (!snapshot) return;
+          var view = el('view').value;
+          var statuses = views[view];
+          el('history-control').hidden = view !== 'all' && view !== 'archive';
+          var since = cutoff(el('history').value);
+          var search = el('search').value.toLocaleLowerCase();
+          var cards = snapshot.cards.filter(function (card) {
+            return statuses.includes(card.status)
+              && (!el('recurring').checked || !(card.is_recurring || card.recurrence_source_id))
+              && (!terminal(card) || since === null || new Date(card.completed_at || '').getTime() >= since)
+              && (!search || (card.title + '\n' + (card.notes || '')).toLocaleLowerCase().includes(search));
+          });
+          snapshot.streams.slice().sort(function (a, b) {
+            return Number(a.title === 'Uncategorized') - Number(b.title === 'Uncategorized') || a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+          }).forEach(function (stream) {
+            if (el('area').value !== 'all' && stream.area !== 'neutral' && stream.area !== el('area').value) return;
+            var streamCards = cards.filter(function (card) { return (terminal(card) && card.recurrence_stream_id || card.stream_id) === stream.id; });
+            if (!streamCards.length) return;
+            var section = node('section', undefined, 'stream');
+            section.append(node('h2', stream.title + (stream.area === 'neutral' ? '' : ' · ' + (stream.area === 'work' ? 'Work' : 'Personal'))));
+            if (stream.notes) {
+              var notes = node('details'); notes.append(node('summary', 'Stream notes'), node('p', stream.notes, 'notes')); section.append(notes);
+            }
+            statuses.forEach(function (status) {
+              var items = streamCards.filter(function (c) { return c.status === status; }).sort(function (a, b) { return terminal(a) ? new Date(b.completed_at || 0) - new Date(a.completed_at || 0) : a.position - b.position; });
+              if (!items.length) return;
+              section.append(node('h3', labels[status] + ' · ' + items.length));
+              var list = node('div', undefined, 'cards');
+              var groups = new Map();
+              items.forEach(function (card) {
+                if (terminal(card) && card.recurrence_source_id) {
+                  var group = groups.get(card.recurrence_source_id);
+                  if (!group) {
+                    group = node('details', undefined, 'group');
+                    var count = items.filter(function (c) { return c.recurrence_source_id === card.recurrence_source_id; }).length;
+                    group.append(node('summary', (card.recurrence_title || card.title) + ' · ' + count));
+                    groups.set(card.recurrence_source_id, group); list.append(group);
+                  }
+                  group.append(cardNode(card));
+                } else list.append(cardNode(card));
+              });
+              section.append(list);
+            });
+            board.append(section);
+          });
+          if (!board.children.length) board.append(node('p', 'No saved cards match these filters.', 'muted'));
+        }
+        function load(initial) {
+          snapshot = null;
+          try {
+            var owner = localStorage.getItem('will-do-it:offline-account:v1');
+            var saved = JSON.parse(localStorage.getItem('will-do-it:offline-workspace:v1') || 'null');
+            if (owner && saved && saved.version === 1 && saved.userId === owner
+                && Number.isFinite(Date.parse(saved.savedAt)) && Array.isArray(saved.streams) && Array.isArray(saved.cards)
+                && saved.streams.every(function (s) { return s && s.user_id === owner && typeof s.id === 'string' && typeof s.title === 'string' && ['work', 'personal', 'neutral'].includes(s.area); })
+                && saved.cards.every(function (c) { return c && c.user_id === owner && typeof c.id === 'string' && typeof c.title === 'string' && typeof c.stream_id === 'string' && Object.hasOwn(labels, c.status); })) {
+              snapshot = saved;
+              if (initial) {
+                var preferences = JSON.parse(localStorage.getItem('will-do-it:workspace:' + owner) || 'null') || {};
+                if (Object.hasOwn(views, preferences.view)) el('view').value = preferences.view;
+                if (['all', 'work', 'personal'].includes(preferences.area)) el('area').value = preferences.area;
+                if (['week', 'month', 'quarter', 'year', 'all'].includes(preferences.archivePeriod)) el('history').value = preferences.archivePeriod;
+                el('recurring').checked = preferences.hideRecurring === true;
+              }
+            }
+          } catch (_) { /* Missing or malformed storage leaves the reconnect screen usable. */ }
+          el('empty').hidden = !!snapshot;
+          el('workspace').hidden = !snapshot;
+          if (snapshot) el('saved').textContent = 'Last saved on this device: ' + date(snapshot.savedAt);
+          render();
+        }
+        document.querySelector('form').addEventListener('input', render);
+        document.querySelector('form').addEventListener('change', render);
+        window.addEventListener('storage', function () { load(false); });
+        window.addEventListener('pageshow', function () { load(false); });
+        load(true);
+      })();
+    </script>
   </body>
 </html>

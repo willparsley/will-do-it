@@ -72,7 +72,7 @@ test('offline navigation recovers online and never caches account requests', asy
   }
   await page.evaluate(() => localStorage.removeItem('theme'));
   const cachedPaths = await page.evaluate(async () => {
-    const cache = await caches.open('will-do-it-offline-v5');
+    const cache = await caches.open('will-do-it-offline-v6');
     return (await cache.keys()).map((entry) => new URL(entry.url).pathname);
   });
   expect(cachedPaths).toEqual(['/offline.html']);

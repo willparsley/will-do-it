@@ -1,3 +1,4 @@
+import { clearOfflineWorkspace, prepareOfflineAccount } from '../offline-workspace';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /** Watches identity changes without network requests or reacting to token refreshes. */
@@ -11,8 +12,10 @@ export function watchAccount(client: SupabaseClient, onInvalidate: (signedOut: b
   };
   // Subscribe before getUser() so logout cannot race the initial load.
   const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_OUT') invalidate(true);
+    if (!active) return;
+    if (event === 'SIGNED_OUT') { clearOfflineWorkspace(); invalidate(true); }
     else if (session?.user) {
+      prepareOfflineAccount(session.user.id);
       if (userId !== undefined && session.user.id !== userId) invalidate(false);
       else userId = session.user.id;
     }
@@ -24,6 +27,7 @@ export function watchAccount(client: SupabaseClient, onInvalidate: (signedOut: b
         invalidate(false);
         return false;
       }
+      prepareOfflineAccount(id);
       userId = id;
       return true;
     },
