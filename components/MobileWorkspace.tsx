@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from 'react-aria-components';
 import { ChevronDown, Plus, SlidersHorizontal } from 'lucide-react';
+import { SortableStreamRow, StreamDragHandle } from './StreamOrdering';
 import { AppSelect } from './AppSelect';
 import { CardFormDialog } from './CardForm';
 import { AreaIndicator } from './AreaIndicator';
@@ -85,8 +86,8 @@ export function MobileCards({ layout, view, streams, columns, cardsForStream, re
         return cards.length > 0 ? <div key={status} className="space-y-2">{renderStatusCards(cards, status)}</div> : null;
       });
       const canAdd = stream ? stream.state === 'in_progress' : streams.some(stream => stream.state === 'in_progress');
-      return <details key={section.id} open className={styles.section}>
-        <summary className={`${styles.heading} focus-ring`}>
+      const content = <details key={section.id} open className={styles.section}>
+        <summary className={`${styles.heading} focus-ring ${stream && stream.title !== 'Uncategorized' ? 'pr-12' : ''}`}>
           <ChevronDown size={17} className={styles.chevron} aria-hidden="true" />
           {status ? <StatusHeader status={status} /> : <span className="flex min-w-0 items-center gap-2"><AreaIndicator area={stream!.area} /><span className="break-words">{section.title}</span></span>}
           <span className={styles.count} aria-label={`${section.cards.length} cards`}>{section.cards.length}</span>
@@ -108,6 +109,10 @@ export function MobileCards({ layout, view, streams, columns, cardsForStream, re
           {canAdd && <button type="button" className={styles.add} aria-label={`Add card to ${section.title}`} onClick={event => { event.currentTarget.focus(); onAdd({ streamId: stream?.id, status: status || columns[0] }); }}><Plus size={17} /> Add card</button>}
         </div>
       </details>;
+      return stream ? <SortableStreamRow key={section.id} stream={stream}>
+        <div className="absolute right-1 top-0.5 z-10"><StreamDragHandle stream={stream} /></div>
+        {content}
+      </SortableStreamRow> : content;
     })}
   </div>;
 }

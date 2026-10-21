@@ -6,19 +6,13 @@ import { AppSelect } from '@/components/AppSelect';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { 
-  DndContext, 
-  pointerWithin,
-  MouseSensor, 
-  TouchSensor, 
-  useSensor, 
-  useSensors,
   DragEndEvent,
   DragStartEvent,
   DragOverlay,
 } from '@dnd-kit/core';
 import { createClient } from '@/lib/supabase/client';
 import { watchAccount } from '@/lib/supabase/account-boundary';
-import { Stream, Card, CardStatus, RecurrenceSource, Area, streamsForDisplay, nextStatus, STATUS_LABELS } from '@/lib/types';
+import { Stream, Card, CardStatus, RecurrenceSource, Area, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { AreaFilter } from '@/components/AreaFilter';
 import { StreamTitle } from '@/components/StreamTitle';
 import { AddCardModal } from '@/components/AddCardModal';
@@ -41,6 +35,8 @@ import { MobileAddMenu, MobileCards, MobileLayoutControls, MOBILE_LAYOUTS, type 
 import { MoveCardModal } from '@/components/MoveCardModal';
 import { AreaIndicator } from '@/components/AreaIndicator';
 import { errorMessage } from '@/lib/errors';
+import { useStreamOrder } from '@/components/useStreamOrder';
+import { StreamOrdering, SortableStreamRow, StreamOrderReset } from '@/components/StreamOrdering';
 
 const supabase = createClient();
 
@@ -77,17 +73,6 @@ export default function WillDoIt() {
   const touchInput = useRef(false);
   const suppressCardClick = useRef(false);
   const [activeDragCard, setActiveDragCard] = useState<Card | null>(null);
-
-  const sensors = useSensors(
-    // Mouse: drag once the pointer moves a little, so plain clicks still work.
-    useSensor(MouseSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-    // Touch: press and hold briefly, so the page can still scroll.
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 8 },
-    })
-  );
 
   const loadData = useCallback(async (userId: string, processTasks = true) => {
     if (!accountActive.current) return;
@@ -237,18 +222,18 @@ export default function WillDoIt() {
     };
   }, []);
 
+  const streamOrder = useStreamOrder(user?.id, streams);
+
   const visibleCards = hideRecurring
     ? cards.filter(card => !card.is_recurring && !card.recurrence_source_id)
     : cards;
 
-  const filteredStreams = streamsForDisplay(
-    streams.filter((stream) => {
-      if (activeFilter !== 'all' && stream.area !== activeFilter && stream.area !== 'neutral') {
-        return false;
-      }
-      return getCardsForStream(stream.id).length > 0;
-    })
-  );
+  const filteredStreams = streamOrder.streams.filter((stream) => {
+    if (activeFilter !== 'all' && stream.area !== activeFilter && stream.area !== 'neutral') {
+      return false;
+    }
+    return getCardsForStream(stream.id).length > 0;
+  });
 
   function getCardsForStream(streamId: string): Card[] {
     return cardsForStream(visibleCards, streamId, view, archivePeriod);
@@ -643,6 +628,7 @@ export default function WillDoIt() {
             ))}
           </div>
           <div className="hidden md:block">{!mobileViewport && filterControls}</div>
+          <StreamOrderReset custom={streamOrder.custom} disabled={streamOrder.disabled} onReset={streamOrder.reset} />
           <div className="w-full md:hidden"><MobileLayoutControls layout={mobileLayout} onLayout={layout => { setMobileLayout(layout); savePreferences({ mobileLayout: layout }); }} filterCount={(activeFilter !== 'all' ? 1 : 0) + (hideRecurring ? 1 : 0) + (columns.includes('complete') && archivePeriod !== 'week' ? 1 : 0)} filters={<><AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />{filterControls}</>} /></div>
         </div>
       </div>
@@ -650,11 +636,8 @@ export default function WillDoIt() {
       {/* One scroll container keeps sticky labels aligned on both axes, while
           the controls above take their natural height even when they wrap. */}
       <div className="workspace-board w-full min-h-0 overflow-x-auto overflow-y-auto scroll-pt-14 px-4 sm:px-6 lg:px-8 pb-6 flex-1" role="region" aria-label="Task board" tabIndex={0}>
-        <DndContext
-          sensors={sensors}
-          // Tall rows can have centers farther away than a neighboring row.
-          // Mouse and touch drops must target the cell containing the pointer.
-          collisionDetection={pointerWithin}
+        <StreamOrdering
+          streams={filteredStreams} disabled={streamOrder.disabled} onMove={streamOrder.move}
           onDragStart={handleDragStart}
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
@@ -681,8 +664,8 @@ export default function WillDoIt() {
                 const streamCards = getCardsForStream(stream.id);
 
                 return (
-                  <div
-                    key={stream.id}
+                  <SortableStreamRow
+                    key={stream.id} stream={stream}
                     className={`stream-row rounded-xl p-4 ${stream.title === 'Uncategorized' ? 'uncategorized' : ''}`}
                   >
                     <div 
@@ -710,7 +693,7 @@ export default function WillDoIt() {
                         );
                       })}
                     </div>
-                  </div>
+                  </SortableStreamRow>
                 );
               })
             ) : (
@@ -738,7 +721,7 @@ export default function WillDoIt() {
               </div>
             ) : null}
           </DragOverlay>
-        </DndContext>
+        </StreamOrdering>
 
         {creationContext && (
           <AddCardModal

@@ -184,3 +184,28 @@ Apply `supabase/migrations/202610150002_card_creation_notes.sql` before deployin
 Apply `supabase/migrations/202610150003_card_prerequisites.sql` before deploying this version. Add or edit a card and expand **Prerequisite** to search cards by title or stream, then select one prerequisite. Choose **No prerequisite** to remove it.
 
 Unfinished cards have a softened title and a muted red “Blocked by” label (with separate shades for light and dark themes) until their prerequisite is Complete. Canceled prerequisites still block. This indicator is advisory; movement and completion remain available. Links use the full workspace regardless of view filters. A recurring card’s link belongs to that occurrence only. Circular links are rejected. Referenced cards cannot be deleted until their incoming links are removed.
+
+### Persistent stream ordering
+
+Apply `supabase/migrations/202610210001_stream_order.sql` before deploying this UI.
+It adds an account-owned order row, atomic relative-move/reset RPCs, a creation
+trigger, and Realtime publication membership when the publication exists. It is
+safe to reapply and does not modify cards, stream titles, or history.
+
+Drag a stream's grip on the board, mobile **By stream**, or the Streams directory.
+For keyboard use, focus the grip, press Space, use Up/Down, and press Space to
+save (Escape cancels). Uncategorized stays pinned last. The first move switches
+from alphabetical to custom order; **Reset stream order to alphabetical** restores
+the default. New streams append above Uncategorized in custom mode; renaming
+keeps their place. Directory sections retain Active/Complete/Canceled grouping;
+stream dropdowns stay alphabetical. Filters share one underlying account order.
+
+Persistence uses the existing Supabase database and installed dnd-kit packages.
+One Realtime subscription per open workspace/directory receives order changes;
+focus, visibility, and reconnect refreshes provide recovery without polling.
+No additional paid service or dependency is required. Order saves require internet.
+
+Run `npm test` for ordering, ownership, synchronization, and rollback tests. After
+`npm run build`, run `npx playwright test --config tests/browser/playwright.config.mjs streams.spec.mjs drag-targets.spec.mjs`
+for production-asset keyboard, mouse/touch, cross-device, reset, and card-drag
+regressions. Browser requests are intercepted; these tests do not write live data.

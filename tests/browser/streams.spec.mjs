@@ -12,7 +12,8 @@ const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
 const expires = Math.floor(Date.now() / 1000) + 3600;
 const session = { access_token: encode({ alg: 'HS256', typ: 'JWT' }) + '.' + encode({ sub: user.id, exp: expires, aud: 'authenticated', role: 'authenticated' }) + '.fixture', refresh_token: 'fixture', token_type: 'bearer', expires_in: 3600, expires_at: expires, user };
 
-async function setup(page, theme, signedIn = true, fail = false) {
+async function setup(page, theme, signedIn = true, fail = false, ordering = null) {
+  await page.routeWebSocket('**/realtime/**', socket => socket.close());
   let fixtures = [
     { id: 'z', title: 'zebra', state: 'in_progress', area: 'work', notes: 'Notes for an empty stream' },
     { id: 'unc', title: 'Uncategorized', state: 'in_progress', area: 'neutral' },
@@ -28,6 +29,24 @@ async function setup(page, theme, signedIn = true, fail = false) {
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin === new URL(supabaseUrl).origin) {
+      if (url.pathname.endsWith('/get_stream_order')) return route.fulfill({ json: ordering?.value || null });
+      if (url.pathname.endsWith('/move_stream') && ordering) {
+        const body = route.request().postDataJSON();
+        ordering.calls.push(body);
+        if (ordering.failNext) {
+          ordering.failNext = false;
+          return route.fulfill({ status: 400, json: { message: 'Order save failed' } });
+        }
+        let ids = [...fixtures].filter(s => s.title !== 'Uncategorized').sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })).map(s => s.id);
+        if (ordering.value?.ordered_ids) ids.sort((a, b) => (ordering.value.ordered_ids.indexOf(a) < 0 ? Infinity : ordering.value.ordered_ids.indexOf(a)) - (ordering.value.ordered_ids.indexOf(b) < 0 ? Infinity : ordering.value.ordered_ids.indexOf(b)) || 0);
+        if (!body.p_reset) {
+          ids = ids.filter(id => id !== body.p_stream_id);
+          ids.splice(ids.indexOf(body.p_target_id) + Number(body.p_after), 0, body.p_stream_id);
+        }
+        ordering.value = { ordered_ids: body.p_reset ? null : ids, revision: (ordering.value?.revision || 0) + 1 };
+        return route.fulfill({ json: ordering.value });
+      }
+      if (url.pathname.endsWith('/cards') && ordering?.cards) return route.fulfill({ json: ordering.cards });
       if (url.pathname.endsWith('/logout')) return route.fulfill({ json: {} });
       if (url.pathname.endsWith('/streams')) {
         if (route.request().method() === 'POST') {
@@ -146,4 +165,107 @@ for (const theme of ['light', 'dark']) test(`area filtering and new streams in $
   await page.screenshot({ path: testInfo.outputPath('streams-controls.png'), fullPage: true });
   await page.getByRole('link', { name: 'Back to workspace' }).click();
   await expect(filter.getByRole('button', { name: 'Personal', exact: true })).toHaveAttribute('aria-pressed', 'true');
+});
+
+
+function orderingFixture() {
+  return { value: null, calls: [], cards: [
+    { id: 'alpha-task', stream_id: 'a', title: 'Alpha task', status: 'research', position: 0 },
+    { id: 'zebra-task', stream_id: 'z', title: 'Zebra task', status: 'research', position: 0 },
+  ].map(c => ({ ...c, user_id: user.id, is_recurring: false })) };
+}
+
+async function keyboardMove(page, name, arrow = 'ArrowUp') {
+  const handle = page.getByRole('button', { name: `Reorder stream ${name}`, exact: true });
+  await expect(handle).toBeEnabled();
+  await handle.focus();
+  const target = await handle.evaluate((node, arrow) => {
+    const row = node.closest('[data-stream-id]');
+    const rows = [...row.parentElement.children].filter(el => el.hasAttribute('data-stream-id'));
+    return rows[rows.indexOf(row) + (arrow === 'ArrowUp' ? -1 : 1)].getAttribute('data-stream-id');
+  }, arrow);
+  await page.keyboard.press('Space');
+  await expect(handle).toHaveAttribute('aria-pressed', 'true');
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.keyboard.press(arrow);
+  await expect(page.getByRole('status').filter({ hasText: `was moved over droppable area stream:${target}.` })).toHaveCount(1);
+  await page.keyboard.press('Space');
+  await expect(handle).not.toHaveAttribute('aria-pressed', 'true');
+}
+
+test('stream ordering persists across devices, refresh, board, filters, and reset', async ({ page, context, isMobile }) => {
+  const ordering = orderingFixture();
+  await setup(page, 'light', true, false, ordering);
+  await page.goto('http://app.test/streams');
+  await expect(page.getByRole('button', { name: 'Reorder stream Uncategorized' })).toHaveCount(0);
+  await keyboardMove(page, 'zebra');
+  await expect.poll(() => ordering.calls.length).toBe(1);
+  expect(ordering.calls[0]).toMatchObject({ p_stream_id: 'z', p_target_id: 'a', p_after: false });
+  const rows = page.locator('main section').first().locator('li');
+  await expect(rows.first()).toHaveAttribute('data-stream-id', 'z');
+  await expect(page.getByRole('button', { name: 'Reorder stream zebra' })).toBeFocused();
+  await page.reload();
+  await expect(rows.first()).toHaveAttribute('data-stream-id', 'z');
+
+  const other = await context.newPage();
+  await setup(other, 'dark', true, false, ordering);
+  await other.goto('http://app.test/streams');
+  await expect(other.locator('main section').first().locator('li').first()).toHaveAttribute('data-stream-id', 'z');
+  await keyboardMove(other, 'zebra', 'ArrowDown');
+  await expect.poll(() => ordering.calls.length).toBe(2);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(rows.first()).toHaveAttribute('data-stream-id', 'a');
+  await other.close();
+
+  // Only zebra is visible in Work, so hidden streams keep their saved order.
+  await page.getByRole('group', { name: 'Area filter', exact: true }).getByRole('button', { name: 'Work', exact: true }).click();
+  await expect(rows).toHaveCount(2);
+  await page.getByRole('group', { name: 'Area filter', exact: true }).getByRole('button', { name: 'All', exact: true }).click();
+  await keyboardMove(page, 'zebra');
+  await expect.poll(() => ordering.calls.length).toBe(3);
+  await page.goto('http://app.test');
+  if (isMobile) {
+    await page.getByRole('button', { name: /Mobile layout/ }).click();
+    await page.getByRole('option', { name: 'By stream', exact: true }).click();
+  }
+  await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'z');
+  await expect(page.getByRole('button', { name: 'Reorder stream zebra' })).toBeEnabled();
+  await keyboardMove(page, 'zebra', 'ArrowDown');
+  await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'a');
+  await keyboardMove(page, 'zebra');
+  await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'z');
+  await page.getByRole('button', { name: 'Reset stream order to alphabetical' }).click();
+  await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'a');
+  expect(ordering.value.ordered_ids).toBe(null);
+});
+
+test('stream drag handle moves a row and a failed save restores its order', async ({ page, isMobile }) => {
+  const ordering = orderingFixture();
+  await setup(page, 'dark', true, false, ordering);
+  await page.goto('http://app.test/streams');
+  const handle = page.getByRole('button', { name: 'Reorder stream zebra', exact: true });
+  await expect(handle).toBeEnabled();
+  const start = await handle.boundingBox();
+  const target = await page.getByRole('button', { name: 'Reorder stream Alpha', exact: true }).boundingBox();
+  let cdp;
+  if (isMobile) {
+    cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start.x + 20, y: start.y + 20 }] });
+    await page.waitForTimeout(250);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: target.x + 20, y: target.y + 20 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    await page.mouse.move(start.x + 20, start.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 30, start.y + 20, { steps: 3 });
+    await page.mouse.move(target.x + 20, target.y + 20, { steps: 10 });
+    await page.mouse.up();
+  }
+  await expect.poll(() => ordering.calls.length).toBe(1);
+  const rows = page.locator('main section').first().locator('li');
+  await expect(rows.first()).toHaveAttribute('data-stream-id', 'z');
+  ordering.failNext = true;
+  await keyboardMove(page, 'zebra', 'ArrowDown');
+  await expect(page.getByText('Order save failed', { exact: true })).toBeVisible();
+  await expect(rows.first()).toHaveAttribute('data-stream-id', 'z');
 });

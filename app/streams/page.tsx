@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { watchAccount } from '@/lib/supabase/account-boundary';
 import { toast } from 'sonner';
 import { errorMessage } from '@/lib/errors';
-import { streamsForDisplay, UNCATEGORIZED_TITLE, type Area, type Stream } from '@/lib/types';
+import { UNCATEGORIZED_TITLE, type Area, type Stream } from '@/lib/types';
 import { BrandLogo } from '@/components/BrandLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -16,6 +16,8 @@ import { AreaIndicator } from '@/components/AreaIndicator';
 import { EditStreamModal } from '@/components/EditStreamModal';
 import { AddStreamModal } from '@/components/AddStreamModal';
 import { AreaFilter } from '@/components/AreaFilter';
+import { useStreamOrder } from '@/components/useStreamOrder';
+import { StreamOrdering, SortableStreamRow, StreamDragHandle, StreamOrderReset } from '@/components/StreamOrdering';
 import { TooltipButton } from '@/components/TooltipButton';
 
 const supabase = createClient();
@@ -85,6 +87,8 @@ export default function StreamsPage() {
     return () => { boundary.dispose(); cancelLoads(); };
   }, [load]);
 
+  const streamOrder = useStreamOrder(user?.id, streams);
+
   const changeArea = (area: Area | 'all') => {
     setActiveFilter(area);
     if (!user) return;
@@ -118,7 +122,8 @@ export default function StreamsPage() {
           <ArrowLeft size={16} aria-hidden="true" /> Back to workspace
         </Link>
         <h1 className="text-2xl font-semibold">Streams</h1>
-        <p className="mt-2 mb-8 text-sm text-ink-soft">All your streams, including those without cards. Select a stream to edit its details.</p>
+        <p className="mt-2 mb-8 text-sm text-ink-soft">All your streams, including those without cards. Select a stream to edit its details. Drag its handle to reorder, or focus the handle and use Space, arrow keys, then Space.</p>
+        <StreamOrderReset custom={streamOrder.custom} disabled={streamOrder.disabled} onReset={streamOrder.reset} />
 
         {error ? <div role="alert" className="rounded-xl border border-line bg-surface p-5">
           <p>{error}</p>
@@ -126,13 +131,14 @@ export default function StreamsPage() {
         </div> : loading ? <p role="status" className="text-ink-soft">Loading your streams...</p> : (
           <div className="space-y-8">
             {sections.map(({ state, label }) => {
-              const items = streamsForDisplay(streams.filter(stream => stream.state === state &&
-                (activeFilter === 'all' || stream.area === activeFilter || stream.area === 'neutral')));
+              const items = streamOrder.streams.filter(stream => stream.state === state &&
+                (activeFilter === 'all' || stream.area === activeFilter || stream.area === 'neutral'));
               return <section key={state} aria-labelledby={`streams-${state}`}>
                 <h2 id={`streams-${state}`} className="flex items-center gap-2 text-lg font-semibold mb-3">
                   {label} <span className="text-sm font-normal text-ink-soft">({items.length})</span>
                 </h2>
                 {items.length === 0 ? <p className="text-sm text-ink-soft">No {label.toLowerCase()} streams.</p> : (
+                  <StreamOrdering streams={items} disabled={streamOrder.disabled} onMove={streamOrder.move}>
                   <ul className="rounded-xl border border-line bg-surface divide-y divide-line overflow-hidden">
                     {items.map(stream => {
                       const details = <>
@@ -143,14 +149,16 @@ export default function StreamsPage() {
                         </span>
                         {stream.notes && stream.title !== UNCATEGORIZED_TITLE && <span className="block mt-2 whitespace-pre-wrap break-words text-sm text-ink-soft">{stream.notes}</span>}
                       </>;
-                      return <li key={stream.id}>
+                      return <SortableStreamRow as="li" key={stream.id} stream={stream} className="flex items-start">
+                        <StreamDragHandle stream={stream} />
                         {stream.title === UNCATEGORIZED_TITLE ? <div className="p-4 min-h-14">{details}</div> : (
                           <button type="button" aria-label={`Edit stream ${stream.title}`} className="block w-full min-h-14 p-4 text-left hover:bg-sunken focus-ring rounded"
                             onClick={event => { event.currentTarget.focus(); setEditingStream(stream); }}>{details}</button>
                         )}
-                      </li>;
+                      </SortableStreamRow>;
                     })}
                   </ul>
+                  </StreamOrdering>
                 )}
               </section>;
             })}
