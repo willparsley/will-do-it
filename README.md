@@ -197,7 +197,8 @@ or the Streams directory. Title text retains its edit/disclosure action and uses
 the full available width; there is no visible handle.
 For keyboard use, focus the reorder area, press Space, use Up/Down, and press Space to
 save (Escape cancels). Uncategorized stays pinned last. The first move switches
-from alphabetical to custom order; **Reset stream order to alphabetical** restores
+from alphabetical to custom order; **Reset stream order to alphabetical** on the
+Streams page restores
 the default. New streams append above Uncategorized in custom mode; renaming
 keeps their place. Directory sections retain Active/Complete/Canceled grouping;
 stream dropdowns stay alphabetical. Filters share one underlying account order.

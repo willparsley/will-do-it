@@ -91,7 +91,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 ### Streams
 - Rows in the matrix.
 - Alphabetical (case-insensitive) until the first manual reorder, then one account-wide custom order shared across devices. Uncategorized remains pinned last.
-- Dragging the non-text background of a stream title/header reorders rows on the board, mobile By stream, and the stream directory (within its state sections). No visible grip or reserved handle space is used; title text retains editing (mobile heading text toggles collapse), and cards keep their own drag targets. Keyboard: focus the reorder area, Space, Up/Down, Space; Escape cancels. Reset restores alphabetical ordering. Stream dropdowns remain alphabetical.
+- Dragging the non-text background of a stream title/header reorders rows on the board, mobile By stream, and the stream directory (within its state sections). No visible grip or reserved handle space is used; title text retains editing (mobile heading text toggles collapse), and cards keep their own drag targets. Keyboard: focus the reorder area, Space, Up/Down, Space; Escape cancels. Reset on the Streams directory restores alphabetical ordering; the workspace toolbar has no reset button. Stream dropdowns remain alphabetical.
 - Uncategorized always at bottom, special treatment.
 - Hidden if no cards in current view/filter.
 - Work/Personal filter applies to streams.

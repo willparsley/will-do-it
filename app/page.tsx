@@ -36,7 +36,7 @@ import { MoveCardModal } from '@/components/MoveCardModal';
 import { AreaIndicator } from '@/components/AreaIndicator';
 import { errorMessage } from '@/lib/errors';
 import { useStreamOrder } from '@/components/useStreamOrder';
-import { StreamOrdering, SortableStreamRow, StreamOrderReset } from '@/components/StreamOrdering';
+import { StreamOrdering, SortableStreamRow } from '@/components/StreamOrdering';
 
 const supabase = createClient();
 
@@ -628,7 +628,6 @@ export default function WillDoIt() {
             ))}
           </div>
           <div className="hidden md:block">{!mobileViewport && filterControls}</div>
-          <StreamOrderReset custom={streamOrder.custom} disabled={streamOrder.disabled} onReset={streamOrder.reset} />
           <div className="w-full md:hidden"><MobileLayoutControls layout={mobileLayout} onLayout={layout => { setMobileLayout(layout); savePreferences({ mobileLayout: layout }); }} filterCount={(activeFilter !== 'all' ? 1 : 0) + (hideRecurring ? 1 : 0) + (columns.includes('complete') && archivePeriod !== 'week' ? 1 : 0)} filters={<><AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />{filterControls}</>} /></div>
         </div>
       </div>

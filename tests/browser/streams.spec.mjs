@@ -234,6 +234,8 @@ test('stream ordering persists across devices, refresh, board, filters, and rese
   await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'a');
   await keyboardMove(page, 'zebra');
   await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'z');
+  await expect(page.getByRole('button', { name: 'Reset stream order to alphabetical' })).toHaveCount(0);
+  await page.goto('http://app.test/streams');
   await page.getByRole('button', { name: 'Reset stream order to alphabetical' }).click();
   await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'a');
   expect(ordering.value.ordered_ids).toBe(null);
