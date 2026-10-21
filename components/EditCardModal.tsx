@@ -42,6 +42,7 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
   const [remindAt, setRemindAt] = useState(dateTimeLocal(card.remind_at));
   const [prerequisiteId, setPrerequisiteId] = useState(card.prerequisite_card_id || '');
   const [notes, setNotes] = useState(card.notes || '');
+  const [removeRecurrence, setRemoveRecurrence] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -63,7 +64,8 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
         notes: notes.trim() || null,
       };
 
-      const { data: updatedCard, error } = await supabase.rpc('save_card', {
+      const { data: updatedCard, error } = await supabase.rpc(removeRecurrence ? 'save_card_without_recurrence' : 'save_card', {
+        ...(removeRecurrence ? { p_expected_source_id: card.recurrence_source_id } : {}),
         p_card_id: card.id,
         p_expected_status: card.status,
         p_changes: updates,
@@ -105,7 +107,7 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
     }
   };
 
-  const dirty = prerequisiteId !== (card.prerequisite_card_id || '') || title !== card.title || streamId !== (card.recurrence_stream_id || card.stream_id)
+  const dirty = removeRecurrence || prerequisiteId !== (card.prerequisite_card_id || '') || title !== card.title || streamId !== (card.recurrence_stream_id || card.stream_id)
     || status !== card.status || dueAt !== dateTimeLocal(card.due_at)
     || remindAt !== dateTimeLocal(card.remind_at) || notes !== (card.notes || '');
 
@@ -120,7 +122,7 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
       <form onSubmit={handleSave} className={styles.form}>
         <div className={styles.body}>
           <fieldset disabled={loading} className={styles.fields}>
-            {cardFields({ title, setTitle, streamId, setStreamId, status, setStatus, streams: selectableStreams, saving: loading, dueAt, setDueAt, remindAt, setRemindAt, notes, setNotes, recurring: !!card.recurrence_source_id,
+            {cardFields({ title, setTitle, streamId, setStreamId, status, setStatus, streams: selectableStreams, saving: loading, dueAt, setDueAt, remindAt, setRemindAt, notes, setNotes, recurring: !!card.recurrence_source_id && !removeRecurrence,
               datesInitiallyOpen: !!(card.due_at || card.remind_at), notesInitiallyOpen: !!card.notes })}
             <CardPrerequisiteField cards={cards} streams={streams} cardId={card.id} value={prerequisiteId} onChange={setPrerequisiteId} disabled={loading} />
             {card.recurrence_source_id && <section className={styles.section} aria-label="Recurrence">
@@ -128,7 +130,13 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
                 <h3 className="text-sm font-medium text-ink">Part of a recurring task</h3>
                 {card.recurrence_title && <p className="text-sm text-ink-soft">{card.recurrence_title}</p>}
                 <p className={styles.help}>Title, notes, dates, and status edits apply to this occurrence. To change the repeating title or schedule for pending and future cards, edit the recurrence.</p>
-                {onEditRecurrence && <button type="button" className="btn btn-secondary focus-ring px-4 py-2.5" disabled={loading} onClick={editRecurrence}>Edit recurrence</button>}
+                {!['complete', 'canceled'].includes(card.status) && <div>
+                  <label className={styles.check}>
+                    <input type="checkbox" checked={removeRecurrence} onChange={event => setRemoveRecurrence(event.target.checked)} aria-describedby="remove-recurrence-help" />Remove recurrence
+                  </label>
+                  <p id="remove-recurrence-help" className={styles.help}>On save, stop future occurrences and make all pending cards in this recurrence one-off cards. Keep their dates and notes, and preserve completed and canceled history.</p>
+                </div>}
+                {onEditRecurrence && !removeRecurrence && <button type="button" className="btn btn-secondary focus-ring px-4 py-2.5" disabled={loading} onClick={editRecurrence}>Edit recurrence</button>}
               </div>
             </section>}
           </fieldset>

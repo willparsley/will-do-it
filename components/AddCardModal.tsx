@@ -37,7 +37,7 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
   const [remindAt, setRemindAt] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [stackMissed, setStackMissed] = useState(false);
-  const [frequency, setFrequency] = useState<'daily' | 'every_n_days' | 'weekly' | 'monthly'>('daily');
+  const [frequency, setFrequency] = useState<'' | 'daily' | 'every_n_days' | 'weekly' | 'monthly'>('');
   const [recInterval, setRecInterval] = useState(1);
   const [weekdays, setWeekdays] = useState<number[]>([]); // 0=Sun, 1=Mon, ..., 6=Sat
   const [monthDay, setMonthDay] = useState(1); // 1..31, or -1 for the last day
@@ -49,6 +49,15 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading || !title.trim() || !streamId) return;
+
+    if (isRecurring && !frequency) {
+      setError('Choose how often this card should repeat, or close Repeat for a one-off card.');
+      return;
+    }
+    if (isRecurring && frequency === 'weekly' && !weekdays.length) {
+      setError('Choose at least one weekday for this recurrence.');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -89,7 +98,7 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
     }
   };
 
-  const dirty = !!(prerequisiteId || title || notes || dueAt || remindAt || isRecurring || stackMissed || frequency !== 'daily' || recInterval !== 1 || weekdays.length || monthDay !== 1 || streamId !== initialValues.streamId || status !== initialValues.status);
+  const dirty = !!(prerequisiteId || title || notes || dueAt || remindAt || isRecurring || stackMissed || frequency !== '' || recInterval !== 1 || weekdays.length || monthDay !== 1 || streamId !== initialValues.streamId || status !== initialValues.status);
 
   return (
     <CardFormDialog title="Add New Card" dirty={dirty} saving={loading} onClose={onClose}>
@@ -102,15 +111,15 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
               <summary className="focus-ring" aria-disabled={loading} onClick={event => {
                 event.preventDefault();
                 if (!loading) setIsRecurring(previous => !previous);
-              }}>Repeat <span className={styles.optional}>{isRecurring ? 'Recurring' : 'Does not repeat'}</span></summary>
+              }}>Repeat <span className={styles.optional}>{isRecurring && frequency ? 'Recurring' : 'Does not repeat'}</span></summary>
               <div className={styles.sectionBody}>
                 {isRecurring && <>
                   <div>
                     <label htmlFor="card-frequency" className="field-label">Repeat</label>
                     <AppSelect id="card-frequency" value={frequency} onValueChange={value => setFrequency(value as typeof frequency)} aria-label="Repeat" disabled={loading}
-                      options={[{ value: 'daily', label: 'Daily' }, { value: 'every_n_days', label: 'Every N days' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
+                      placeholder="Choose frequency" options={[{ value: 'daily', label: 'Daily' }, { value: 'every_n_days', label: 'Every N days' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
                   </div>
-                  {frequency !== 'daily' && <div>
+                  {frequency && frequency !== 'daily' && <div>
                     <label htmlFor="card-interval" className="field-label">Every {frequency === 'weekly' ? 'N weeks' : frequency === 'monthly' ? 'N months' : 'N days'}</label>
                     <input id="card-interval" type="number" min={1} step={1} required value={recInterval} onChange={e => setRecInterval(Math.max(1, parseInt(e.target.value, 10) || 1))} className="control" />
                   </div>}
@@ -122,7 +131,7 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
                           onChange={e => setWeekdays(previous => e.target.checked ? [...previous, index].sort() : previous.filter(value => value !== index))} />{day}
                       </label>)}
                     </div>
-                    {!weekdays.length && <p className={styles.help}>With no days selected, repeats on today’s weekday.</p>}
+                    {!weekdays.length && <p className={styles.help}>Choose at least one weekday.</p>}
                   </fieldset>}
                   {frequency === 'monthly' && <div>
                     <label htmlFor="card-month-day" className="field-label">Day of month</label>
@@ -133,7 +142,7 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
                     <label className={styles.check}><input type="checkbox" checked={stackMissed} onChange={e => setStackMissed(e.target.checked)} aria-describedby="card-stack-help" />Keep missed occurrences</label>
                     <p id="card-stack-help" className={styles.help}>{stackMissed ? 'Each missed occurrence stays as a separate card.' : 'Keep just one pending occurrence until you complete or cancel it.'}</p>
                   </div>
-                  <p className={styles.help}>Close Repeat to make this a one-off card. Without a due date, the first occurrence starts on the next matching day, including today. Notes apply to this first card. You can change the schedule or set an end date after creation.</p>
+                  <p className={styles.help}>Choose a frequency to enable recurrence. Close Repeat to make this a one-off card. Without a due date, the first occurrence starts on the next matching day, including today. Notes apply to this first card. You can change the schedule or set an end date after creation.</p>
                 </>}
               </div>
             </details>
