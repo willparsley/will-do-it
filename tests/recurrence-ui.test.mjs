@@ -132,7 +132,7 @@ test('workspace refresh calls conditional promotion and hydrates cards before di
   const supabase={auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user},error:null};}},async rpc(name){calls.push(name);return {data:0,error:null};},from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[card]:[source],error:null});},async order(){return {data:streams,error:null};}};}};
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module,
-    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
+    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},KeyboardSensor: class { static activators = []; },DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
   ui.render();ui.effects[0]();
   await new Promise(resolve=>setTimeout(resolve,0));
@@ -166,14 +166,14 @@ for (const refreshFails of [false,true]) test(`workspace stays visible during a 
   };
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module,
-    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
+    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},KeyboardSensor: class { static activators = []; },DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
   assert.ok(text(ui.render()).includes('Loading your workspace'));
   ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
   assert.ok(text(ui.render()).includes('Loading your workspace'));
   releaseInitial({data:streams});await new Promise(resolve=>setTimeout(resolve,0));
   let tree=ui.render();
-  nodes(tree,n=>n.props.card?.id==='card')[0].props.onClick();tree=ui.render();
+  nodes(tree,n=>n.props.card?.id==='card')[0].props.onEdit({ detail: 0 });tree=ui.render();
   storedCard={...base,title:'Edited card'};
   const refresh=nodes(tree,n=>n.props.onCardUpdated)[0].props.onCardUpdated(storedCard);
   tree=ui.render();
@@ -201,7 +201,7 @@ for(const action of ['complete','advance','drag']) test(`failed stale ${action} 
   },from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[persisted]:[source]});},async order(){return {data:streams};}};}};
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module,
-    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
+    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},KeyboardSensor: class { static activators = []; },DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
   ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
   button(ui.render(),'All').props.onClick();
@@ -257,7 +257,7 @@ for (const operation of ['create', 'edit', 'drag']) {
         };
         const ui = driver('app/page.tsx', 'default', {}, {
           '@/lib/supabase/client': { createClient: () => supabase }, sonner: notices.module,
-          '@dnd-kit/core': { useSensors: () => [], useSensor: () => null, MouseSensor() {}, TouchSensor() {}, DndContext() {}, DragOverlay() {}, pointerWithin() {} },
+          '@dnd-kit/core': { useSensors: () => [], useSensor: () => null, MouseSensor() {}, TouchSensor() {}, KeyboardSensor: class { static activators = []; }, DndContext() {}, DragOverlay() {}, pointerWithin() {} },
         });
         ui.render(); ui.effects[0](); await new Promise(resolve => setTimeout(resolve, 0));
         let tree = ui.render();
@@ -269,7 +269,7 @@ for (const operation of ['create', 'edit', 'drag']) {
           await nodes(tree, n => typeof n.props?.onDragEnd === 'function')[0].props.onDragEnd({ active: { id: card.id }, over: { id: `new-stream::${initial}` } });
         } else {
           if (operation === 'create') nodes(tree, n => n.props?.tooltip === 'Add a new card')[0].props.onPress();
-          else nodes(tree, n => n.props.card?.id === card.id)[0].props.onClick();
+          else nodes(tree, n => n.props.card?.id === card.id)[0].props.onEdit({ detail: 0 });
           tree = ui.render();
           const callback = operation === 'create' ? 'onCardCreated' : 'onCardUpdated';
           await nodes(tree, n => typeof n.props?.[callback] === 'function')[0].props[callback](saved);
@@ -312,7 +312,7 @@ for (const action of ['complete','advance']) for (const fails of [false,true]) {
     const ui=driver('app/page.tsx','default',{}, {
       '@/lib/supabase/client':{createClient:()=>supabase},
       sonner:{toast:{success:(message,options)=>{successes.push({message,options});return 'toast';},error:message=>errors.push(message),loading:()=> 'pending',dismiss(){}}},
-      '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
+      '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},KeyboardSensor: class { static activators = []; },DndContext(){},DragOverlay(){},pointerWithin(){}},
     });
     ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
     button(ui.render(),'All').props.onClick();
