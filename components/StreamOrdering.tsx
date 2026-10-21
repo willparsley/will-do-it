@@ -5,6 +5,7 @@ import { DndContext, MouseSensor, TouchSensor, KeyboardSensor, closestCenter, po
   type DndContextProps, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { RotateCcw } from 'lucide-react';
 import styles from './StreamOrdering.module.css';
 import type { Stream } from '@/lib/types';
 
@@ -90,5 +91,8 @@ export function StreamDragSurface({ stream, children, className, contentClassNam
 
 export function StreamOrderReset({ custom, disabled, onReset }: { custom: boolean; disabled: boolean; onReset: () => void }) {
   if (!custom) return null;
-  return <button type="button" className="btn btn-ghost min-h-11 px-2 text-xs" disabled={disabled} onClick={onReset}>Reset stream order to alphabetical</button>;
+  return <button type="button" className="btn btn-secondary focus-ring min-h-11 w-full sm:w-auto px-4 py-2 text-sm shadow-sm mb-6" disabled={disabled} onClick={onReset}>
+    <RotateCcw size={16} className="shrink-0" aria-hidden="true" />
+    Reset stream order to alphabetical
+  </button>;
 }

@@ -138,6 +138,7 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Calm, easy-on-the-eyes UI with light/dark mode.
 
 ## Git Workflow
+- **Start from current main.** Before creating a new feature branch or worktree, run `git fetch origin` and explicitly base it on the latest `origin/main`, rather than the current checkout or a potentially stale local `main`. When continuing an existing feature branch, fetch and check for newer main commits before presenting a preview; integrate them while preserving feature commits and uncommitted work. If fetching fails, report that freshness could not be verified and never claim the branch is current.
 - Feature branches (`feat/`, `fix/`, `chore/`, etc.)
 - Conventional Commits
 - **User review before PRs.** After implementing and validating changes, always ask the user to review them and wait for explicit approval before drafting or creating a PR, including a draft PR. Approval to implement changes is not approval to draft a PR. If the user requests further changes, complete them and ask for review again before proceeding with the PR.
