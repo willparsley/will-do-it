@@ -84,6 +84,8 @@ test('service worker shows private notifications and opens only the workspace', 
   listeners.push({ data: { json: () => ({ tag: 'reminder-1', title: 'secret', url: 'https://evil.example' }) }, waitUntil: p => { pending = p; } });
   await pending;
   assert.equal(shown[0][0],'Will Do It');
+  assert.equal(shown[0][1].icon,'/icons/icon-192.png?v=2');
+  assert.equal(shown[0][1].badge,'/icons/notification-badge.png');
   assert.equal(JSON.stringify(shown).includes('secret'),false);
   listeners.notificationclick({ notification: { close() {} }, waitUntil: p => { pending = p; } });
   await pending;

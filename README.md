@@ -148,9 +148,14 @@ Use the deployed HTTPS site (Vercel provides HTTPS):
 - **Android:** Open in Chrome and choose **Install app** or **Add to Home screen** from the browser menu. Wording varies by browser/device.
 
 Launch **Will Do It** from its home-screen icon to open it in its own window.
-The icon uses the same green artwork as the favicon, with separate PNG files for
-mobile installation and an Apple touch icon. To regenerate these files after
-changing `app/icon.svg`, run `node scripts/generate-pwa-icons.mjs`.
+Install icons use the favicon’s checkmark shapes in dark-mode green (`#00C177`)
+on the dark canvas (`#17171a`), including Android maskable and Apple touch icons.
+Push notifications use the same full-color icon and a separate transparent
+checkmark badge (Android controls its monochrome color). To regenerate the icons
+from `app/icon.svg`, run `node scripts/generate-pwa-icons.mjs`. The favicon stays
+unchanged. After deployment, close all app windows to let the updated service
+worker activate. Installed launcher icons may take time to refresh; reinstall
+the PWA if Android continues to show the previous icon.
 
 After a successful online workspace load, cards and stream notes are saved on this
 device for **read-only offline viewing**, including after an accidental refresh or
