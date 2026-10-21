@@ -122,7 +122,7 @@ test('both workspace entry points open the same source editor and saving runs ge
   const supabase={auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user:{id:'user'}}};}},async rpc(name){calls.push(name);return {data:0};},from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:table==='cards'?[card]:[source]});},async order(){return {data:streams};}};}};
   const ui=driver('app/page.tsx','default',{}, {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices,
-    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
+    '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},KeyboardSensor: class { static activators = []; },DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
   ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
   let tree=ui.render();

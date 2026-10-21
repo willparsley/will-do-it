@@ -45,7 +45,7 @@ for(const page of ['app/page.tsx','app/streams/page.tsx','app/profile/page.tsx']
       const supabase={auth:{...emitter.auth,async getUser(){return holdIdentity?pending.promise:{data:{user}};}},async rpc(){return {data:0};},from(table){return {select(){return this;},eq(){if(table==='streams')return this;return holdData?pending.promise:Promise.resolve({data:table==='cards'?cards:[]});},then(resolve,reject){return (holdData?pending.promise:Promise.resolve({data:streams})).then(resolve,reject);},async order(){return holdData?pending.promise:{data:streams};}};}};
       const ui=driver(page,'default',{}, {'@/lib/supabase/client':{createClient:()=>supabase},'next/link':()=>null,'next/image':()=>null,
         sonner:{toast:{dismiss(){dismissed++;},error(){},success(){}}},
-        '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},DndContext(){},DragOverlay(){},pointerWithin(){}},
+        '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},KeyboardSensor: class { static activators = []; },DndContext(){},DragOverlay(){},pointerWithin(){}},
       });
       const originalWindow=Object.getOwnPropertyDescriptor(globalThis,'window');
       Object.defineProperty(globalThis,'window',{configurable:true,value:{location:{replace:url=>redirects.push(url)}}});

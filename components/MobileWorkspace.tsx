@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from 'react-aria-components';
 import { ChevronDown, Plus, SlidersHorizontal } from 'lucide-react';
+import { SortableStreamRow, StreamDragSurface } from './StreamOrdering';
 import { AppSelect } from './AppSelect';
 import { CardFormDialog } from './CardForm';
 import { AreaIndicator } from './AreaIndicator';
@@ -96,11 +97,14 @@ export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view
         return cards.length > 0 ? <div key={status} className="space-y-2">{renderStatusCards(cards, status)}</div> : null;
       });
       const canAdd = stream ? stream.state === 'in_progress' : streams.some(stream => stream.state === 'in_progress');
-      return <details key={section.id} open className={styles.section}>
+      const heading = <>
+        <ChevronDown size={17} className={styles.chevron} aria-hidden="true" data-stream-text />
+        {status ? <StatusHeader status={status} /> : <span data-stream-text className="flex min-w-0 items-center gap-2"><AreaIndicator area={stream!.area} /><span className="break-words">{section.title}</span></span>}
+        <span data-stream-text className={`${styles.count} ml-auto`} aria-label={`${section.cards.length} cards`}>{section.cards.length}</span>
+      </>;
+      const content = <details key={section.id} open className={styles.section}>
         <summary className={`${styles.heading} focus-ring`}>
-          <ChevronDown size={17} className={styles.chevron} aria-hidden="true" />
-          {status ? <StatusHeader status={status} /> : <span className="flex min-w-0 items-center gap-2"><AreaIndicator area={stream!.area} /><span className="break-words">{section.title}</span></span>}
-          <span className={styles.count} aria-label={`${section.cards.length} cards`}>{section.cards.length}</span>
+          {stream ? <StreamDragSurface stream={stream} className="-m-3 min-w-0 flex-1 rounded-xl" contentClassName="flex items-center gap-2 p-3 min-h-[52px]">{heading}</StreamDragSurface> : heading}
         </summary>
         <div className={styles.sectionBody}>
           {stream && stream.title !== 'Uncategorized' && <button type="button" className="btn btn-ghost min-h-11 px-2 text-xs" onClick={() => onEditStream(stream)}>Stream details</button>}
@@ -119,6 +123,9 @@ export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view
           {canAdd && <button type="button" className={styles.add} aria-label={`Add card to ${section.title}`} onClick={event => { event.currentTarget.focus(); onAdd({ streamId: stream?.id, status: status || columns[0] }); }}><Plus size={17} /> Add card</button>}
         </div>
       </details>;
+      return stream ? <SortableStreamRow key={section.id} stream={stream}>
+        {content}
+      </SortableStreamRow> : content;
     })}
   </div>;
 }

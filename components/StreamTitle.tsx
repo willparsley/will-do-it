@@ -2,11 +2,12 @@
 
 import { Pencil } from 'lucide-react';
 import type { Stream } from '@/lib/types';
+import { StreamDragSurface } from './StreamOrdering';
 import { AreaIndicator } from './AreaIndicator';
 import styles from './StreamArea.module.css';
 
 export function StreamTitle({ stream, onEdit }: { stream: Stream; onEdit: () => void }) {
-  return <div className={`${styles.area} ${styles.titleCell}`} data-area={stream.area}>
+  return <StreamDragSurface stream={stream} className={`${styles.area} ${styles.titleCell}`} area={stream.area}>
     <div className={styles.heading}>
       {stream.area !== 'neutral' && <AreaIndicator area={stream.area} labelled />}
       <div className="min-w-0 flex-1">
@@ -22,5 +23,5 @@ export function StreamTitle({ stream, onEdit }: { stream: Stream; onEdit: () => 
         </span>}
       </div>
     </div>
-  </div>;
+  </StreamDragSurface>;
 }

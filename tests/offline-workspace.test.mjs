@@ -81,7 +81,7 @@ test('temporary auth-network failures open the saved view without erasing cards'
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
         getUser: async () => ({ data: { user: null }, error: { name: 'AuthRetryableFetchError', status: 0 } }),
       } }) },
-      '@dnd-kit/core': { useSensors: () => [], useSensor: () => null, MouseSensor() {}, TouchSensor() {}, DndContext() {}, DragOverlay() {}, pointerWithin() {} },
+      '@dnd-kit/core': { useSensors: () => [], useSensor: () => null, MouseSensor() {}, TouchSensor() {}, KeyboardSensor: class { static activators = []; }, DndContext() {}, DragOverlay() {}, pointerWithin() {} },
     });
     ui.render(); cleanup = ui.effects[0]();
     await new Promise(resolve => setTimeout(resolve, 0));

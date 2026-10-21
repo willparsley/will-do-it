@@ -53,6 +53,9 @@ for (const theme of ['light', 'dark']) test(`reminder preferences save and reloa
     return route.fulfill({ body: await readFile(root + file), contentType });
   });
   await page.goto('https://app.test/profile');
+  for (const name of ['Completed history', 'Reminder preferences', 'Push notifications']) {
+    await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  }
   const input = page.getByLabel('Default reminder time', { exact: true });
   await expect(input).toBeEnabled();
   await expect(input).toHaveValue('09:00');

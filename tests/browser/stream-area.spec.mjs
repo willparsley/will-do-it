@@ -83,7 +83,7 @@ for (const theme of ['light', 'dark']) test(`stream area indicators and accessib
       });
       expect(contrast).toBeGreaterThanOrEqual(1.1);
     }
-    const iconColor = await areaCell.locator('svg').first().evaluate(el => getComputedStyle(el).color);
+    const iconColor = await areaCell.getByRole('img', { includeHidden: true }).locator('svg').evaluate(el => getComputedStyle(el).color);
     expect(await button.locator('svg').evaluate(el => getComputedStyle(el).color)).toBe(iconColor);
   }
   await expect(cell(streams[2].title).getByRole('img')).toHaveCount(0);
