@@ -128,6 +128,7 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
          await route.fulfill({status:400,json:{message:'This card changed. Try again.'}});return;
        }
        if(url.pathname.endsWith('/save_card')) data={...card,...body.p_changes};
+       if(url.pathname.endsWith('/save_card_without_recurrence')) data={...card,...body.p_changes,is_recurring:false,recurrence_source_id:null};
        if(url.pathname.endsWith('/create_recurring_card_with_prerequisite')) data={...card,title:body.p_title,notes:body.p_notes};
        if(url.pathname.endsWith('/cards')) data={...card,...body};
      }
@@ -205,6 +206,10 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  await dialog.locator('summary').filter({hasText:'Repeat'}).click();
  assert.equal(await page.getByLabel('Recurring task',{exact:true}).count(),0);
  await page.locator('#card-frequency').waitFor();
+ await expect(page.locator('#card-frequency')).toHaveText(/Choose frequency/);
+ await dialog.getByRole('button',{name:'Create Card',exact:true}).click();
+ await expect(dialog.getByRole('alert')).toHaveText(/Choose how often/);
+ assert.equal(calls.some(call=>call.path.endsWith('/create_recurring_card_with_prerequisite')),false);
  await dialog.locator('summary').filter({hasText:'Repeat'}).click();
  assert.equal(await page.locator('#card-frequency').isVisible(),false);
  await dialog.locator('summary').filter({hasText:'Repeat'}).click();
@@ -251,7 +256,13 @@ for (const theme of ['light', 'dark']) test(`card forms protect drafts and suppo
  const prompted=page.waitForEvent('dialog',{timeout:8000});const navigation=dialog.getByRole('button',{name:'Edit recurrence',exact:true}).click();
  const prompt=await prompted;await prompt.dismiss();await navigation;assert.equal(await dialog.count(),1);
  await page.screenshot({path:testInfo.outputPath('card-edit.png'),scale:'css'});
+ await dialog.getByRole('checkbox',{name:'Remove recurrence',exact:true}).check();
+ await expect(dialog.getByRole('button',{name:'Edit recurrence',exact:true})).toHaveCount(0);
+ assert.equal(calls.some(call=>call.path.endsWith('/save_card_without_recurrence')),false);
  failSave=false;await page.getByRole('button',{name:'Save Changes',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ const removal=calls.find(call=>call.path.endsWith('/save_card_without_recurrence'));
+ assert.equal(removal.body.p_expected_source_id,'source');
+ assert.equal(removal.body.p_changes.title,'Updated walk');
  await page.getByText('Walk the dog',{exact:true}).click();
  await page.getByLabel('Title',{exact:true}).fill('Discard this edit');
  const writesBeforeCancel=calls.length;
