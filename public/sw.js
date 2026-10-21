@@ -35,8 +35,8 @@ self.addEventListener('push', (event) => {
   try { tag = event.data?.json()?.tag || tag; } catch { /* Always show received pushes. */ }
   event.waitUntil(self.registration.showNotification('Will Do It', {
     body: 'A card is ready for your attention. Open your workspace to see it.',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: '/icons/icon-192.png?v=2',
+    badge: '/icons/notification-badge.png',
     tag,
   }));
 });

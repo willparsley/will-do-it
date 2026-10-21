@@ -1,8 +1,10 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
 
-// Derive install icons from the existing vector artwork, preserving the source.
+// Derive install/notification icons from the existing vector paths.
+// Preserve the favicon and supplied artwork; installed icons always use dark branding.
 const source = await readFile(new URL('../app/icon.svg', import.meta.url));
+const darkArtwork = Buffer.from(source.toString().replaceAll('#008751', '#00C177'));
 await mkdir(new URL('../public/icons/', import.meta.url), { recursive: true });
 
 for (const [path, size, scale] of [
@@ -12,12 +14,23 @@ for (const [path, size, scale] of [
   ['public/icons/icon-maskable-512.png', 512, 0.56],
   ['app/apple-icon.png', 180, 0.8],
 ]) {
-  const artwork = await sharp(source).resize(Math.round(size * scale)).png().toBuffer();
+  const artwork = await sharp(darkArtwork).resize(Math.round(size * scale)).png().toBuffer();
   const icon = await sharp({
-    create: { width: size, height: size, channels: 4, background: '#ffffff' },
+    create: { width: size, height: size, channels: 4, background: '#17171a' },
   }).composite([{ input: artwork, gravity: 'centre' }]).removeAlpha().png().toBuffer();
   await writeFile(new URL(`../${path}`, import.meta.url), icon);
 }
+
+// Android masks the small notification badge to a monochrome silhouette.
+// Keep only the checkmarks opaque so the badge never becomes a solid square.
+const badgeArtwork = Buffer.from(source.toString().replaceAll('#008751', '#ffffff'));
+const badge = await sharp({
+  create: { width: 96, height: 96, channels: 4, background: '#00000000' },
+}).composite([{
+  input: await sharp(badgeArtwork).resize(77, 77).png().toBuffer(),
+  gravity: 'centre',
+}]).png().toBuffer();
+await writeFile(new URL('../public/icons/notification-badge.png', import.meta.url), badge);
 
 // Store PNG frames in the ICO container for the browser fallback as well.
 const sizes = [16, 32, 48];
