@@ -31,7 +31,11 @@ test('database ordering is atomic, account isolated, and relative to the latest 
       grant usage on schema public,auth to authenticated,anon;
       alter default privileges in schema public grant select,insert,update,delete on tables to authenticated,anon;`);
     await db.exec((await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8')).replace('create extension if not exists "uuid-ossp";', '').replaceAll('uuid_generate_v4()', 'gen_random_uuid()'));
-    await db.exec(await readFile(new URL('../supabase/migrations/202610210001_stream_order.sql', import.meta.url), 'utf8'));
+    await db.exec('create publication supabase_realtime');
+    const migration = await readFile(new URL('../supabase/migrations/202610210001_stream_order.sql', import.meta.url), 'utf8');
+    await db.exec(migration);
+    await db.exec(migration);
+    assert.equal((await q("select * from pg_publication_tables where pubname='supabase_realtime' and tablename='stream_orders'")).length, 1);
     await q('insert into auth.users values($1),($2)', [account, other]);
     for (const [id, user, title] of [[alpha, account, 'Alpha'], [beta, account, 'Beta'], [zebra, account, 'zebra'], [unc, account, 'Uncategorized'], [foreign, other, 'Foreign']]) {
       await q("insert into streams(id,user_id,title,state,area) values($1,$2,$3,'in_progress','neutral')", [id, user, title]);
@@ -52,7 +56,8 @@ test('database ordering is atomic, account isolated, and relative to the latest 
     await assert.rejects(q('update stream_orders set ordered_ids = null'));
     await assert.rejects(q('insert into stream_orders(user_id) values($1)', [other]));
     await q("insert into streams(id,user_id,title,state,area) values($1,$2,'Empty','in_progress','neutral')", [empty, account]);
-    // New streams are included on the next move; rename does not change rank.
+    assert.deepEqual((await read()).ordered_ids, [zebra, beta, alpha, empty]);
+    // New streams append immediately; rename does not change rank.
     await q("update streams set title='A renamed zebra' where id=$1", [zebra]);
     assert.deepEqual((await move(alpha, empty, true)).ordered_ids, [zebra, beta, empty, alpha]);
     await q('delete from streams where id=$1', [beta]);
@@ -63,7 +68,7 @@ test('database ordering is atomic, account isolated, and relative to the latest 
     await assert.rejects(move(foreign, alpha));
     await q("select set_config('request.jwt.claim.sub',$1,false)", [account]);
     const reset = (await q('select move_stream(p_reset => true) as result'))[0].result;
-    assert.deepEqual(reset, { ordered_ids: null, revision: 5 });
+    assert.deepEqual(reset, { ordered_ids: null, revision: 6 });
     await db.exec('reset role; set role anon');
     await q("select set_config('request.jwt.claim.sub','',false)");
     await assert.rejects(q('select get_stream_order()'));

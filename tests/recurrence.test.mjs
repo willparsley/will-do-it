@@ -27,6 +27,7 @@ before(async () => {
     create function auth.uid() returns uuid language sql stable as
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     create role authenticated;
+    create role anon;
     grant usage on schema auth, public to authenticated;
     grant select on auth.users to authenticated;`);
   const schema = (await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'))

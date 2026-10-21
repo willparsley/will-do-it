@@ -1,23 +1,25 @@
--- One small account-owned row, changed only on an explicit reorder/reset.
+begin;
+-- One small account-owned row, changed on reorder/reset and stream creation.
 -- NULL retains the alphabetical default. New streams append automatically.
-create table public.stream_orders (
+create table if not exists public.stream_orders (
   user_id uuid primary key references auth.users(id) on delete cascade,
   ordered_ids uuid[],
   revision bigint not null default 0
 );
 alter table public.stream_orders enable row level security;
+drop policy if exists "Read own stream order" on public.stream_orders;
 create policy "Read own stream order" on public.stream_orders
   for select to authenticated using (user_id = auth.uid());
 revoke all on public.stream_orders from anon, authenticated;
 grant select on public.stream_orders to authenticated;
 
-create function public.get_stream_order() returns jsonb
+create or replace function public.get_stream_order() returns jsonb
 language sql stable security invoker set search_path = public as $$
   select jsonb_build_object('ordered_ids', ordered_ids, 'revision', revision)
   from public.stream_orders where user_id = auth.uid()
 $$;
 
-create function public.move_stream(
+create or replace function public.move_stream(
   p_stream_id uuid default null, p_target_id uuid default null,
   p_after boolean default false, p_reset boolean default false
 ) returns jsonb
@@ -62,9 +64,28 @@ revoke all on function public.move_stream(uuid,uuid,boolean,boolean) from public
 grant execute on function public.get_stream_order() to authenticated;
 grant execute on function public.move_stream(uuid,uuid,boolean,boolean) to authenticated;
 
+-- Preserve insertion order for new streams in custom mode, even across devices.
+create or replace function public.append_stream_order() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.title <> 'Uncategorized' then
+    update public.stream_orders set ordered_ids = ordered_ids || array[new.id], revision = revision + 1
+      where user_id = new.user_id and ordered_ids is not null;
+  end if;
+  return new;
+end $$;
+revoke all on function public.append_stream_order() from public;
+drop trigger if exists append_stream_order on public.streams;
+create trigger append_stream_order after insert on public.streams
+  for each row execute function public.append_stream_order();
+
 -- Realtime is optional: focus/visibility refresh also works without it.
 do $$ begin
-  if exists(select 1 from pg_publication where pubname = 'supabase_realtime') then
+  if exists(select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists(select 1 from pg_publication_tables where pubname = 'supabase_realtime'
+      and schemaname = 'public' and tablename = 'stream_orders') then
     alter publication supabase_realtime add table public.stream_orders;
   end if;
 end $$;
+
+commit;
