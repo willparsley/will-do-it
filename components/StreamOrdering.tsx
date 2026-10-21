@@ -5,7 +5,7 @@ import { DndContext, MouseSensor, TouchSensor, KeyboardSensor, closestCenter, po
   type DndContextProps, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
+import styles from './StreamOrdering.module.css';
 import type { Stream } from '@/lib/types';
 
 // Card keyboard events retain their existing selection/edit behavior.
@@ -21,7 +21,7 @@ const streamKey = (id: string) => `stream:${id}`;
 const Handle = createContext<Pick<ReturnType<typeof useSortable>, 'attributes' | 'listeners' | 'setActivatorNodeRef'> | null>(null);
 const Disabled = createContext(false);
 
-/** A single drag context routes stream handles and cards to separate targets. */
+/** A single drag context routes stream backgrounds and cards to separate targets. */
 export function StreamOrdering({ streams, disabled, onMove, children, onDragStart, onDragEnd, onDragCancel }: {
   streams: Stream[]; disabled: boolean; children: ReactNode;
   onMove: (id: string, target: string, after: boolean) => void;
@@ -71,17 +71,21 @@ export function SortableStreamRow({ stream, children, className, as: Element = '
   </Handle.Provider>;
 }
 
-export function StreamDragHandle({ stream }: { stream: Stream }) {
+/** The background button occupies no layout space. Text/actions remain above it. */
+export function StreamDragSurface({ stream, children, className, contentClassName, area }: {
+  stream: Stream; children: ReactNode; className?: string; contentClassName?: string; area?: Stream['area'];
+}) {
   const sortable = useContext(Handle);
   const disabled = useContext(Disabled);
-  if (!sortable || stream.title === 'Uncategorized') return null;
-  const { setActivatorNodeRef, attributes, listeners } = sortable;
-  return <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners}
-    aria-label={`Reorder stream ${stream.title}`} aria-disabled={disabled}
-    className="shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center rounded text-ink-soft hover:text-ink hover:bg-sunken focus-ring cursor-grab active:cursor-grabbing aria-disabled:opacity-40"
-    style={{ touchAction: 'none' }} onClick={event => event.stopPropagation()}>
-    <GripVertical size={18} aria-hidden="true" />
-  </button>;
+  const movable = !!sortable && stream.title !== 'Uncategorized';
+  const { setActivatorNodeRef, attributes, listeners } = sortable || {};
+  return <div className={`${styles.surface} ${className || ''}`} data-area={area}>
+    {movable && <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners}
+      aria-label={`Reorder stream ${stream.title}`} aria-disabled={disabled}
+      className={`${styles.drag} focus-ring`}
+      onClick={event => { event.preventDefault(); event.stopPropagation(); }} />}
+    <div className={`${movable ? styles.content : ''} ${contentClassName || ''}`}>{children}</div>
+  </div>;
 }
 
 export function StreamOrderReset({ custom, disabled, onReset }: { custom: boolean; disabled: boolean; onReset: () => void }) {

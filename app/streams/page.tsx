@@ -17,7 +17,7 @@ import { EditStreamModal } from '@/components/EditStreamModal';
 import { AddStreamModal } from '@/components/AddStreamModal';
 import { AreaFilter } from '@/components/AreaFilter';
 import { useStreamOrder } from '@/components/useStreamOrder';
-import { StreamOrdering, SortableStreamRow, StreamDragHandle, StreamOrderReset } from '@/components/StreamOrdering';
+import { StreamOrdering, SortableStreamRow, StreamDragSurface, StreamOrderReset } from '@/components/StreamOrdering';
 import { TooltipButton } from '@/components/TooltipButton';
 
 const supabase = createClient();
@@ -122,7 +122,7 @@ export default function StreamsPage() {
           <ArrowLeft size={16} aria-hidden="true" /> Back to workspace
         </Link>
         <h1 className="text-2xl font-semibold">Streams</h1>
-        <p className="mt-2 mb-8 text-sm text-ink-soft">All your streams, including those without cards. Select a stream to edit its details. Drag its handle to reorder, or focus the handle and use Space, arrow keys, then Space.</p>
+        <p className="mt-2 mb-8 text-sm text-ink-soft">All your streams, including those without cards. Select a stream to edit its details. Drag the empty space around a stream title to reorder. Keyboard: focus its reorder area and use Space, arrow keys, then Space.</p>
         <StreamOrderReset custom={streamOrder.custom} disabled={streamOrder.disabled} onReset={streamOrder.reset} />
 
         {error ? <div role="alert" className="rounded-xl border border-line bg-surface p-5">
@@ -141,20 +141,21 @@ export default function StreamsPage() {
                   <StreamOrdering streams={items} disabled={streamOrder.disabled} onMove={streamOrder.move}>
                   <ul className="rounded-xl border border-line bg-surface divide-y divide-line overflow-hidden">
                     {items.map(stream => {
-                      const details = <>
-                        <span className="flex items-center gap-2 min-w-0">
-                          {stream.area !== 'neutral' && <AreaIndicator area={stream.area} labelled />}
-                          <span className="font-medium break-words min-w-0">{stream.title}</span>
-                          {stream.title !== UNCATEGORIZED_TITLE && <Pencil size={14} className="ml-auto shrink-0 text-ink-soft" aria-hidden="true" />}
-                        </span>
-                        {stream.notes && stream.title !== UNCATEGORIZED_TITLE && <span className="block mt-2 whitespace-pre-wrap break-words text-sm text-ink-soft">{stream.notes}</span>}
-                      </>;
-                      return <SortableStreamRow as="li" key={stream.id} stream={stream} className="flex items-start">
-                        <StreamDragHandle stream={stream} />
-                        {stream.title === UNCATEGORIZED_TITLE ? <div className="p-4 min-h-14">{details}</div> : (
-                          <button type="button" aria-label={`Edit stream ${stream.title}`} className="block w-full min-h-14 p-4 text-left hover:bg-sunken focus-ring rounded"
-                            onClick={event => { event.currentTarget.focus(); setEditingStream(stream); }}>{details}</button>
-                        )}
+                      return <SortableStreamRow as="li" key={stream.id} stream={stream}>
+                        <StreamDragSurface stream={stream} className="p-4 min-h-14">
+                          <span className="flex items-start gap-2 min-w-0">
+                            {stream.area !== 'neutral' && <AreaIndicator area={stream.area} labelled />}
+                            {stream.title === UNCATEGORIZED_TITLE
+                              ? <span className="font-medium break-words">{stream.title}</span>
+                              : <button type="button" aria-label={`Edit stream ${stream.title}`}
+                                className="inline-flex items-start gap-2 min-w-0 font-medium text-left hover:underline focus-ring rounded"
+                                onClick={event => { event.currentTarget.focus(); setEditingStream(stream); }}>
+                                <span className="break-words min-w-0">{stream.title}</span>
+                                <Pencil size={14} className="mt-1 shrink-0 text-ink-soft" aria-hidden="true" />
+                              </button>}
+                          </span>
+                          {stream.notes && stream.title !== UNCATEGORIZED_TITLE && <span data-stream-text className="block mt-2 whitespace-pre-wrap break-words text-sm text-ink-soft">{stream.notes}</span>}
+                        </StreamDragSurface>
                       </SortableStreamRow>;
                     })}
                   </ul>

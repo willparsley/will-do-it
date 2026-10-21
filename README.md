@@ -192,8 +192,10 @@ It adds an account-owned order row, atomic relative-move/reset RPCs, a creation
 trigger, and Realtime publication membership when the publication exists. It is
 safe to reapply and does not modify cards, stream titles, or history.
 
-Drag a stream's grip on the board, mobile **By stream**, or the Streams directory.
-For keyboard use, focus the grip, press Space, use Up/Down, and press Space to
+Drag the non-text background around a stream title on the board, mobile **By stream**,
+or the Streams directory. Title text retains its edit/disclosure action and uses
+the full available width; there is no visible handle.
+For keyboard use, focus the reorder area, press Space, use Up/Down, and press Space to
 save (Escape cancels). Uncategorized stays pinned last. The first move switches
 from alphabetical to custom order; **Reset stream order to alphabetical** restores
 the default. New streams append above Uncategorized in custom mode; renaming

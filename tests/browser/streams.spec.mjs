@@ -93,7 +93,7 @@ for (const theme of ['light', 'dark']) test(`all streams, grouping, and editing 
   const areaFilter = page.getByRole('group', { name: 'Area filter', exact: true });
   for (const [title, area] of [['zebra', 'Work'], ['Alpha', 'Personal']]) {
     const color = await areaFilter.getByRole('button', { name: area, exact: true }).locator('svg').evaluate(icon => getComputedStyle(icon).color);
-    await expect(page.getByRole('button', { name: `Edit stream ${title}`, exact: true }).getByRole('img', { name: area }).locator('svg')).toHaveCSS('color', color);
+    await expect(page.getByRole('button', { name: `Edit stream ${title}`, exact: true }).locator('..').getByRole('img', { name: area }).locator('svg')).toHaveCSS('color', color);
   }
   const edit = page.getByRole('button', { name: 'Edit stream zebra', exact: true });
   await edit.focus();
@@ -176,21 +176,21 @@ function orderingFixture() {
 }
 
 async function keyboardMove(page, name, arrow = 'ArrowUp') {
-  const handle = page.getByRole('button', { name: `Reorder stream ${name}`, exact: true });
-  await expect(handle).toBeEnabled();
-  await handle.focus();
-  const target = await handle.evaluate((node, arrow) => {
+  const surface = page.getByRole('button', { name: `Reorder stream ${name}`, exact: true });
+  await expect(surface).toBeEnabled();
+  await surface.focus();
+  const target = await surface.evaluate((node, arrow) => {
     const row = node.closest('[data-stream-id]');
     const rows = [...row.parentElement.children].filter(el => el.hasAttribute('data-stream-id'));
     return rows[rows.indexOf(row) + (arrow === 'ArrowUp' ? -1 : 1)].getAttribute('data-stream-id');
   }, arrow);
   await page.keyboard.press('Space');
-  await expect(handle).toHaveAttribute('aria-pressed', 'true');
+  await expect(surface).toHaveAttribute('aria-pressed', 'true');
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.keyboard.press(arrow);
   await expect(page.getByRole('status').filter({ hasText: `was moved over droppable area stream:${target}.` })).toHaveCount(1);
   await page.keyboard.press('Space');
-  await expect(handle).not.toHaveAttribute('aria-pressed', 'true');
+  await expect(surface).not.toHaveAttribute('aria-pressed', 'true');
 }
 
 test('stream ordering persists across devices, refresh, board, filters, and reset', async ({ page, context, isMobile }) => {
@@ -239,26 +239,26 @@ test('stream ordering persists across devices, refresh, board, filters, and rese
   expect(ordering.value.ordered_ids).toBe(null);
 });
 
-test('stream drag handle moves a row and a failed save restores its order', async ({ page, isMobile }) => {
+test('stream background moves a row and a failed save restores its order', async ({ page, isMobile }) => {
   const ordering = orderingFixture();
   await setup(page, 'dark', true, false, ordering);
   await page.goto('http://app.test/streams');
-  const handle = page.getByRole('button', { name: 'Reorder stream zebra', exact: true });
-  await expect(handle).toBeEnabled();
-  const start = await handle.boundingBox();
+  const surface = page.getByRole('button', { name: 'Reorder stream zebra', exact: true });
+  await expect(surface).toBeEnabled();
+  const start = await surface.boundingBox();
   const target = await page.getByRole('button', { name: 'Reorder stream Alpha', exact: true }).boundingBox();
   let cdp;
   if (isMobile) {
     cdp = await page.context().newCDPSession(page);
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start.x + 20, y: start.y + 20 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start.x + 6, y: start.y + 6 }] });
     await page.waitForTimeout(250);
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: target.x + 20, y: target.y + 20 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: target.x + 6, y: target.y + 6 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   } else {
-    await page.mouse.move(start.x + 20, start.y + 20);
+    await page.mouse.move(start.x + 6, start.y + 6);
     await page.mouse.down();
-    await page.mouse.move(start.x + 30, start.y + 20, { steps: 3 });
-    await page.mouse.move(target.x + 20, target.y + 20, { steps: 10 });
+    await page.mouse.move(start.x + 16, start.y + 6, { steps: 3 });
+    await page.mouse.move(target.x + 6, target.y + 6, { steps: 10 });
     await page.mouse.up();
   }
   await expect.poll(() => ordering.calls.length).toBe(1);
@@ -268,4 +268,55 @@ test('stream drag handle moves a row and a failed save restores its order', asyn
   await keyboardMove(page, 'zebra', 'ArrowDown');
   await expect(page.getByText('Order save failed', { exact: true })).toBeVisible();
   await expect(rows.first()).toHaveAttribute('data-stream-id', 'z');
+});
+
+
+test('board stream backgrounds drag while title text keeps its space and actions', async ({ page, isMobile }, testInfo) => {
+  const ordering = orderingFixture();
+  await setup(page, 'light', true, false, ordering);
+  await page.goto('http://app.test');
+  if (isMobile) {
+    await page.getByRole('button', { name: /Mobile layout/ }).click();
+    await page.getByRole('option', { name: 'By stream', exact: true }).click();
+  }
+  const drag = page.getByRole('button', { name: 'Reorder stream zebra', exact: true });
+  await expect(drag).toBeEnabled();
+  await expect(drag.locator('svg')).toHaveCount(0);
+  const start = await drag.boundingBox();
+  const target = await page.getByRole('button', { name: 'Reorder stream Alpha', exact: true }).boundingBox();
+  const point = { x: start.x + 6, y: start.y + 6 };
+  expect(await page.evaluate(point => document.elementFromPoint(point.x, point.y)?.getAttribute('aria-label'), point)).toBe('Reorder stream zebra');
+  if (!isMobile) {
+    const edit = page.getByRole('button', { name: 'Edit stream zebra', exact: true });
+    const title = await edit.boundingBox();
+    expect(title.x - start.x).toBeLessThanOrEqual(40);
+    // Text belongs to the edit button above the background, so it cannot start a row drag.
+    expect(await edit.evaluate(el => getComputedStyle(el).pointerEvents)).toBe('auto');
+    await edit.click();
+    await expect(page.getByRole('dialog', { name: 'Edit Stream', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  } else {
+    const row = page.locator('[data-stream-id="z"]');
+    await row.locator('summary').getByText('zebra', { exact: true }).click();
+    await expect(row.locator('details')).not.toHaveAttribute('open', '');
+    await row.locator('summary').getByText('zebra', { exact: true }).click();
+    await expect(row.locator('details')).toHaveAttribute('open', '');
+  }
+  expect(ordering.calls).toHaveLength(0);
+  if (isMobile) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+    await page.waitForTimeout(250);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: target.x + 6, y: target.y + 6 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down();
+    await page.mouse.move(point.x + 10, point.y, { steps: 3 });
+    await page.mouse.move(target.x + 6, target.y + 6, { steps: 10 });
+    await page.mouse.up();
+  }
+  await expect.poll(() => ordering.calls.length).toBe(1);
+  await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'z');
+  await page.screenshot({ path: testInfo.outputPath('stream-background.png') });
 });
