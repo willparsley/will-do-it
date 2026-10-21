@@ -138,7 +138,7 @@ deployments are unaffected. To restore automatic previews later, remove the
 - Tailwind + calm design system
 - @dnd-kit for the matrix
 
-Core CRUD, authentication, recurrence generation, and archive history persist in Supabase. Mobile installation is supported; push notifications and offline workspace editing remain future work.
+Core CRUD, authentication, recurrence generation, and archive history persist in Supabase. Mobile installation is supported; push notifications have an opt-in implementation pending deployment; offline workspace editing remains future work.
 
 ### Install on your phone
 
@@ -152,10 +152,27 @@ The icon uses the same green artwork as the favicon, with separate PNG files for
 mobile installation and an Apple touch icon. To regenerate these files after
 changing `app/icon.svg`, run `node scripts/generate-pwa-icons.mjs`.
 
-Cards and saves still require internet access. After one online launch, offline
-navigation shows a reconnect screen with **Try again**. Only that public fallback
-is cached by the service worker; account pages and Supabase data are never cached
-by it. Service workers run only in production builds. Updates take effect after
+After a successful online workspace load, cards and stream notes are saved on this
+device for **read-only offline viewing**, including after an accidental refresh or
+reopening the installed app without service. The offline view shows its last-saved
+time and offers Active/Backlog/All/Archive, area/history filters, Hide recurring,
+search, and expandable card/stream notes. It displays the last successful load;
+recurrence generation and automatic status changes need a connection. Changes
+are disabled offline and are not queued. Losing connectivity while an app page is
+open covers it with the saved view; reconnecting restores that page and its drafts.
+The offline view's **Reconnect** link opens the live workspace.
+
+The snapshot lives in browser local storage, includes card titles and notes, and
+is replaced after each successful workspace refresh. It belongs to the current
+account and clears on sign-out or account change. Browser storage cleanup can
+remove it. If storage is unavailable/full, the online workspace shows a warning;
+without a valid snapshot, offline navigation shows a reconnect screen. Load the
+workspace online before a flight, and check that the offline view is available.
+
+Only the self-contained public offline viewer is cached by the service worker;
+authenticated pages, API responses, writes, and Next router payloads are never
+cached by it. No auth tokens are included in the snapshot. Service workers run
+only in production builds. Updates take effect after
 existing app windows close and the app is reopened, without reloading open edits.
 Installation does not enable background recurrence processing or push reminders;
 generation/promotion still runs when the workspace loads or after mutations.
@@ -187,7 +204,7 @@ Unfinished cards have a softened title and a muted red “Blocked by” label (w
 
 ### Persistent stream ordering
 
-Apply `supabase/migrations/202610210001_stream_order.sql` before deploying this UI.
+Apply `supabase/migrations/202610210002_stream_order.sql` before deploying this UI.
 It adds an account-owned order row, atomic relative-move/reset RPCs, a creation
 trigger, and Realtime publication membership when the publication exists. It is
 safe to reapply and does not modify cards, stream titles, or history.
@@ -212,3 +229,7 @@ Run `npm test` for ordering, ownership, synchronization, and rollback tests. Aft
 `npm run build`, run `npx playwright test --config tests/browser/playwright.config.mjs streams.spec.mjs drag-targets.spec.mjs`
 for production-asset keyboard, mouse/touch, cross-device, reset, and card-drag
 regressions. Browser requests are intercepted; these tests do not write live data.
+
+### Push notifications
+
+Per-device push reminders and exact-time background delivery are implemented but require server setup. See [Push notification setup](docs/push-notifications.md) for migration, VAPID secrets, Supabase function/scheduler deployment, and phone validation.

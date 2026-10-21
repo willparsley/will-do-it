@@ -109,7 +109,7 @@ test('weekly intervals remain visible after switching from every-N-days and recu
   nodes(tree,n=>n.type==='input' && n.props.type==='text')[0].props.onChange({target:{value:'Weekly walk'}});
   nodes(tree,n=>n.type==='summary' && text(n).includes('Repeat'))[0].props.onClick({preventDefault(){}});
   tree=ui.render();
-  nodes(tree,n=>n.props?.onValueChange && n.props.value==='daily')[0].props.onValueChange('every_n_days');
+  nodes(tree,n=>n.props?.onValueChange && n.props.id==='card-frequency')[0].props.onValueChange('every_n_days');
   tree=ui.render();
   nodes(tree,n=>n.type==='input' && n.props.type==='number')[0].props.onChange({target:{value:'3'}});
   tree=ui.render();
@@ -117,6 +117,8 @@ test('weekly intervals remain visible after switching from every-N-days and recu
   tree=ui.render();
   assert.equal(nodes(tree,n=>n.type==='input' && n.props.type==='number')[0].props.value,3);
   assert.ok(text(tree).includes('weeks'));
+  nodes(tree,n=>n.props?.['aria-label']==='Monday')[0].props.onChange({target:{checked:true}});
+  tree=ui.render();
   await nodes(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
   assert.equal(calls.length,1);
   assert.equal(calls[0].name,'create_recurring_card_with_prerequisite');
@@ -331,3 +333,34 @@ for (const action of ['complete','advance']) for (const fails of [false,true]) {
     assert.equal(successes.at(-1).message,fails?notification.message:'Undone');
   });
 }
+
+for (const frequency of ['', 'daily', 'weekly']) {
+  test(`creation requires explicit recurrence frequency and weekdays: ${frequency || 'unselected'}`, async () => {
+    const calls=[];
+    const supabase={auth:{async getUser(){return {data:{user}};}},rpc(name,args){calls.push({name,args});return {async single(){return {data:base};}};}};
+    const ui=driver('components/AddCardModal.tsx','AddCardModal',{streams,onClose(){},onCardCreated(){}},
+      {'@/lib/supabase/client':{createClient:()=>supabase},sonner:notifications().module});
+    let tree=ui.render();
+    nodes(tree,n=>n.type==='input' && n.props.type==='text')[0].props.onChange({target:{value:'Intentional repeat'}});
+    nodes(tree,n=>n.type==='summary' && text(n).includes('Repeat'))[0].props.onClick({preventDefault(){}});
+    tree=ui.render();
+    assert.equal(nodes(tree,n=>n.props?.id==='card-frequency')[0].props.value,'');
+    if(frequency) nodes(tree,n=>n.props?.id==='card-frequency')[0].props.onValueChange(frequency);
+    tree=ui.render();
+    await nodes(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
+    assert.equal(calls.length,frequency==='daily'?1:0);
+    if(frequency!=='daily') assert.match(text(ui.render()),frequency==='weekly'?/Choose at least one weekday/:/Choose how often/);
+  });
+}
+
+test('opening and closing Repeat creates an ordinary card', async () => {
+  let inserted;
+  const supabase={auth:{async getUser(){return {data:{user}};}},from(){return {insert(value){inserted=value;return this;},select(){return this;},async single(){return {data:base};}};}};
+  const ui=driver('components/AddCardModal.tsx','AddCardModal',{streams,onClose(){},onCardCreated(){}},
+    {'@/lib/supabase/client':{createClient:()=>supabase},sonner:notifications().module});
+  let tree=ui.render();
+  nodes(tree,n=>n.type==='input' && n.props.type==='text')[0].props.onChange({target:{value:'One off'}});
+  for(let i=0;i<2;i++) {nodes(tree,n=>n.type==='summary' && text(n).includes('Repeat'))[0].props.onClick({preventDefault(){}});tree=ui.render();}
+  await nodes(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
+  assert.equal(inserted.is_recurring,false);
+});

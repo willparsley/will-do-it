@@ -32,7 +32,7 @@ test('database ordering is atomic, account isolated, and relative to the latest 
       alter default privileges in schema public grant select,insert,update,delete on tables to authenticated,anon;`);
     await db.exec((await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8')).replace('create extension if not exists "uuid-ossp";', '').replaceAll('uuid_generate_v4()', 'gen_random_uuid()'));
     await db.exec('create publication supabase_realtime');
-    const migration = await readFile(new URL('../supabase/migrations/202610210001_stream_order.sql', import.meta.url), 'utf8');
+    const migration = await readFile(new URL('../supabase/migrations/202610210002_stream_order.sql', import.meta.url), 'utf8');
     await db.exec(migration);
     await db.exec(migration);
     assert.equal((await q("select * from pg_publication_tables where pubname='supabase_realtime' and tablename='stream_orders'")).length, 1);

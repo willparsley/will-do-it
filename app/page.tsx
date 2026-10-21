@@ -29,6 +29,7 @@ import { TooltipButton } from '@/components/TooltipButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { toast } from 'sonner';
 import type { User } from '@supabase/supabase-js';
+import { DEFAULT_HISTORY_LIMIT, HISTORY_LIMIT_EVENT, readHistoryLimit, type HistoryLimit } from '@/lib/history-preferences';
 import { ArchiveCards } from '@/components/ArchiveCards';
 import { ArchivePeriod, HISTORY_PERIODS, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
 import { MobileAddMenu, MobileCards, MobileLayoutControls, MOBILE_LAYOUTS, type MobileLayout } from '@/components/MobileWorkspace';
@@ -37,6 +38,7 @@ import { AreaIndicator } from '@/components/AreaIndicator';
 import { errorMessage } from '@/lib/errors';
 import { useStreamOrder } from '@/components/useStreamOrder';
 import { StreamOrdering, SortableStreamRow } from '@/components/StreamOrdering';
+import { clearOfflineWorkspace, saveOfflineWorkspace } from '@/lib/offline-workspace';
 
 const supabase = createClient();
 
@@ -48,11 +50,13 @@ const VIEWS = [
 ] as const;
 
 export default function WillDoIt() {
+  const [offlineSaveFailed, setOfflineSaveFailed] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [recurrenceSources, setRecurrenceSources] = useState<RecurrenceSource[]>([]);
   const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('week');
+  const [historyLimit, setHistoryLimit] = useState<HistoryLimit>(DEFAULT_HISTORY_LIMIT);
   const [hideRecurring, setHideRecurring] = useState(false);
   const [mobileLayout, setMobileLayout] = useState<MobileLayout>('status');
   const [mobileViewport, setMobileViewport] = useState(false);
@@ -128,7 +132,9 @@ export default function WillDoIt() {
       const sources = (sourceResult.data || []) as RecurrenceSource[];
       setRecurrenceSources(sources);
       setStreams(loadedStreams);
-      setCards(hydrateRecurringCards((cardResult.data || []) as Card[], sources));
+      const loadedCards = hydrateRecurringCards((cardResult.data || []) as Card[], sources);
+      setCards(loadedCards);
+      setOfflineSaveFailed(!saveOfflineWorkspace(userId, loadedStreams, loadedCards));
     } catch (error) {
       if (sequence === loadSequence.current) toast.error(errorMessage(error, 'Could not load your workspace'));
     } finally {
@@ -160,7 +166,13 @@ export default function WillDoIt() {
     const init = async () => {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (!boundary.active) return;
+      if (error && (error.name === 'AuthRetryableFetchError' || error.status === 0 || navigator.onLine === false)) {
+        // A connection failure is not a sign-out. Keep the saved account copy.
+        window.location.replace('/offline.html');
+        return;
+      }
       if (error || !user) {
+        clearOfflineWorkspace();
         window.location.replace('/login');
         return;
       }
@@ -187,6 +199,18 @@ export default function WillDoIt() {
       boundary.dispose();
     };
   }, [loadData]);
+
+  useEffect(() => {
+    if (!user) return;
+    const update = () => setHistoryLimit(readHistoryLimit(user.id));
+    update();
+    window.addEventListener('storage', update);
+    window.addEventListener(HISTORY_LIMIT_EVENT, update);
+    return () => {
+      window.removeEventListener('storage', update);
+      window.removeEventListener(HISTORY_LIMIT_EVENT, update);
+    };
+  }, [user]);
 
   const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod; hideRecurring: boolean; mobileLayout: MobileLayout }>) => {
     if (!user) return;
@@ -607,6 +631,8 @@ export default function WillDoIt() {
         </div>
       </header>
 
+      {offlineSaveFailed && <p role="status" className="shrink-0 px-4 py-2 text-sm bg-sunken text-ink-soft">Offline viewing is unavailable because this browser could not save a local copy. Your online workspace still works.</p>}
+
       {/* View switcher lives in its own stable bar so it never shifts
           horizontally when the number of columns changes between views. */}
       <div className="relative shrink-0 z-40 border-b border-line bg-chrome/80 backdrop-blur">
@@ -641,7 +667,7 @@ export default function WillDoIt() {
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
         >
-          {compact && filteredStreams.length > 0 ? <MobileCards view={view} layout={mobileLayout as 'status' | 'stream'} streams={filteredStreams} columns={columns} cardsForStream={getCardsForStream} renderCard={renderCard} onAdd={setCreationContext} onEditStream={setEditingStream} /> :
+          {compact && filteredStreams.length > 0 ? <MobileCards historyLimit={historyLimit} view={view} layout={mobileLayout as 'status' | 'stream'} streams={filteredStreams} columns={columns} cardsForStream={getCardsForStream} renderCard={renderCard} onAdd={setCreationContext} onEditStream={setEditingStream} /> :
           <div className={`space-y-3 mx-auto ${mobileViewport ? 'mobile-matrix' : ''}`} style={{ maxWidth: matrixMaxWidth, minWidth: compact ? 0 : mobileViewport ? 34 + columns.length * 240 + (columns.length - 1) * GRID_GAP : 34 + streamColWidth + columns.length * 180 + columns.length * GRID_GAP }}>
             {!compact && <div
               className="sticky top-0 z-20 grid gap-3 items-center px-4 py-2 bg-canvas border border-transparent border-b-line shadow-sm"
@@ -684,7 +710,7 @@ export default function WillDoIt() {
                               addLabel={`Add card to ${stream.title} — ${STATUS_LABELS[status]}.`}>
                               <div className="space-y-2">
                                 {status === 'complete' || status === 'canceled'
-                                  ? <ArchiveCards cards={cellCards} status={status} renderCard={renderCard} />
+                                  ? <ArchiveCards key={`${stream.id}:${status}:${historyLimit}`} limit={historyLimit} cards={cellCards} status={status} renderCard={renderCard} />
                                   : cellCards.map(renderCard)}
                               </div>
                             </DroppableCell>

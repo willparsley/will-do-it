@@ -11,6 +11,7 @@ import { AreaIndicator } from './AreaIndicator';
 import { ArchiveCards } from './ArchiveCards';
 import { StatusHeader } from './StatusHeader';
 import { type Card, type CardStatus, type Stream, STATUS_LABELS } from '@/lib/types';
+import { DEFAULT_HISTORY_LIMIT, type HistoryLimit } from '@/lib/history-preferences';
 import { type View, displayStreamId } from '@/lib/card-views';
 import styles from './MobileWorkspace.module.css';
 import menuStyles from './HeaderControls.module.css';
@@ -53,7 +54,8 @@ export function MobileLayoutControls({ layout, onLayout, filters, filterCount }:
   </div>;
 }
 
-export function MobileCards({ layout, view, streams, columns, cardsForStream, renderCard, onAdd, onEditStream }: {
+export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view, streams, columns, cardsForStream, renderCard, onAdd, onEditStream }: {
+  historyLimit?: HistoryLimit;
   layout: 'status' | 'stream'; view: View; streams: Stream[]; columns: CardStatus[];
   cardsForStream: (id: string) => Card[]; renderCard: (card: Card) => ReactNode;
   onAdd: (context: { streamId?: string; status: CardStatus }) => void;
@@ -66,7 +68,16 @@ export function MobileCards({ layout, view, streams, columns, cardsForStream, re
   };
   const renderStatusCards = (cards: Card[], status: CardStatus) => {
     const context = layout === 'status' ? streamContext : () => <span>{STATUS_LABELS[status]}</span>;
-    if (status === 'complete' || status === 'canceled') return <ArchiveCards cards={cards} status={status} renderCard={renderCard} renderContext={context} />;
+    if (status === 'complete' || status === 'canceled') {
+      if (layout === 'status') return streams.map(stream => {
+        const streamCards = cards.filter(card => displayStreamId(card) === stream.id);
+        return streamCards.length > 0 ? <div key={stream.id} className="space-y-2">
+          <h3 className="text-sm font-medium flex items-center gap-1.5"><AreaIndicator area={stream.area} />{stream.title}</h3>
+          <ArchiveCards key={`${stream.id}:${status}:${historyLimit}`} limit={historyLimit} cards={streamCards} status={status} renderCard={renderCard} renderContext={context} />
+        </div> : null;
+      });
+      return <ArchiveCards key={`${cards[0] ? displayStreamId(cards[0]) : ''}:${status}:${historyLimit}`} limit={historyLimit} cards={cards} status={status} renderCard={renderCard} renderContext={context} />;
+    }
     return cards.map(renderCard);
   };
   const sections = layout === 'status' ? columns.map(status => ({

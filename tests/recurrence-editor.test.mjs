@@ -139,3 +139,24 @@ test('both workspace entry points open the same source editor and saving runs ge
   await new Promise(resolve=>setTimeout(resolve,0));
   assert.deepEqual(calls,['generate_recurring_instances','promote_due_cards','generate_recurring_instances','promote_due_cards']);
 });
+
+test('removing recurrence is a draft until save and submits edited values atomically', async () => {
+  const calls=[];
+  let updated;
+  const supabase={rpc(name,args){calls.push({name,args});return {async single(){return {data:{...card,...args.p_changes,is_recurring:false,recurrence_source_id:null}};}};}};
+  const ui=driver('components/EditCardModal.tsx','EditCardModal',{
+    card,streams,onClose(){},onCardUpdated:value=>{updated=value;},onCardDeleted(){},onEditRecurrence(){},
+  },{'@/lib/supabase/client':{createClient:()=>supabase},sonner:notices});
+  let tree=ui.render();
+  nodes(tree,n=>n.type==='input' && n.props.type==='checkbox' && n.props['aria-describedby']==='remove-recurrence-help')[0].props.onChange({target:{checked:true}});
+  tree=ui.render();
+  assert.equal(calls.length,0);
+  assert.equal(tree.props.dirty,true);
+  assert.equal(button(tree,'Edit recurrence'),undefined);
+  nodes(tree,n=>n.type==='input' && n.props.type==='text')[0].props.onChange({target:{value:'One off'}});
+  tree=ui.render();await submit(tree);
+  assert.equal(calls[0].name,'save_card_without_recurrence');
+  assert.equal(calls[0].args.p_expected_source_id,'source');
+  assert.equal(calls[0].args.p_changes.title,'One off');
+  assert.equal(updated.is_recurring,false);
+});

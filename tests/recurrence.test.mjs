@@ -26,8 +26,7 @@ before(async () => {
     create table auth.users (id uuid primary key);
     create function auth.uid() returns uuid language sql stable as
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-    create role authenticated;
-    create role anon;
+    create role authenticated; create role service_role; create role anon;
     grant usage on schema auth, public to authenticated;
     grant select on auth.users to authenticated;`);
   const schema = (await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'))
@@ -1017,4 +1016,61 @@ test('recurring creation links only the first occurrence and invalid links roll 
   const before=await query('select id from recurrence_sources');
   await assert.rejects(create(other),/Choose one of your cards/);
   assert.deepEqual(await query('select id from recurrence_sources'),before);
+});
+
+test('service push claim generates recurring cards for subscribed owners and restores caller identity', async () => {
+  await fixture({ stack: true, daysAgo: 2 });
+  await db.exec('reset role');
+  await query(`insert into push_subscriptions(user_id,endpoint,p256dh,auth,enabled_at)
+    values ($1,'https://fcm.googleapis.com/test',repeat('a',87),repeat('a',22),now()-interval '1 day')`, [user]);
+  await query("select set_config('request.jwt.claim.sub',$1,false)",[other]);
+  await query('select * from claim_push_reminders()');
+  const generated = await instances();
+  assert.ok(generated.length >= 2);
+  assert.ok(generated.every(card => card.user_id === user));
+  assert.equal((await query('select auth.uid() as id'))[0].id, other);
+  await query('select * from claim_push_reminders()');
+  assert.equal((await instances()).length, generated.length);
+});
+
+const removeRecurrence = (changes = {}, expectedStatus = 'in_progress', ownerSource = source) =>
+  query('select * from public.save_card_without_recurrence($1,$2::jsonb,$3,$4)',[original,JSON.stringify(changes),expectedStatus,ownerSource]);
+
+test('removing recurrence converts pending cards, preserves history and stops generation', async () => {
+  await fixture({stack:true,active:true,daysAgo:2});
+  await generate();
+  await saveCard(original,'in_progress',{status:'complete'});
+  const [history]=await query('select * from cards where id=$1',[original]);
+  const [pending]=await query("select * from cards where status not in ('complete','canceled') order by id limit 1");
+  const before=await query("select * from cards where status not in ('complete','canceled') order by id");
+  await query('select * from public.save_card_without_recurrence($1,$2::jsonb,$3,$4)',[pending.id,JSON.stringify({title:'One off',notes:'Keep me'}),pending.status,source]);
+  assert.deepEqual((await query('select * from cards where id=$1',[original]))[0],history);
+  const after=await query("select * from cards where status not in ('complete','canceled') order by id");
+  assert.equal(after.length,before.length);
+  for(let i=0;i<after.length;i++) {
+    assert.equal(after[i].is_recurring,false);
+    assert.equal(after[i].recurrence_source_id,null);
+    assert.equal(after[i].recurrence_date,null);
+    assert.equal(after[i].scheduled_date,null);
+    assert.deepEqual(after[i].due_at,before[i].due_at);
+    assert.deepEqual(after[i].remind_at,before[i].remind_at);
+  }
+  assert.ok((await recurrenceSettings()).stopped_at);
+  assert.equal(await generate(),0);
+  await saveCard(pending.id,pending.status,{status:'complete'});
+  assert.equal(await generate(),0);
+});
+
+test('recurrence removal rolls back on invalid edits and rejects stale or foreign cards', async () => {
+  await fixture({active:true});
+  const before=await query('select * from cards');
+  const settings=await recurrenceSettings();
+  await assert.rejects(removeRecurrence({status:'invalid'}));
+  assert.deepEqual(await query('select * from cards'),before);
+  assert.deepEqual(await recurrenceSettings(),settings);
+  await assert.rejects(removeRecurrence({},'backlog'),/changed elsewhere/);
+  await query("select set_config('request.jwt.claim.sub',$1,false)",[other]);
+  await assert.rejects(removeRecurrence(),/not found/);
+  await query("select set_config('request.jwt.claim.sub',$1,false)",[user]);
+  await assert.rejects(query('update cards set recurrence_source_id=null,recurrence_date=null,scheduled_date=null,is_recurring=false where id=$1',[original]),/recurrence identity/);
 });
