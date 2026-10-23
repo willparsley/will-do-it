@@ -86,7 +86,7 @@ export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view
       status === 'complete' || status === 'canceled'
         ? new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime() : 0),
   })) : streams.map(stream => ({ id: stream.id, title: stream.title, stream, cards: cardsForStream(stream.id) }));
-  return <div className={styles.sections} data-mobile-layout={layout}>
+  return <div className={styles.sections} data-mobile-layout={layout} data-list-layout={layout}>
     {sections.map(section => {
       const stream = 'stream' in section ? section.stream : undefined;
       const status = 'status' in section ? section.status : undefined;
@@ -109,7 +109,7 @@ export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view
         <div className={styles.sectionBody}>
           {stream && stream.title !== 'Uncategorized' && <button type="button" className="btn btn-ghost min-h-11 px-2 text-xs" onClick={() => onEditStream(stream)}>Stream details</button>}
           {status ? renderStatusCards(section.cards, status) : <>
-            {renderColumns(collapseHistory ? columns.filter(status => status !== 'complete' && status !== 'canceled') : columns)}
+            <div className={styles.streamCards}>{renderColumns(collapseHistory ? columns.filter(status => status !== 'complete' && status !== 'canceled') : columns)}</div>
             {collapseHistory && historyCards.length > 0 && <details className={styles.history} data-stream-history={section.id}>
               <summary className="focus-ring">
                 <ChevronDown size={16} className={styles.chevron} aria-hidden="true" />

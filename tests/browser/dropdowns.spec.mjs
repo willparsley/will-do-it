@@ -585,7 +585,7 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  await expect(group(2,'canceled')).toHaveCount(1);
  await expect(page.getByText('Next walk',{exact:true})).toBeVisible();
  await expect(page.getByText('One-off completed',{exact:true})).toBeVisible();
- await expect(completed.locator('.card')).toHaveCount(14);
+ await expect(completed.locator('.card')).toHaveCount(5);
  await expect(completed.locator('.card').first()).not.toBeVisible();
  const closed=await completed.boundingBox();
  assert.ok(closed.height<=82,`Closed history uses ${closed.height}px for 14 occurrences`);
@@ -597,6 +597,8 @@ for (const theme of ['light','dark']) test(`recurring history saves space in All
  await page.keyboard.press('Enter');
  await expect(completed).toHaveAttribute('open','');
  await expect(completed.locator('.card').first()).toBeVisible();
+ await completed.getByRole('button', { name: 'Show all 14 (9 more)', exact: true }).click();
+ await expect(completed.locator('.card')).toHaveCount(14);
  assert.deepEqual(await completed.locator('.card-title').allTextContents(),[
    ...Array.from({length:12},(_,i)=>`Walk occurrence ${i}`),'Old walk','Undated walk',
  ]);

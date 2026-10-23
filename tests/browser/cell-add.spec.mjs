@@ -134,6 +134,8 @@ for (const theme of ['light', 'dark']) test(`cell add defaults, saves, focus, an
   await recurring.click();
   await dialog.getByLabel('Title', { exact: true }).fill('Cell-created recurring card');
   await dialog.locator('summary').filter({ hasText: 'Repeat' }).click();
+  await dialog.locator('button[aria-label="Repeat"]').click();
+  await page.getByRole('option', { name: 'Daily', exact: true }).click();
   await dialog.getByRole('button', { name: 'Create Card', exact: true }).click();
   await expect(dialog).toBeHidden();
   expect(calls.find(call => call.path.endsWith('/create_recurring_card_with_prerequisite')).body).toMatchObject({ p_title: 'Cell-created recurring card', p_stream_id: '0', p_status: 'complete' });

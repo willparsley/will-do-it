@@ -124,3 +124,28 @@ test('mobile layout is validated, remembered per user, and retained when other f
     assert.equal(layoutControl(await workspace()).props.layout, 'status');
   });
 });
+
+test('desktop defaults to Board and saves layout independently of mobile and other filters', async () => {
+  const storage = memoryStorage();
+  const desktop = ui => nodes(ui.render(), node => node.props?.['aria-label'] === 'Desktop layout')[0];
+  const mobile = ui => nodes(ui.render(), node => typeof node.props?.onLayout === 'function')[0];
+  await withStorage(storage, async () => {
+    let ui = await workspace();
+    assert.equal(desktop(ui).props.value, 'board');
+    desktop(ui).props.onValueChange('stream');
+    ui.render();
+    mobile(ui).props.onLayout('board');
+    ui = await workspace();
+    assert.equal(desktop(ui).props.value, 'stream');
+    assert.equal(mobile(ui).props.layout, 'board');
+    button(ui.render(), 'Archive').props.onClick();
+    ui = await workspace();
+    assert.equal(desktop(ui).props.value, 'stream');
+    assert.equal(mobile(ui).props.layout, 'board');
+    assert.equal(desktop(await workspace('other')).props.value, 'board');
+    storage.setItem('will-do-it:workspace:user', JSON.stringify({ desktopLayout: 'invalid', mobileLayout: 'stream' }));
+    ui = await workspace();
+    assert.equal(desktop(ui).props.value, 'board');
+    assert.equal(mobile(ui).props.layout, 'stream');
+  });
+});
