@@ -244,5 +244,46 @@ for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, mo
   await fits();
   await page.setViewportSize({ width: 320, height: 640 });
   await fits();
+
+  // Mobile list cards must keep native vertical scrolling, even after a long press.
+  cards.push(...Array.from({ length: 20 }, (_, i) => ({ id: `scroll-${i}`, title: `Mobile scrolling check ${i}`,
+    stream_id: 'personal', user_id: user.id, status: 'research', position: i + 20, is_recurring: false,
+  })));
+  await page.reload();
+  await expect(card('scroll-4')).toBeAttached();
+  const writesBeforeScroll = calls.filter(call => call.path.endsWith('/save_card_with_undo')).length;
+  const cdp = await page.context().newCDPSession(page);
+  const board = page.getByRole('region', { name: 'Task board', exact: true });
+  for (const label of ['By status', 'By stream']) {
+    await layout(label);
+    await expect(page.locator('[data-status-drop]')).toHaveCount(0);
+    if (label === 'By stream') {
+      const sections = await page.locator('[data-list-layout="stream"] > [data-stream-id]').evaluateAll(elements =>
+        elements.map(el => ({ x: el.getBoundingClientRect().x, y: el.getBoundingClientRect().y })));
+      expect(sections.length).toBeGreaterThan(1);
+      expect(Math.abs(sections[0].x - sections[1].x)).toBeLessThanOrEqual(1);
+      expect(sections[1].y).toBeGreaterThan(sections[0].y);
+    }
+    await card('scroll-4').scrollIntoViewIfNeeded();
+    const source = await card('scroll-4').boundingBox();
+    const before = await board.evaluate(el => el.scrollTop);
+    const point = { x: source.x + 15, y: source.y + source.height / 2 };
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+    // Exceed the Board's 200ms touch-drag activation delay before swiping.
+    await page.waitForTimeout(300);
+    await expect(page.locator('[data-card-dragging]')).toHaveCount(0);
+    for (let step = 1; step <= 10; step++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: point.x, y: point.y - step * 15 }] });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect.poll(() => board.evaluate(el => el.scrollTop)).toBeGreaterThan(before + 40);
+    await expect(page.locator('[data-card-dragging]')).toHaveCount(0);
+    await expect(page.locator('.card[data-selected]')).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(calls.filter(call => call.path.endsWith('/save_card_with_undo'))).toHaveLength(writesBeforeScroll);
+    await fits();
+  }
+  await cdp.detach();
   expect(errors).toEqual([]);
 });
