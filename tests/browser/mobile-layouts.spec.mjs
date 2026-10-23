@@ -11,15 +11,24 @@ const user = { id: '11111111-1111-4111-8111-111111111111', email: 'preview@examp
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
 const expires = Math.floor(Date.now() / 1000) + 3600;
 const session = { access_token: encode({ alg: 'HS256', typ: 'JWT' }) + '.' + encode({ sub: user.id, exp: expires, aud: 'authenticated', role: 'authenticated' }) + '.fixture', refresh_token: 'fixture', token_type: 'bearer', expires_in: 3600, expires_at: expires, user };
-const streams = [
+const baseStreams = [
   { id: 'work', title: 'Website refresh', area: 'work' },
   { id: 'personal', title: 'Kitchen renovation', area: 'personal' },
   { id: 'unc', title: 'Uncategorized', area: 'neutral' },
 ].map((stream, i) => ({ ...stream, user_id: user.id, state: 'in_progress', position: i }));
 
 for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, movement and history in ${theme}`, async ({ page, isMobile }, testInfo) => {
+  const streams = isMobile ? baseStreams : [...baseStreams,
+    ...['Home maintenance', 'Learning', 'Trip planning'].map((title, i) => ({ id: `extra-${i}`, title, user_id: user.id, state: 'in_progress', area: 'personal', position: i + 3 })),
+  ];
   const sources = [{ id: 'repeat', stream_id: 'personal', base_title: 'Clean kitchen' }];
   let cards = [
+    ...(!isMobile ? [
+      { id: 'home', title: 'Book the autumn furnace service', stream_id: 'extra-0', status: 'waiting' },
+      ...['Test smoke alarms', 'Replace the hallway bulb', 'Clean the dryer vent', 'Order air filters', 'Inspect the window seals', 'Clear the gutters', 'Touch up the front door', 'Check the thermostat', 'Put away garden tools', 'Service the snow blower'].map((title, i) => ({ id: `home-${i}`, title, stream_id: 'extra-0', status: 'waiting' })),
+      { id: 'learn', title: 'Choose the next photography course', stream_id: 'extra-1', status: 'research' },
+      { id: 'travel', title: 'Compare places to stay for the weekend', stream_id: 'extra-2', status: 'research' },
+    ] : []),
     { id: 'research', title: 'Compare a very long list of cabinet handles and finishes for the entire kitchen', stream_id: 'personal', status: 'research' },
     { id: 'waiting', title: 'Confirm delivery date', stream_id: 'personal', status: 'waiting', due_at: new Date().toISOString() },
     { id: 'progress', title: 'Draft proposal', stream_id: 'work', status: 'in_progress' },
@@ -74,6 +83,7 @@ for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, mo
   const fits = async () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const board = page.getByRole('region', { name: 'Task board', exact: true });
+    if (!isMobile && await page.locator('[data-list-layout="stream"]').count()) return;
     expect(await board.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   };
   if (!isMobile) {
@@ -82,6 +92,7 @@ for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, mo
     await layout('By status');
   }
   await expect(page.locator('[data-mobile-layout="status"]')).toBeVisible();
+  await expect(page.locator('[data-status-drop]')).toHaveCount(isMobile ? 0 : 3);
   await fits();
   await expect(card('waiting')).toContainText('Kitchen renovation');
   await expect(card('waiting')).toContainText('Today');
@@ -107,7 +118,26 @@ for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, mo
     await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
   await fits();
+  if (!isMobile) {
+    const board = page.getByRole('region', { name: 'Task board', exact: true });
+    const lanes = page.locator('[data-list-layout="stream"] > [data-stream-id]');
+    const boxes = await lanes.evaluateAll(elements => elements.map(el => ({ x: el.offsetLeft, y: el.offsetTop })));
+    expect(new Set(boxes.map(box => box.y)).size).toBe(1);
+    expect(boxes[1].x).toBeGreaterThan(boxes[0].x);
+    expect(await board.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    await board.evaluate(el => { el.scrollLeft = el.scrollWidth; el.scrollTop = 0; });
+    await expect(card('progress')).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath('by-stream-scrolled.png'), fullPage: true });
+    await board.evaluate(el => { el.scrollLeft = 0; el.scrollTop = 0; });
+  }
   await page.screenshot({ path: testInfo.outputPath('by-stream.png'), fullPage: true });
+  if (!isMobile) {
+    const lane = page.locator('[data-stream-id="extra-0"] > details');
+    expect(await lane.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+    await lane.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect(card('home-9')).toBeInViewport();
+    await lane.evaluate(el => { el.scrollTop = 0; });
+  }
   await page.reload();
   await expect(page.locator('[data-mobile-layout="stream"]')).toBeVisible();
   await openFilters(page);
@@ -214,5 +244,46 @@ for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, mo
   await fits();
   await page.setViewportSize({ width: 320, height: 640 });
   await fits();
+
+  // Mobile list cards must keep native vertical scrolling, even after a long press.
+  cards.push(...Array.from({ length: 20 }, (_, i) => ({ id: `scroll-${i}`, title: `Mobile scrolling check ${i}`,
+    stream_id: 'personal', user_id: user.id, status: 'research', position: i + 20, is_recurring: false,
+  })));
+  await page.reload();
+  await expect(card('scroll-4')).toBeAttached();
+  const writesBeforeScroll = calls.filter(call => call.path.endsWith('/save_card_with_undo')).length;
+  const cdp = await page.context().newCDPSession(page);
+  const board = page.getByRole('region', { name: 'Task board', exact: true });
+  for (const label of ['By status', 'By stream']) {
+    await layout(label);
+    await expect(page.locator('[data-status-drop]')).toHaveCount(0);
+    if (label === 'By stream') {
+      const sections = await page.locator('[data-list-layout="stream"] > [data-stream-id]').evaluateAll(elements =>
+        elements.map(el => ({ x: el.getBoundingClientRect().x, y: el.getBoundingClientRect().y })));
+      expect(sections.length).toBeGreaterThan(1);
+      expect(Math.abs(sections[0].x - sections[1].x)).toBeLessThanOrEqual(1);
+      expect(sections[1].y).toBeGreaterThan(sections[0].y);
+    }
+    await card('scroll-4').scrollIntoViewIfNeeded();
+    const source = await card('scroll-4').boundingBox();
+    const before = await board.evaluate(el => el.scrollTop);
+    const point = { x: source.x + 15, y: source.y + source.height / 2 };
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+    // Exceed the Board's 200ms touch-drag activation delay before swiping.
+    await page.waitForTimeout(300);
+    await expect(page.locator('[data-card-dragging]')).toHaveCount(0);
+    for (let step = 1; step <= 10; step++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: point.x, y: point.y - step * 15 }] });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect.poll(() => board.evaluate(el => el.scrollTop)).toBeGreaterThan(before + 40);
+    await expect(page.locator('[data-card-dragging]')).toHaveCount(0);
+    await expect(page.locator('.card[data-selected]')).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(calls.filter(call => call.path.endsWith('/save_card_with_undo'))).toHaveLength(writesBeforeScroll);
+    await fits();
+  }
+  await cdp.detach();
   expect(errors).toEqual([]);
 });

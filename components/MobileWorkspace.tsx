@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useDroppable } from '@dnd-kit/core';
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from 'react-aria-components';
 import { ChevronDown, Plus, SlidersHorizontal } from 'lucide-react';
 import { SortableStreamRow, StreamDragSurface } from './StreamOrdering';
@@ -54,8 +55,18 @@ export function MobileLayoutControls({ layout, onLayout, filters, filterCount }:
   </div>;
 }
 
-export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view, streams, columns, cardsForStream, renderCard, onAdd, onEditStream }: {
+function StatusDropSection({ status, enabled, children }: { status: CardStatus; enabled: boolean; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `status:${status}`, disabled: !enabled, data: { kind: 'status', status } });
+  return <details ref={setNodeRef} open data-status-drop={enabled ? status : undefined} data-drop-over={enabled && isOver || undefined}
+    className={`${styles.section} ${enabled ? styles.dropEnabled : ''} ${enabled && isOver ? styles.dropOver : ''}`}>
+    {children}
+  </details>;
+}
+
+export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view, streams, columns, cardsForStream, renderCard, onAdd, onEditStream, enableStatusDrop = false, dragging = false }: {
   historyLimit?: HistoryLimit;
+  enableStatusDrop?: boolean;
+  dragging?: boolean;
   layout: 'status' | 'stream'; view: View; streams: Stream[]; columns: CardStatus[];
   cardsForStream: (id: string) => Card[]; renderCard: (card: Card) => ReactNode;
   onAdd: (context: { streamId?: string; status: CardStatus }) => void;
@@ -86,7 +97,7 @@ export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view
       status === 'complete' || status === 'canceled'
         ? new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime() : 0),
   })) : streams.map(stream => ({ id: stream.id, title: stream.title, stream, cards: cardsForStream(stream.id) }));
-  return <div className={styles.sections} data-mobile-layout={layout} data-list-layout={layout}>
+  return <div className={styles.sections} data-mobile-layout={layout} data-list-layout={layout} data-card-dragging={enableStatusDrop && dragging || undefined}>
     {sections.map(section => {
       const stream = 'stream' in section ? section.stream : undefined;
       const status = 'status' in section ? section.status : undefined;
@@ -102,7 +113,7 @@ export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view
         {status ? <StatusHeader status={status} /> : <span data-stream-text className="flex min-w-0 items-center gap-2"><AreaIndicator area={stream!.area} /><span className="break-words">{section.title}</span></span>}
         <span data-stream-text className={`${styles.count} ml-auto`} aria-label={`${section.cards.length} cards`}>{section.cards.length}</span>
       </>;
-      const content = <details key={section.id} open className={styles.section}>
+      const sectionContent = <>
         <summary className={`${styles.heading} focus-ring`}>
           {stream ? <StreamDragSurface stream={stream} className="-m-3 min-w-0 flex-1 rounded-xl" contentClassName="flex items-center gap-2 p-3 min-h-[52px]">{heading}</StreamDragSurface> : heading}
         </summary>
@@ -120,9 +131,12 @@ export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view
             </details>}
           </>}
           {section.cards.length === 0 && <p className="py-2 text-sm text-ink-muted">No cards in this status.</p>}
-          {canAdd && <button type="button" className={styles.add} aria-label={`Add card to ${section.title}`} onClick={event => { event.currentTarget.focus(); onAdd({ streamId: stream?.id, status: status || columns[0] }); }}><Plus size={17} /> Add card</button>}
+          {canAdd && <button type="button" className={styles.add} disabled={dragging} aria-label={`Add card to ${section.title}`} onClick={event => { event.currentTarget.focus(); onAdd({ streamId: stream?.id, status: status || columns[0] }); }}><Plus size={17} /> Add card</button>}
         </div>
-      </details>;
+      </>;
+      const content = status
+        ? <StatusDropSection key={section.id} status={status} enabled={enableStatusDrop}>{sectionContent}</StatusDropSection>
+        : <details key={section.id} open className={styles.section}>{sectionContent}</details>;
       return stream ? <SortableStreamRow key={section.id} stream={stream}>
         {content}
       </SortableStreamRow> : content;

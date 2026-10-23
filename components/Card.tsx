@@ -222,12 +222,14 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
 interface CardProps extends CardViewProps {
   /** Rendered inside a DragOverlay — not interactive, not draggable. */
   overlay?: boolean;
+  /** Lists can enable dragging independently of their compact presentation. */
+  dragEnabled?: boolean;
 }
 
-export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected, touchMode, desktop, compact, context, onMove, overlay = false }: CardProps) {
+export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected, touchMode, desktop, compact, context, onMove, dragEnabled = !compact, overlay = false }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
-    disabled: overlay || compact,
+    disabled: overlay || !dragEnabled,
   });
 
   if (overlay) {
@@ -241,8 +243,8 @@ export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEdi
   return (
     <div
       ref={setNodeRef}
-      {...(compact ? {} : attributes)}
-      {...(compact ? {} : listeners)}
+      {...(dragEnabled ? attributes : {})}
+      {...(dragEnabled ? listeners : {})}
       role={undefined}
       tabIndex={undefined}
       className={isDragging ? 'opacity-40' : ''}
