@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
+import { openFilters, closeFilters } from './workspace-controls.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL) process.loadEnvFile(root + '/.env.local');
@@ -16,8 +17,7 @@ const streams = [
   { id: 'unc', title: 'Uncategorized', area: 'neutral' },
 ].map((stream, i) => ({ ...stream, user_id: user.id, state: 'in_progress', position: i }));
 
-for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, movement and history in ${theme}`, async ({ page, isMobile }, testInfo) => {
-  test.skip(!isMobile);
+for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, movement and history in ${theme}`, async ({ page, isMobile }, testInfo) => {
   const sources = [{ id: 'repeat', stream_id: 'personal', base_title: 'Clean kitchen' }];
   let cards = [
     { id: 'research', title: 'Compare a very long list of cabinet handles and finishes for the entire kitchen', stream_id: 'personal', status: 'research' },
@@ -67,7 +67,7 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
 
   const card = id => page.locator(`.card[data-card-id="${id}"]`);
   const layout = async label => {
-    await page.getByRole('button', { name: 'Mobile layout' }).click();
+    await page.getByRole('button', { name: isMobile ? 'Mobile layout' : 'Desktop layout' }).click();
     await page.getByRole('option', { name: label, exact: true }).click();
   };
   const view = async label => page.getByRole('group', { name: 'Board view', exact: true }).getByRole('button', { name: label, exact: true }).click();
@@ -76,6 +76,11 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
     const board = page.getByRole('region', { name: 'Task board', exact: true });
     expect(await board.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   };
+  if (!isMobile) {
+    await expect(page.locator('[data-status-headers]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Desktop layout' })).toContainText('Board');
+    await layout('By status');
+  }
   await expect(page.locator('[data-mobile-layout="status"]')).toBeVisible();
   await fits();
   await expect(card('waiting')).toContainText('Kitchen renovation');
@@ -85,7 +90,8 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
   await waitingSection.locator(':scope > summary').click();
   await expect(card('waiting')).toBeHidden();
   await waitingSection.locator(':scope > summary').click();
-  await card('waiting').locator('.card-title button').tap();
+  if (isMobile) await card('waiting').locator('.card-title button').tap();
+  else { await card('waiting').focus(); await page.keyboard.press('Enter'); }
   for (const button of await card('waiting').getByRole('group').getByRole('button').all()) {
     const box = await button.boundingBox();
     expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
@@ -94,21 +100,28 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
   await layout('By stream');
   await expect(card('waiting')).toContainText('Waiting');
   await expect(card('waiting')).not.toHaveAttribute('data-selected');
+  if (!isMobile) {
+    await card('waiting').getByRole('button', { name: 'Edit Confirm delivery date', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: 'Edit Card', exact: true });
+    await expect(editor).toBeVisible();
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  }
   await fits();
   await page.screenshot({ path: testInfo.outputPath('by-stream.png'), fullPage: true });
   await page.reload();
   await expect(page.locator('[data-mobile-layout="stream"]')).toBeVisible();
-  await page.getByRole('button', { name: 'Filters', exact: true }).click();
-  const filters = page.getByRole('dialog', { name: 'Filters', exact: true });
-  await filters.getByRole('button', { name: 'Work', exact: true }).click();
-  await filters.getByRole('button', { name: 'Done', exact: true }).click();
+  await openFilters(page);
+  const filters = isMobile ? page.getByRole('dialog', { name: 'Filters', exact: true }) : page;
+  await filters.getByRole('group', { name: 'Area filter', exact: true }).getByRole('button', { name: 'Work', exact: true }).click();
+  await closeFilters(page);
   await expect(card('waiting')).toHaveCount(0);
   await expect(card('progress')).toBeVisible();
-  await page.getByRole('button', { name: /Filters/ }).click();
-  await filters.getByRole('button', { name: 'All', exact: true }).click();
-  await filters.getByRole('button', { name: 'Done', exact: true }).click();
-  await card('waiting').locator('.card-title button').tap();
-  await card('waiting').getByRole('button', { name: 'Move', exact: true }).tap();
+  await openFilters(page);
+  await filters.getByRole('group', { name: 'Area filter', exact: true }).getByRole('button', { name: 'All', exact: true }).click();
+  await closeFilters(page);
+  if (isMobile) await card('waiting').locator('.card-title button').tap();
+  else { await card('waiting').focus(); await page.keyboard.press('Enter'); }
+  await card('waiting').getByRole('button', { name: 'Move', exact: true }).click();
   const move = page.getByRole('dialog', { name: 'Move Card', exact: true });
   await move.getByRole('button', { name: 'Destination stream' }).click();
   await page.getByRole('option', { name: 'Website refresh', exact: true }).click();
@@ -160,22 +173,39 @@ for (const theme of ['light', 'dark']) test(`mobile layouts preserve filtering, 
   await layout('By status');
   await expect(page.getByText('2 completed', { exact: true })).toBeVisible();
   await expect(page.locator('details').filter({ hasText: '2 completed' }).last()).toContainText('Kitchen renovation');
-  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await openFilters(page);
   await filters.getByRole('switch', { name: 'Hide recurring' }).click();
-  await filters.getByRole('button', { name: 'Done', exact: true }).click();
+  await closeFilters(page);
   await expect(page.getByText('Clean kitchen', { exact: true })).toHaveCount(0);
   await fits();
   await expect(card('ordinary-done')).toBeVisible();
-  await page.getByRole('button', { name: /Filters/ }).click();
+  await openFilters(page);
   await filters.getByRole('switch', { name: 'Hide recurring' }).click();
-  await filters.getByRole('button', { name: 'Done', exact: true }).click();
+  await closeFilters(page);
   await expect(page.getByText('Clean kitchen', { exact: true })).toBeVisible();
   await view('Active');
   await layout('Board');
-  await expect(page.locator('.mobile-matrix')).toBeVisible();
+  await expect(page.locator('[data-status-headers]')).toBeVisible();
   await expect(card('waiting')).toBeAttached();
   await layout('By status');
   await fits();
+  if (!isMobile) {
+    // Desktop preference survives reload and remains separate from mobile.
+    await page.reload();
+    await expect(page.locator('[data-list-layout="status"]')).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Mobile layout' }).click();
+    await page.getByRole('option', { name: 'By stream', exact: true }).click();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.locator('[data-list-layout="status"]')).toBeVisible();
+    await fits();
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await fits();
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await fits();
+    expect(errors).toEqual([]);
+    return;
+  }
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(page.locator('[data-mobile-layout]')).toHaveCount(0);
   await expect(page.locator('[data-status-headers]')).toBeVisible();

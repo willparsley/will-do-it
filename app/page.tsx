@@ -59,9 +59,11 @@ export default function WillDoIt() {
   const [historyLimit, setHistoryLimit] = useState<HistoryLimit>(DEFAULT_HISTORY_LIMIT);
   const [hideRecurring, setHideRecurring] = useState(false);
   const [mobileLayout, setMobileLayout] = useState<MobileLayout>('status');
+  const [desktopLayout, setDesktopLayout] = useState<MobileLayout>('board');
   const [mobileViewport, setMobileViewport] = useState(false);
   const [movingCard, setMovingCard] = useState<Card | null>(null);
-  const compact = mobileViewport && mobileLayout !== 'board';
+  const layout = mobileViewport ? mobileLayout : desktopLayout;
+  const compact = layout !== 'board';
   const loadSequence = useRef(0);
   const accountActive = useRef(true);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
@@ -185,6 +187,7 @@ export default function WillDoIt() {
           if (['all', 'work', 'personal'].includes(preferences.area)) setActiveFilter(preferences.area);
           if (HISTORY_PERIODS.some(option => option.value === preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
           if (MOBILE_LAYOUTS.some(option => option.value === preferences.mobileLayout)) setMobileLayout(preferences.mobileLayout);
+          if (MOBILE_LAYOUTS.some(option => option.value === preferences.desktopLayout)) setDesktopLayout(preferences.desktopLayout);
           if (typeof preferences.hideRecurring === 'boolean') setHideRecurring(preferences.hideRecurring);
         }
       } catch {
@@ -212,10 +215,10 @@ export default function WillDoIt() {
     };
   }, [user]);
 
-  const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod; hideRecurring: boolean; mobileLayout: MobileLayout }>) => {
+  const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod; hideRecurring: boolean; mobileLayout: MobileLayout; desktopLayout: MobileLayout }>) => {
     if (!user) return;
     try {
-      localStorage.setItem(`will-do-it:workspace:${user.id}`, JSON.stringify({ view, area: activeFilter, archivePeriod, hideRecurring, ...(mobileLayout !== 'status' ? { mobileLayout } : {}), ...changes }));
+      localStorage.setItem(`will-do-it:workspace:${user.id}`, JSON.stringify({ view, area: activeFilter, archivePeriod, hideRecurring, ...(mobileLayout !== 'status' ? { mobileLayout } : {}), ...(desktopLayout !== 'board' ? { desktopLayout } : {}), ...changes }));
     } catch {
       // The selected view still works when browser storage is unavailable.
     }
@@ -264,7 +267,7 @@ export default function WillDoIt() {
   }
 
   // Adjust transient selection before rendering a changed workspace context.
-  const selectionContext = [mobileViewport, mobileLayout, movingCard?.id, view, activeFilter, archivePeriod, hideRecurring, editingCard?.id,
+  const selectionContext = [mobileViewport, layout, movingCard?.id, view, activeFilter, archivePeriod, hideRecurring, editingCard?.id,
     editingRecurrenceId, !!creationContext, showStreamModal, editingStream?.id].join(':');
   const [previousSelectionContext, setPreviousSelectionContext] = useState(selectionContext);
   if (previousSelectionContext !== selectionContext) {
@@ -529,13 +532,13 @@ export default function WillDoIt() {
 
   const renderCard = (card: Card) => {
     const stream = streams.find(stream => stream.id === displayStreamId(card));
-    const context = mobileLayout === 'status'
+    const context = layout === 'status'
       ? <span className="flex items-center gap-1.5"><AreaIndicator area={stream?.area || 'neutral'} />{stream?.title}</span>
       : <span>{STATUS_LABELS[card.status]}</span>;
     return (
-    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={compact || touchMode} desktop={!mobileViewport} compact={compact}
+    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={(mobileViewport && compact) || touchMode} desktop={!mobileViewport} compact={compact}
       context={compact ? context : undefined}
-      onMove={mobileViewport ? () => { setSelectedCardId(null); setMovingCard(card); } : undefined}
+      onMove={mobileViewport || compact ? () => { setSelectedCardId(null); setMovingCard(card); } : undefined}
       onEdit={event => {
         if (activeDragCard || (suppressCardClick.current && event.detail !== 0)) return;
         setSelectedCardId(null); setEditingCard(card);
@@ -636,7 +639,7 @@ export default function WillDoIt() {
       {/* View switcher lives in its own stable bar so it never shifts
           horizontally when the number of columns changes between views. */}
       <div className="relative shrink-0 z-40 border-b border-line bg-chrome/80 backdrop-blur">
-        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:gap-6 items-center justify-center">
+        <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:flex-wrap lg:gap-x-6 lg:gap-y-1 items-center justify-center">
           <div role="group" aria-label="Board view" className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
             {VIEWS.map((v) => (
               <button
@@ -653,7 +656,13 @@ export default function WillDoIt() {
               </button>
             ))}
           </div>
-          <div className="hidden md:block">{!mobileViewport && filterControls}</div>
+          <div className="hidden md:flex items-center gap-4">{!mobileViewport && <>
+            {filterControls}
+            <AppSelect aria-label="Desktop layout" size="small" className="w-40" value={desktopLayout}
+              onValueChange={value => { const desktopLayout = value as MobileLayout; setDesktopLayout(desktopLayout); savePreferences({ desktopLayout }); }}
+              options={[MOBILE_LAYOUTS[2], MOBILE_LAYOUTS[0], MOBILE_LAYOUTS[1]]} />
+            {compact && <Link href="/streams" className="text-sm text-ink-soft hover:text-ink hover:underline focus-ring whitespace-nowrap">All streams</Link>}
+          </>}</div>
           <div className="w-full md:hidden"><MobileLayoutControls layout={mobileLayout} onLayout={layout => { setMobileLayout(layout); savePreferences({ mobileLayout: layout }); }} filterCount={(activeFilter !== 'all' ? 1 : 0) + (hideRecurring ? 1 : 0) + (columns.includes('complete') && archivePeriod !== 'week' ? 1 : 0)} filters={<><AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />{filterControls}</>} /></div>
         </div>
       </div>
@@ -667,7 +676,7 @@ export default function WillDoIt() {
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
         >
-          {compact && filteredStreams.length > 0 ? <MobileCards historyLimit={historyLimit} view={view} layout={mobileLayout as 'status' | 'stream'} streams={filteredStreams} columns={columns} cardsForStream={getCardsForStream} renderCard={renderCard} onAdd={setCreationContext} onEditStream={setEditingStream} /> :
+          {compact && filteredStreams.length > 0 ? <MobileCards historyLimit={historyLimit} view={view} layout={layout as 'status' | 'stream'} streams={filteredStreams} columns={columns} cardsForStream={getCardsForStream} renderCard={renderCard} onAdd={setCreationContext} onEditStream={setEditingStream} /> :
           <div className={`space-y-3 mx-auto ${mobileViewport ? 'mobile-matrix' : ''}`} style={{ maxWidth: matrixMaxWidth, minWidth: compact ? 0 : mobileViewport ? 34 + columns.length * 240 + (columns.length - 1) * GRID_GAP : 34 + streamColWidth + columns.length * 180 + columns.length * GRID_GAP }}>
             {!compact && <div
               className="sticky top-0 z-20 grid gap-3 items-center px-4 py-2 bg-canvas border border-transparent border-b-line shadow-sm"
