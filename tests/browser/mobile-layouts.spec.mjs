@@ -92,6 +92,7 @@ for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, mo
     await layout('By status');
   }
   await expect(page.locator('[data-mobile-layout="status"]')).toBeVisible();
+  await expect(page.locator('[data-status-drop]')).toHaveCount(isMobile ? 0 : 3);
   await fits();
   await expect(card('waiting')).toContainText('Kitchen renovation');
   await expect(card('waiting')).toContainText('Today');

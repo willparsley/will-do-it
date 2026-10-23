@@ -64,6 +64,7 @@ export default function WillDoIt() {
   const [movingCard, setMovingCard] = useState<Card | null>(null);
   const layout = mobileViewport ? mobileLayout : desktopLayout;
   const compact = layout !== 'board';
+  const statusDragEnabled = !mobileViewport && layout === 'status';
   const loadSequence = useRef(0);
   const accountActive = useRef(true);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
@@ -367,14 +368,17 @@ export default function WillDoIt() {
 
     // Cell ids are `${streamId}::${status}`. UUIDs contain hyphens, so a
     // hyphen is not a safe separator.
-    const [targetStreamId, targetStatus] = overId.includes('::')
+    const statusOnly = over.data?.current?.kind === 'status';
+    const [targetStreamId, targetStatus] = statusOnly
+      ? [activeCard.stream_id, over.data.current!.status as CardStatus]
+      : overId.includes('::')
       ? overId.split('::')
       : [activeCard.stream_id, overId];
 
-    if (!targetStatus) return;
+    if (!targetStatus || !Object.hasOwn(STATUS_LABELS, targetStatus)) return;
 
     // Dropped back where it started — nothing to do.
-    if (targetStreamId === displayStreamId(activeCard) && targetStatus === activeCard.status) {
+    if ((statusOnly || targetStreamId === displayStreamId(activeCard)) && targetStatus === activeCard.status) {
       return;
     }
 
@@ -397,7 +401,7 @@ export default function WillDoIt() {
 
     try {
       await saveQuickAction(activeCard, {
-        stream_id: targetStreamId, status: targetStatus as Card['status'], position: newCards[cardIndex].position,
+        ...(statusOnly ? {} : { stream_id: targetStreamId }), status: targetStatus as Card['status'], position: newCards[cardIndex].position,
       });
       await loadData(user.id, false);
     } catch (err) {
@@ -536,7 +540,7 @@ export default function WillDoIt() {
       ? <span className="flex items-center gap-1.5"><AreaIndicator area={stream?.area || 'neutral'} />{stream?.title}</span>
       : <span>{STATUS_LABELS[card.status]}</span>;
     return (
-    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={(mobileViewport && compact) || touchMode} desktop={!mobileViewport} compact={compact}
+    <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={(mobileViewport && compact) || touchMode} desktop={!mobileViewport} compact={compact} dragEnabled={!compact || statusDragEnabled}
       context={compact ? context : undefined}
       onMove={mobileViewport || compact ? () => { setSelectedCardId(null); setMovingCard(card); } : undefined}
       onEdit={event => {
@@ -677,7 +681,7 @@ export default function WillDoIt() {
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
         >
-          {compact && filteredStreams.length > 0 ? <MobileCards historyLimit={historyLimit} view={view} layout={layout as 'status' | 'stream'} streams={filteredStreams} columns={columns} cardsForStream={getCardsForStream} renderCard={renderCard} onAdd={setCreationContext} onEditStream={setEditingStream} /> :
+          {compact && filteredStreams.length > 0 ? <MobileCards enableStatusDrop={statusDragEnabled} dragging={!!activeDragCard} historyLimit={historyLimit} view={view} layout={layout as 'status' | 'stream'} streams={filteredStreams} columns={columns} cardsForStream={getCardsForStream} renderCard={renderCard} onAdd={setCreationContext} onEditStream={setEditingStream} /> :
           <div className={`space-y-3 mx-auto ${mobileViewport ? 'mobile-matrix' : ''}`} style={{ maxWidth: matrixMaxWidth, minWidth: compact ? 0 : mobileViewport ? 34 + columns.length * 240 + (columns.length - 1) * GRID_GAP : 34 + streamColWidth + columns.length * 180 + columns.length * GRID_GAP }}>
             {!compact && <div
               className="sticky top-0 z-20 grid gap-3 items-center px-4 py-2 bg-canvas border border-transparent border-b-line shadow-sm"
