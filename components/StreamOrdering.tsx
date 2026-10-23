@@ -3,7 +3,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { DndContext, MouseSensor, TouchSensor, KeyboardSensor, closestCenter, pointerWithin, useSensor, useSensors,
   type DndContextProps, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy, horizontalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { RotateCcw } from 'lucide-react';
 import styles from './StreamOrdering.module.css';
@@ -23,8 +23,8 @@ const Handle = createContext<Pick<ReturnType<typeof useSortable>, 'attributes' |
 const Disabled = createContext(false);
 
 /** A single drag context routes stream backgrounds and cards to separate targets. */
-export function StreamOrdering({ streams, disabled, onMove, children, onDragStart, onDragEnd, onDragCancel }: {
-  streams: Stream[]; disabled: boolean; children: ReactNode;
+export function StreamOrdering({ streams, disabled, onMove, children, onDragStart, onDragEnd, onDragCancel, horizontal = false }: {
+  streams: Stream[]; disabled: boolean; children: ReactNode; horizontal?: boolean;
   onMove: (id: string, target: string, after: boolean) => void;
 } & Pick<DndContextProps, 'onDragStart' | 'onDragEnd' | 'onDragCancel'>) {
   const sensors = useSensors(
@@ -44,7 +44,7 @@ export function StreamOrdering({ streams, disabled, onMove, children, onDragStar
   };
   return <Disabled.Provider value={disabled}>
     <DndContext sensors={sensors}
-      accessibility={{ screenReaderInstructions: { draggable: 'Press Space to pick up a stream. Use Up and Down to reorder it, Space to drop, or Escape to cancel.' } }}
+      accessibility={{ screenReaderInstructions: { draggable: `Press Space to pick up a stream. Use ${horizontal ? 'Left and Right' : 'Up and Down'} to reorder it, Space to drop, or Escape to cancel.` } }}
       collisionDetection={args => {
         const streamDrag = args.active.data.current?.kind === 'stream';
         const droppableContainers = args.droppableContainers.filter(item =>
@@ -52,7 +52,7 @@ export function StreamOrdering({ streams, disabled, onMove, children, onDragStar
         return (streamDrag && !args.pointerCoordinates ? closestCenter : pointerWithin)({ ...args, droppableContainers });
       }}
       onDragStart={onDragStart} onDragCancel={onDragCancel} onDragEnd={end}>
-      <SortableContext items={items} strategy={verticalListSortingStrategy}>{children}</SortableContext>
+      <SortableContext items={items} strategy={horizontal ? horizontalListSortingStrategy : verticalListSortingStrategy}>{children}</SortableContext>
     </DndContext>
   </Disabled.Provider>;
 }

@@ -11,15 +11,24 @@ const user = { id: '11111111-1111-4111-8111-111111111111', email: 'preview@examp
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
 const expires = Math.floor(Date.now() / 1000) + 3600;
 const session = { access_token: encode({ alg: 'HS256', typ: 'JWT' }) + '.' + encode({ sub: user.id, exp: expires, aud: 'authenticated', role: 'authenticated' }) + '.fixture', refresh_token: 'fixture', token_type: 'bearer', expires_in: 3600, expires_at: expires, user };
-const streams = [
+const baseStreams = [
   { id: 'work', title: 'Website refresh', area: 'work' },
   { id: 'personal', title: 'Kitchen renovation', area: 'personal' },
   { id: 'unc', title: 'Uncategorized', area: 'neutral' },
 ].map((stream, i) => ({ ...stream, user_id: user.id, state: 'in_progress', position: i }));
 
 for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, movement and history in ${theme}`, async ({ page, isMobile }, testInfo) => {
+  const streams = isMobile ? baseStreams : [...baseStreams,
+    ...['Home maintenance', 'Learning', 'Trip planning'].map((title, i) => ({ id: `extra-${i}`, title, user_id: user.id, state: 'in_progress', area: 'personal', position: i + 3 })),
+  ];
   const sources = [{ id: 'repeat', stream_id: 'personal', base_title: 'Clean kitchen' }];
   let cards = [
+    ...(!isMobile ? [
+      { id: 'home', title: 'Book the autumn furnace service', stream_id: 'extra-0', status: 'waiting' },
+      ...['Test smoke alarms', 'Replace the hallway bulb', 'Clean the dryer vent', 'Order air filters', 'Inspect the window seals', 'Clear the gutters', 'Touch up the front door', 'Check the thermostat', 'Put away garden tools', 'Service the snow blower'].map((title, i) => ({ id: `home-${i}`, title, stream_id: 'extra-0', status: 'waiting' })),
+      { id: 'learn', title: 'Choose the next photography course', stream_id: 'extra-1', status: 'research' },
+      { id: 'travel', title: 'Compare places to stay for the weekend', stream_id: 'extra-2', status: 'research' },
+    ] : []),
     { id: 'research', title: 'Compare a very long list of cabinet handles and finishes for the entire kitchen', stream_id: 'personal', status: 'research' },
     { id: 'waiting', title: 'Confirm delivery date', stream_id: 'personal', status: 'waiting', due_at: new Date().toISOString() },
     { id: 'progress', title: 'Draft proposal', stream_id: 'work', status: 'in_progress' },
@@ -74,6 +83,7 @@ for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, mo
   const fits = async () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const board = page.getByRole('region', { name: 'Task board', exact: true });
+    if (!isMobile && await page.locator('[data-list-layout="stream"]').count()) return;
     expect(await board.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   };
   if (!isMobile) {
@@ -107,7 +117,26 @@ for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, mo
     await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
   await fits();
+  if (!isMobile) {
+    const board = page.getByRole('region', { name: 'Task board', exact: true });
+    const lanes = page.locator('[data-list-layout="stream"] > [data-stream-id]');
+    const boxes = await lanes.evaluateAll(elements => elements.map(el => ({ x: el.offsetLeft, y: el.offsetTop })));
+    expect(new Set(boxes.map(box => box.y)).size).toBe(1);
+    expect(boxes[1].x).toBeGreaterThan(boxes[0].x);
+    expect(await board.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    await board.evaluate(el => { el.scrollLeft = el.scrollWidth; el.scrollTop = 0; });
+    await expect(card('progress')).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath('by-stream-scrolled.png'), fullPage: true });
+    await board.evaluate(el => { el.scrollLeft = 0; el.scrollTop = 0; });
+  }
   await page.screenshot({ path: testInfo.outputPath('by-stream.png'), fullPage: true });
+  if (!isMobile) {
+    const lane = page.locator('[data-stream-id="extra-0"] > details');
+    expect(await lane.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+    await lane.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect(card('home-9')).toBeInViewport();
+    await lane.evaluate(el => { el.scrollTop = 0; });
+  }
   await page.reload();
   await expect(page.locator('[data-mobile-layout="stream"]')).toBeVisible();
   await openFilters(page);

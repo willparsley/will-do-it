@@ -182,7 +182,7 @@ async function keyboardMove(page, name, arrow = 'ArrowUp') {
   const target = await surface.evaluate((node, arrow) => {
     const row = node.closest('[data-stream-id]');
     const rows = [...row.parentElement.children].filter(el => el.hasAttribute('data-stream-id'));
-    return rows[rows.indexOf(row) + (arrow === 'ArrowUp' ? -1 : 1)].getAttribute('data-stream-id');
+    return rows[rows.indexOf(row) + (arrow === 'ArrowUp' || arrow === 'ArrowLeft' ? -1 : 1)].getAttribute('data-stream-id');
   }, arrow);
   await page.keyboard.press('Space');
   await expect(surface).toHaveAttribute('aria-pressed', 'true');
@@ -234,6 +234,14 @@ test('stream ordering persists across devices, refresh, board, filters, and rese
   await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'a');
   await keyboardMove(page, 'zebra');
   await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'z');
+  if (!isMobile) {
+    await page.getByRole('button', { name: 'Desktop layout' }).click();
+    await page.getByRole('option', { name: 'By stream', exact: true }).click();
+    await keyboardMove(page, 'zebra', 'ArrowRight');
+    await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'a');
+    await keyboardMove(page, 'zebra', 'ArrowLeft');
+    await expect(page.locator('[data-stream-id]').first()).toHaveAttribute('data-stream-id', 'z');
+  }
   await expect(page.getByRole('button', { name: 'Reset stream order to alphabetical' })).toHaveCount(0);
   await page.goto('http://app.test/streams');
   await page.getByRole('button', { name: 'Reset stream order to alphabetical' }).click();

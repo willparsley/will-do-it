@@ -30,7 +30,10 @@
   .section { min-width: 0; }
   .heading { font-size: 1rem; }
   .sectionBody { padding: 0 .75rem .75rem; gap: .75rem; }
-  .streamCards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); align-items: start; gap: .75rem; }
+  .sections[data-list-layout='stream'] { display: grid; grid-auto-flow: column; grid-template-rows: minmax(0, 1fr); grid-auto-columns: clamp(300px, 28vw, 360px); align-items: start; justify-content: start; width: max-content; min-width: 100%; max-width: none; height: 100%; margin-inline: 0; padding-bottom: .25rem; }
+  .sections[data-list-layout='stream'] > div { height: 100%; min-height: 0; max-height: 100%; }
+  .sections[data-list-layout='stream'] .section { max-height: 100%; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
+  .streamCards { gap: .75rem; }
   .sectionBody > button { align-self: flex-start; }
   .sections :global(.card[data-compact]) { cursor: pointer; }
 }

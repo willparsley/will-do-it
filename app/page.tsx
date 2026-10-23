@@ -672,6 +672,7 @@ export default function WillDoIt() {
       <div className="workspace-board w-full min-h-0 overflow-x-auto overflow-y-auto scroll-pt-14 px-4 sm:px-6 lg:px-8 pb-6 flex-1" role="region" aria-label="Task board" tabIndex={0}>
         <StreamOrdering
           streams={filteredStreams} disabled={streamOrder.disabled} onMove={streamOrder.move}
+          horizontal={!mobileViewport && layout === 'stream'}
           onDragStart={handleDragStart}
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
