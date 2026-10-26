@@ -34,7 +34,10 @@ by a Vercel Git deployment alone. Existing visual/day-based promotion is unchang
   profile default. Per-source custom reminder times remain future work.
 - Delivery is at least once: a process failure after the provider accepts a push
   may retry it. Stable notification tags replace duplicates still on screen.
-  Transport failures retry after five minutes, up to eight attempts. Expired
+  Accepted pushes are retained by the provider for up to 24 hours while a device
+  is offline (previously only one hour). This can deliver an older reminder after
+  reconnecting, even if the card has since changed. Transport failures retry
+  after five minutes, up to eight attempts. Expired
   endpoints (404/410) are removed. Devices/OS/network can delay or suppress delivery.
 - Batches generate up to 100 subscribed accounts (least recently processed first),
   enqueue 1000 deliveries and send 100 per tick. This is intended for this personal
@@ -95,3 +98,47 @@ An already-open app may need all windows closed once to activate the new worker.
 References: [Supabase scheduling](https://supabase.com/docs/guides/functions/schedule-functions),
 [Next.js Web Push](https://nextjs.org/docs/app/guides/progressive-web-apps),
 [Apple Home Screen push](https://webkit.org/blog/13878/).
+
+## Investigating missed notifications
+
+Run the sections in `supabase/audit_push_reminders.sql` in the SQL editor. These
+are read-only and omit endpoints, keys, authorization, and card titles. The first
+section checks migrations, followed by Cron, HTTP responses, account preferences,
+and per-card/device eligibility. Set the account UUID in the final query to
+narrow the report. Section 6 searches historical deliveries by exact title or
+card ID even after completion clears the reminder; section 7 can recover an old
+reminder from a completion Undo snapshot if it has not yet been pruned. A removed/expired subscription and its delivery rows are
+cascade-deleted, so historical evidence may already be unavailable.
+
+Check all three layers: Cron run success only confirms that SQL queued the HTTP
+request; `net._http_response` shows the function HTTP status; the function logs
+show send results. HTTP 200 can still contain failed deliveries. A recent
+`last_generation_at` indicates the claim transaction ran, even when no cards
+were eligible. An ordinary card cannot notify without a saved account timezone;
+open Profile to initialize it. Each device must opt in separately.
+
+After deploying the updated `send-reminders` function, look for `push_batch` in
+its logs. Each run logs claimed/sent/failed/expired counts, cleanup failures, and
+failure counts grouped by stage and HTTP status (or `unknown` for transport
+errors). `provider:401`/`403` suggests checking VAPID configuration;
+`provider:404`/`410` marks an expired endpoint, which is removed;
+`provider:429`/`5xx` or `provider:unknown` needs transport/provider investigation.
+`record_acceptance` means the provider accepted the push but saving that fact
+failed, so a retry may duplicate it. `push_claim_failed` identifies queue/RPC
+failure, and `push_configuration_missing` identifies missing server secrets.
+Raw provider errors and response bodies are deliberately excluded from logs.
+
+`sent_at` records **provider acceptance**, not a phone display receipt. If a
+missed notification has this timestamp, compare it with the phone's connection,
+notification permission, Focus/Do Not Disturb, and battery restrictions. Before
+this fix, an accepted push could expire after one hour offline without being
+retried by the app. Provider TTL does not guarantee display: see
+[FCM message lifespan](https://firebase.google.com/docs/cloud-messaging/customize-messages/setting-message-lifespan).
+Capture expected time, timezone, phone/browser, card ID and the audit result
+before disabling/re-enabling, since re-enabling replaces the subscription.
+
+The sender changes require a separate Edge Function deployment; merging the
+Vercel app does not deploy them. No database migration is needed for this fix.
+Validate on the phone with a reminder two minutes ahead, both online and after
+reconnecting following more than an hour offline, before claiming reliability
+is confirmed.
