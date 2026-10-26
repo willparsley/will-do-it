@@ -20,7 +20,7 @@ before(async () => {
     create role authenticated; create role anon; create role service_role;
     grant usage on schema auth, public to authenticated;
     create table recurrence_sources(id uuid primary key, user_id uuid, recurrence_timezone text);
-    create table cards(id uuid primary key default gen_random_uuid(), user_id uuid, status text default 'backlog', due_at timestamptz, remind_at timestamptz, recurrence_source_id uuid);
+    create table cards(id uuid primary key default gen_random_uuid(), title text, completed_at timestamptz, user_id uuid, status text default 'backlog', due_at timestamptz, remind_at timestamptz, recurrence_source_id uuid);
     create function generate_recurring_instances(text) returns integer language sql as $$select 0$$;`);
   await db.exec(migration);
   await db.exec(migration);
@@ -92,15 +92,15 @@ test('service worker shows private notifications and opens only the workspace', 
   assert.deepEqual(opened,['/']);
 });
 
-async function senderHarness({ failure = null } = {}) {
+async function senderHarness({ failure = null, updateFailure = null, deleteFailure = null, claimFailure = null } = {}) {
   let handler;
-  const sent = [], updates = [], deleted = [];
+  const sent = [], updates = [], deleted = [], logs = [];
   const row = { delivery_id: 'delivery', subscription_id: 'subscription', endpoint: 'https://fcm.googleapis.com/push', p256dh: 'key', auth: 'secret' };
   const db = {
-    rpc: async () => ({ data: [row], error: null }),
+    rpc: async () => ({ data: [row], error: claimFailure }),
     from: table => ({
-      update: values => ({ eq: async (...args) => { updates.push({table,values,args}); return {error:null}; } }),
-      delete: () => ({ eq: async (...args) => { deleted.push({table,args}); return {error:null}; } }),
+      update: values => ({ eq: async (...args) => { updates.push({table,values,args}); return {error:updateFailure}; } }),
+      delete: () => ({ eq: async (...args) => { deleted.push({table,args}); return {error:deleteFailure}; } }),
     }),
   };
   const source = (await readFile(new URL('../supabase/functions/send-reminders/index.ts',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'');
@@ -110,8 +110,9 @@ async function senderHarness({ failure = null } = {}) {
     createClient: () => db,
     webpush: { setVapidDetails() {}, sendNotification: async (...args) => { if (failure) throw failure; sent.push(args); } },
     Response, Date,
+    console: { info: value => logs.push(JSON.parse(value)), error: value => logs.push(value) },
   });
-  return { handler, sent, updates, deleted };
+  return { handler, sent, updates, deleted, logs };
 }
 test('push sender authenticates and records delivery only after provider acceptance', async () => {
   const sender = await senderHarness();
@@ -120,6 +121,8 @@ test('push sender authenticates and records delivery only after provider accepta
   const response = await sender.handler(new Request('https://example.com',{method:'POST',headers:{Authorization:'Bearer configured'}}));
   assert.deepEqual(await response.json(),{sent:1,failed:0});
   assert.equal(sender.sent.length,1);
+  assert.equal(sender.sent[0][2].TTL,86400, 'offline phones retain accepted pushes for 24 hours');
+  assert.equal(sender.logs[0].sent,1);
   assert.equal(sender.updates[0].table,'push_deliveries');
   assert.equal(sender.sent[0][1],JSON.stringify({tag:'reminder-delivery'}));
 });
@@ -131,6 +134,33 @@ test('expired endpoints are deleted while transient transport failures remain re
     assert.equal(sender.updates.length,0);
     assert.equal(sender.deleted.length,statusCode === 410 ? 1 : 0);
   }
+});
+
+
+test('sender logs safe failure categories and distinguishes provider acceptance from database failure', async () => {
+  for (const scenario of [
+    {failure:{statusCode:503,body:'private endpoint and key'}, category:'provider:503'},
+    {failure:new Error('private transport details'), category:'provider:unknown'},
+    {updateFailure:{message:'private database details',statusCode:410}, category:'record_acceptance:410'},
+  ]) {
+    const sender = await senderHarness(scenario);
+    await sender.handler(new Request('https://example.com',{method:'POST',headers:{Authorization:'Bearer configured'}}));
+    assert.equal(sender.logs[0].failures[scenario.category],1);
+    assert.equal(sender.logs[0].failed,1);
+    assert.equal(sender.deleted.length,0, 'only provider expiry can delete a subscription');
+    assert.equal(JSON.stringify(sender.logs).includes('private'),false);
+  }
+  const sender = await senderHarness({failure:{statusCode:410},deleteFailure:{message:'private'}});
+  await sender.handler(new Request('https://example.com',{method:'POST',headers:{Authorization:'Bearer configured'}}));
+  assert.equal(sender.logs[0].expired,1);
+  assert.equal(sender.logs[0].cleanupFailed,1);
+});
+test('claim failures return an error and leave a safe diagnostic log', async () => {
+  const sender = await senderHarness({claimFailure:{message:'private card data'}});
+  const response = await sender.handler(new Request('https://example.com',{method:'POST',headers:{Authorization:'Bearer configured'}}));
+  assert.equal(response.status,500);
+  assert.deepEqual(sender.logs,['push_claim_failed']);
+  assert.equal(sender.sent.length,0);
 });
 
 async function notificationAt(instant, {time = '09:00', timezone = 'America/New_York', reminder = false} = {}) {
@@ -212,4 +242,25 @@ test('profile loads the saved default, saves an edited time, and reports save er
   nodes(component.render(),n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
   await new Promise(resolve => setImmediate(resolve));
   assert.match(text(component.render()),/Could not save/);
+});
+
+test('historical audit retains a completed card delivery after its reminder is cleared', async () => {
+  const id = await card('1 hour', '-1 minute');
+  await claim();
+  await query('update push_deliveries set sent_at=now() where card_id=$1',[id]);
+  await query("update cards set status='complete',completed_at=now(),remind_at=null where id=$1",[id]);
+  const audit = await readFile(new URL('../supabase/audit_push_reminders.sql',import.meta.url),'utf8');
+  for (const section of [4,5]) {
+    const report = audit.split(`-- ${section}.`)[1].split(`-- ${section + 1}.`)[0];
+    const start = section === 4 ? report.indexOf('select s.user_id') : report.indexOf('with scope');
+    assert.ok((await query(report.slice(start))).length);
+  }
+  const historical = audit.split('-- 6.')[1].split('-- 7.')[0];
+  const sql = historical.slice(historical.indexOf('with scope'));
+  const rows = await query(sql);
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].card_id,id);
+  assert.ok(rows[0].provider_accepted_at);
+  assert.equal(rows[0].original_at.getTime(),rows[0].scheduled_at.getTime());
+  assert.equal(rows[0].attempts,1);
 });
