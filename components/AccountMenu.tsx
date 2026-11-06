@@ -10,7 +10,7 @@ import { errorMessage } from '@/lib/errors';
 import { TooltipButton } from './TooltipButton';
 import styles from './HeaderControls.module.css';
 
-export function AccountMenu({ email }: { email?: string }) {
+export function AccountMenu({ email, disabled = false }: { email?: string; disabled?: boolean }) {
   const [signingOut, setSigningOut] = useState(false);
 
   async function signOut() {
@@ -29,7 +29,7 @@ export function AccountMenu({ email }: { email?: string }) {
 
   return (
     <MenuTrigger>
-      <TooltipButton tooltip="View your profile or log out" aria-label="Account menu" isDisabled={signingOut}
+      <TooltipButton tooltip="View your profile or log out" aria-label="Account menu" isDisabled={disabled || signingOut}
         className="btn btn-ghost focus-ring min-h-11 px-2 text-sm">
         <UserRound size={18} aria-hidden="true" />
         <span>Account</span><ChevronDown size={14} aria-hidden="true" />

@@ -162,6 +162,9 @@ test('server shell never paints a default selected view while hydration scripts 
   await page.goto('http://app.test', { waitUntil: 'commit' });
   await expect(page.getByRole('banner')).toBeVisible();
   await expect(page.locator('[data-workspace-toolbar]')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Account menu' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Account menu' })).toHaveText('Account');
+  await expect(page.getByRole('button', { name: 'Account menu' })).toBeDisabled();
   release();
   await expect(page.locator('[data-workspace-toolbar]')).toBeVisible();
 });
@@ -194,4 +197,27 @@ test('a view selected in the app survives a real reload without a visible Active
     await expect(page.getByRole('region', { name: 'Task board' })).toHaveAttribute('aria-busy', 'false');
     expect(await page.evaluate(() => [...new Set(window.visibleToolbarViews)])).toEqual([label]);
   }
+});
+
+
+for (const theme of ['light', 'dark']) test(`Account label and geometry stay unchanged while authenticating in ${theme}`, async ({ page }) => {
+  const state = await fixture(page);
+  await page.addInitScript(theme => localStorage.setItem('theme', theme), theme);
+  let releaseAuth;
+  state.authGate = new Promise(resolve => { releaseAuth = resolve; });
+  await page.goto('http://app.test');
+  const account = page.getByRole('button', { name: 'Account menu' });
+  await expect(account).toBeVisible();
+  await expect(account).toHaveText('Account');
+  await expect(account).toBeDisabled();
+  await expect(page.getByText('Connecting…', { exact: true })).toHaveCount(0);
+  await expect(page.getByText(user.email, { exact: true })).toHaveCount(0);
+  await page.evaluate(() => document.fonts.ready);
+  const before = await account.boundingBox();
+  releaseAuth();
+  await expect(account).toBeEnabled();
+  await expect(account).toHaveText('Account');
+  expect(await account.boundingBox()).toEqual(before);
+  await account.click();
+  await expect(page.getByText(user.email, { exact: true })).toBeVisible();
 });
