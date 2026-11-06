@@ -16,6 +16,8 @@ export async function addStream(page) {
 export async function mobileBoard(page) {
   await page.getByRole('banner').waitFor();
   const layout = page.getByRole('button', { name: /Mobile layout/ });
+  // The shell/banner appears before preference-dependent layout controls.
+  if (page.viewportSize()?.width < 768) await layout.waitFor({ state: 'visible' });
   if (await layout.isVisible()) {
     await layout.click();
     await page.getByRole('option', { name: 'Board', exact: true }).click();
