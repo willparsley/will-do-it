@@ -170,22 +170,24 @@ for (const refreshFails of [false,true]) test(`workspace stays visible during a 
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:notices.module,
     '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},KeyboardSensor: class { static activators = []; },DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
-  assert.ok(text(ui.render()).includes('Loading your workspace'));
+  assert.ok(text(ui.render()).includes('Loading streams and cards'));
+  assert.equal(nodes(ui.render(), n => n.type === 'header').length, 1);
+  assert.ok(button(ui.render(), 'Active'));
   ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
-  assert.ok(text(ui.render()).includes('Loading your workspace'));
+  assert.ok(text(ui.render()).includes('Loading streams and cards'));
   releaseInitial({data:streams});await new Promise(resolve=>setTimeout(resolve,0));
   let tree=ui.render();
   nodes(tree,n=>n.props.card?.id==='card')[0].props.onEdit({ detail: 0 });tree=ui.render();
   storedCard={...base,title:'Edited card'};
   const refresh=nodes(tree,n=>n.props.onCardUpdated)[0].props.onCardUpdated(storedCard);
   tree=ui.render();
-  assert.ok(!text(tree).includes('Loading your workspace'));
+  assert.ok(!text(tree).includes('Loading streams and cards'));
   assert.equal(nodes(tree,n=>n.type==='header').length,1);
   assert.equal(nodes(tree,n=>n.props.card?.id==='card')[0].props.card.title,'Edited card');
   assert.equal(nodes(tree,n=>n.props.onCardUpdated).length,1); // The editor also stays mounted.
   releaseRefresh(refreshFails?{error:{message:'Refresh failed'}}:{data:streams});
   await refresh;tree=ui.render();
-  assert.ok(!text(tree).includes('Loading your workspace'));
+  assert.ok(!text(tree).includes('Loading streams and cards'));
   assert.equal(nodes(tree,n=>n.type==='header').length,1);
   assert.deepEqual(notices.errors,refreshFails?['Refresh failed']:[]);
 });

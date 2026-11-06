@@ -24,9 +24,9 @@ export const MOBILE_LAYOUTS = [
   { value: 'board', label: 'Board' },
 ];
 
-export function MobileAddMenu({ onCard, onStream }: { onCard: () => void; onStream: () => void }) {
+export function MobileAddMenu({ onCard, onStream, disabled = false }: { onCard: () => void; onStream: () => void; disabled?: boolean }) {
   return <MenuTrigger>
-    <Button className="btn btn-primary min-h-11 px-3 text-sm"><Plus size={18} /> Add</Button>
+    <Button isDisabled={disabled} className="btn btn-primary min-h-11 px-3 text-sm"><Plus size={18} /> Add</Button>
     <Popover placement="bottom end" className={menuStyles.popover}>
       <Menu aria-label="Add" className={menuStyles.menu}>
         <MenuItem id="card" onAction={onCard} className={menuStyles.item}>New card</MenuItem>
