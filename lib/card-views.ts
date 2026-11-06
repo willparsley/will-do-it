@@ -93,7 +93,15 @@ export function dueBadge(card: Card, now = new Date()): { kind: 'overdue' | 'tod
   if (isTerminal(card) || !card.due_at) return;
   const due = calendarDay(card.due_at, card.recurrence_timezone);
   const today = calendarDay(now, card.recurrence_timezone);
-  if (due < today) return { kind: 'overdue', label: 'Overdue' };
+  if (due < today) return { kind: 'overdue', label: `Overdue · ${new Date(card.due_at).toLocaleDateString(undefined, { timeZone: card.recurrence_timezone })}` };
   if (due === today) return { kind: 'today', label: 'Today' };
   return { kind: 'future', label: new Date(card.due_at).toLocaleDateString(undefined, { timeZone: card.recurrence_timezone }) };
+}
+
+/** Stored schedule slots are calendar dates: format in UTC to avoid shifting a day. */
+export function scheduledOccurrenceLabel(card: Card): string | undefined {
+  if (!isTerminal(card) || !card.recurrence_source_id) return;
+  const day = card.scheduled_date || card.recurrence_date;
+  if (day) return new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { timeZone: 'UTC' });
+  if (card.due_at) return new Date(card.due_at).toLocaleDateString(undefined, { timeZone: card.recurrence_timezone });
 }

@@ -298,7 +298,7 @@ textarea::placeholder {
   border: 1px solid transparent;
 }
 
-.badge-overdue { background: #fee2e2; color: #b91c1c; }
+.badge-overdue { max-width: 100%; white-space: normal; overflow-wrap: anywhere; background: #fee2e2; color: #b91c1c; }
 .badge-today { background: #fef3c7; color: #b45309; }
 .badge-soon { background: #dbeafe; color: #1d4ed8; }
 .badge-future { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--border-subtle); }

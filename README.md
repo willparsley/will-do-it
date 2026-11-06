@@ -238,3 +238,14 @@ regressions. Browser requests are intercepted; these tests do not write live dat
 ### Push notifications
 
 Per-device push reminders and exact-time background delivery are implemented but require server setup. See [Push notification setup](docs/push-notifications.md) for migration, VAPID secrets, Supabase function/scheduler deployment, and phone validation.
+
+### Plain recurring titles
+
+Apply `supabase/migrations/20261106200852_plain_recurring_titles.sql` before deploying.
+Newly generated occurrences use the source title without date/week/month suffixes.
+Source title or pattern edits also use plain titles when updating pending cards.
+The migration does not rewrite existing titles or historical card data.
+Overdue badges include the due date; expanded recurring history shows the saved
+scheduled date separately from completion/cancellation. Schedule dates use the
+saved slot first, then the original occurrence date, with due date as a legacy
+fallback. Stacking, occurrence identity, and history filtering are unchanged.
