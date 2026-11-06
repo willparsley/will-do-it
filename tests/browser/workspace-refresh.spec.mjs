@@ -14,13 +14,14 @@ const session = { access_token: encode({ alg: 'HS256', typ: 'JWT' }) + '.' + enc
 const streams = ['Work stream', 'Uncategorized'].map((title, i) => ({ id: String(i), user_id: user.id, title, state: 'in_progress', area: 'neutral', position: i }));
 
 async function fixture(page) {
-  const state = { cards: [{ id: 'card', user_id: user.id, stream_id: '0', title: 'Phone task', status: 'waiting', position: 0, is_recurring: false }], reads: 0, processing: 0, gate: null, fail: false };
+  const state = { cards: [{ id: 'card', user_id: user.id, stream_id: '0', title: 'Phone task', status: 'waiting', position: 0, is_recurring: false }], reads: 0, processing: 0, gate: null, authGate: null, scriptGate: null, fail: false };
   await page.addInitScript(({ storageKey, session }) => {
     document.cookie = storageKey + '=base64-' + btoa(JSON.stringify(session)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '') + '; path=/';
   }, { storageKey, session });
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin === new URL(supabaseUrl).origin) {
+      if (url.pathname.endsWith('/user') && state.authGate) await state.authGate;
       if (url.pathname.endsWith('/streams')) {
         ++state.reads;
         if (state.gate) await state.gate;
@@ -31,6 +32,7 @@ async function fixture(page) {
       return route.fulfill({ json: data });
     }
     if (url.hostname === 'app.test') {
+      if (url.pathname.endsWith('.js') && state.scriptGate) await state.scriptGate;
       const publicFile = url.pathname.startsWith('/branding/') ? '/public' + url.pathname : url.pathname === '/icon.svg' ? '/app/icon.svg' : url.pathname === '/favicon.ico' ? '/app/favicon.ico' : null;
       const asset = url.pathname.startsWith('/_next/static/') ? '/' + url.pathname.slice('/_next/'.length) : '/server/app/index.html';
       const contentType = url.pathname.endsWith('.css') ? 'text/css' : url.pathname.endsWith('.js') ? 'application/javascript' : url.pathname.endsWith('.woff2') ? 'font/woff2' : url.pathname.endsWith('.svg') ? 'image/svg+xml' : 'text/html';
@@ -112,4 +114,84 @@ test('visible tab catches up periodically, pauses when hidden, and recovers afte
   await page.clock.fastForward(60_000); await page.clock.fastForward(300);
   await expect(card(page)).toContainText('Recovered update');
   expect(state.processing).toBe(2);
+});
+
+
+for (const [view, label] of [['archive', 'Archive'], ['all', 'All'], ['backlog', 'Backlog']]) test(`refresh first shows saved ${label} toolbar while auth and data are still loading`, async ({ page, isMobile }) => {
+  const state = await fixture(page);
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(({ userId, view }) => {
+    localStorage.setItem('will-do-it:offline-account:v1', userId);
+    localStorage.setItem(`will-do-it:workspace:${userId}`, JSON.stringify({ view, archivePeriod: 'year' }));
+    window.visibleToolbarViews = [];
+    new MutationObserver(() => {
+      const toolbar = document.querySelector('[data-workspace-toolbar]');
+      if (toolbar && getComputedStyle(toolbar).visibility === 'visible') {
+        const label = toolbar.querySelector('[aria-label="Board view"] [aria-pressed="true"]')?.textContent;
+        if (label) window.visibleToolbarViews.push(label);
+      }
+    }).observe(document, { childList: true, subtree: true, attributes: true });
+  }, { userId: user.id, view });
+  let releaseAuth;
+  state.authGate = new Promise(resolve => { releaseAuth = resolve; });
+  await page.goto('http://app.test');
+  const toolbar = page.locator('[data-workspace-toolbar]');
+  await expect(toolbar).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Board view', exact: true }).getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Loading streams and cards…')).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Board view', exact: true }).getByRole('button', { name: label, exact: true })).toHaveCSS('transition-duration', '0s');
+  if (!isMobile) {
+    await expect(page.getByRole('button', { name: /Completed\/canceled period/ })).toHaveCount(view === 'backlog' ? 0 : 1);
+    if (view !== 'backlog') await expect(page.getByRole('button', { name: /Completed\/canceled period/ })).toContainText('Past year');
+  }
+  const before = await toolbar.boundingBox();
+  releaseAuth();
+  await expect(page.getByRole('region', { name: 'Task board' })).toHaveAttribute('aria-busy', 'false');
+  const after = await toolbar.boundingBox();
+  expect(after.height).toBe(before.height);
+  expect(after.y).toBe(before.y);
+  expect(await page.evaluate(() => [...new Set(window.visibleToolbarViews)])).toEqual([label]);
+  expect(errors).toEqual([]);
+});
+
+test('server shell never paints a default selected view while hydration scripts are delayed', async ({ page }) => {
+  const state = await fixture(page);
+  let release;
+  state.scriptGate = new Promise(resolve => { release = resolve; });
+  await page.goto('http://app.test', { waitUntil: 'commit' });
+  await expect(page.getByRole('banner')).toBeVisible();
+  await expect(page.locator('[data-workspace-toolbar]')).toBeHidden();
+  release();
+  await expect(page.locator('[data-workspace-toolbar]')).toBeVisible();
+});
+
+
+test('a view selected in the app survives a real reload without a visible Active toolbar', async ({ page }) => {
+  const state = await fixture(page);
+  await page.addInitScript(() => {
+    window.visibleToolbarViews = [];
+    new MutationObserver(() => {
+      const toolbar = document.querySelector('[data-workspace-toolbar]');
+      if (toolbar && getComputedStyle(toolbar).visibility === 'visible') {
+        const selected = toolbar.querySelector('[aria-label="Board view"] [aria-pressed="true"]')?.textContent;
+        if (selected) window.visibleToolbarViews.push(selected);
+      }
+    }).observe(document, { childList: true, subtree: true, attributes: true });
+  });
+  await page.goto('http://app.test');
+  await expect(card(page)).toBeVisible();
+  for (const label of ['All', 'Archive', 'Backlog']) {
+    const viewButton = page.getByRole('group', { name: 'Board view', exact: true }).getByRole('button', { name: label, exact: true });
+    await viewButton.click();
+    let releaseAuth;
+    state.authGate = new Promise(resolve => { releaseAuth = resolve; });
+    await page.reload();
+    await expect(viewButton).toBeVisible();
+    await expect(viewButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('region', { name: 'Task board' })).toHaveAttribute('aria-busy', 'true');
+    releaseAuth();
+    await expect(page.getByRole('region', { name: 'Task board' })).toHaveAttribute('aria-busy', 'false');
+    expect(await page.evaluate(() => [...new Set(window.visibleToolbarViews)])).toEqual([label]);
+  }
 });

@@ -3,7 +3,7 @@
 import { BrandLogo } from '@/components/BrandLogo';
 import { AppSelect } from '@/components/AppSelect';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { 
   DragEndEvent,
@@ -38,7 +38,7 @@ import { AreaIndicator } from '@/components/AreaIndicator';
 import { errorMessage } from '@/lib/errors';
 import { useStreamOrder } from '@/components/useStreamOrder';
 import { StreamOrdering, SortableStreamRow } from '@/components/StreamOrdering';
-import { clearOfflineWorkspace, saveOfflineWorkspace } from '@/lib/offline-workspace';
+import { clearOfflineWorkspace, OFFLINE_ACCOUNT_KEY, saveOfflineWorkspace } from '@/lib/offline-workspace';
 import { watchWorkspaceRefresh } from '@/lib/workspace-refresh';
 
 const supabase = createClient();
@@ -53,6 +53,8 @@ const VIEWS = [
 export default function WillDoIt() {
   const [offlineSaveFailed, setOfflineSaveFailed] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const preferencesAccount = useRef<string | null>(null);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [recurrenceSources, setRecurrenceSources] = useState<RecurrenceSource[]>([]);
@@ -156,6 +158,25 @@ export default function WillDoIt() {
     }
   }, []);
 
+  const restorePreferences = useCallback((userId: string) => {
+    // The cached identity is only a hint for display settings. Auth still gates
+    // all account data, and a different verified account restores its own defaults.
+    if (preferencesAccount.current === userId) return;
+    let saved: Record<string, unknown> = {};
+    try {
+      const value = JSON.parse(localStorage.getItem(`will-do-it:workspace:${userId}`) || 'null');
+      if (value && typeof value === 'object' && !Array.isArray(value)) saved = value;
+    } catch { /* Invalid/unavailable storage falls back to the normal defaults. */ }
+    setView(VIEWS.find(option => option.id === saved.view)?.id || 'activated');
+    setActiveFilter(saved.area === 'work' || saved.area === 'personal' ? saved.area : 'all');
+    setArchivePeriod(HISTORY_PERIODS.find(option => option.value === saved.archivePeriod)?.value || 'week');
+    setMobileLayout((MOBILE_LAYOUTS.find(option => option.value === saved.mobileLayout)?.value as MobileLayout) || 'status');
+    setDesktopLayout((MOBILE_LAYOUTS.find(option => option.value === saved.desktopLayout)?.value as MobileLayout) || 'board');
+    setHideRecurring(saved.hideRecurring === true);
+    preferencesAccount.current = userId;
+    setPreferencesReady(true);
+  }, []);
+
   useEffect(() => {
     accountActive.current = true;
     const cancelLoads = () => { accountActive.current = false; ++loadSequence.current; };
@@ -163,6 +184,7 @@ export default function WillDoIt() {
       accountActive.current = false;
       ++loadSequence.current;
       setUser(null);
+      setPreferencesReady(false);
       setCards([]);
       setStreams([]);
       setRecurrenceSources([]);
@@ -191,20 +213,7 @@ export default function WillDoIt() {
         return;
       }
       if (!boundary.acceptUser(user.id)) return;
-      try {
-        const preferences = JSON.parse(localStorage.getItem(`will-do-it:workspace:${user.id}`) || 'null');
-        if (preferences && typeof preferences === 'object') {
-          const savedView = VIEWS.find(option => option.id === preferences.view);
-          if (savedView) setView(savedView.id);
-          if (['all', 'work', 'personal'].includes(preferences.area)) setActiveFilter(preferences.area);
-          if (HISTORY_PERIODS.some(option => option.value === preferences.archivePeriod)) setArchivePeriod(preferences.archivePeriod);
-          if (MOBILE_LAYOUTS.some(option => option.value === preferences.mobileLayout)) setMobileLayout(preferences.mobileLayout);
-          if (MOBILE_LAYOUTS.some(option => option.value === preferences.desktopLayout)) setDesktopLayout(preferences.desktopLayout);
-          if (typeof preferences.hideRecurring === 'boolean') setHideRecurring(preferences.hideRecurring);
-        }
-      } catch {
-        // Unavailable storage or invalid saved settings must not prevent loading.
-      }
+      restorePreferences(user.id);
       setUser(user);
       await loadData(user.id);
     };
@@ -213,7 +222,16 @@ export default function WillDoIt() {
       cancelLoads();
       boundary.dispose();
     };
-  }, [loadData]);
+  }, [loadData, restorePreferences]);
+
+  useLayoutEffect(() => {
+    // Read local display preferences before paint, without waiting for getUser.
+    // This marker is cleared on sign-out and replaced at account boundaries.
+    try {
+      const userId = localStorage.getItem(OFFLINE_ACCOUNT_KEY);
+      if (userId) restorePreferences(userId);
+    } catch { /* Auth will restore defaults if browser storage is unavailable. */ }
+  }, [restorePreferences]);
 
   useEffect(() => {
     if (!user) return;
@@ -235,9 +253,10 @@ export default function WillDoIt() {
   }, [user]);
 
   const savePreferences = (changes: Partial<{ view: View; area: Area | 'all'; archivePeriod: ArchivePeriod; hideRecurring: boolean; mobileLayout: MobileLayout; desktopLayout: MobileLayout }>) => {
-    if (!user) return;
+    const userId = user?.id || preferencesAccount.current;
+    if (!userId) return;
     try {
-      localStorage.setItem(`will-do-it:workspace:${user.id}`, JSON.stringify({ view, area: activeFilter, archivePeriod, hideRecurring, ...(mobileLayout !== 'status' ? { mobileLayout } : {}), ...(desktopLayout !== 'board' ? { desktopLayout } : {}), ...changes }));
+      localStorage.setItem(`will-do-it:workspace:${userId}`, JSON.stringify({ view, area: activeFilter, archivePeriod, hideRecurring, ...(mobileLayout !== 'status' ? { mobileLayout } : {}), ...(desktopLayout !== 'board' ? { desktopLayout } : {}), ...changes }));
     } catch {
       // The selected view still works when browser storage is unavailable.
     }
@@ -641,7 +660,7 @@ export default function WillDoIt() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-            <div className="hidden md:block">{!mobileViewport && <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />}</div>
+            <div className="hidden md:block" style={{ visibility: preferencesReady ? undefined : 'hidden' }}>{!mobileViewport && <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />}</div>
 
             <div className="hidden md:flex gap-2 sm:gap-4"><TooltipButton
               isDisabled={initialLoading || !user || streams.length === 0}
@@ -673,7 +692,7 @@ export default function WillDoIt() {
 
       {/* View switcher lives in its own stable bar so it never shifts
           horizontally when the number of columns changes between views. */}
-      <div className="relative shrink-0 z-40 border-b border-line bg-chrome/80 backdrop-blur">
+      <div data-workspace-toolbar data-preferences-ready={preferencesReady} className="relative shrink-0 z-40 border-b border-line bg-chrome/80 backdrop-blur" style={{ visibility: preferencesReady ? undefined : 'hidden' }}>
         <div className="w-full px-4 sm:px-6 lg:px-8 min-h-14 py-2 flex flex-col gap-1 lg:flex-row lg:flex-wrap lg:gap-x-6 lg:gap-y-1 items-center justify-center">
           <div role="group" aria-label="Board view" className="flex rounded-lg border border-line overflow-hidden bg-surface shadow-sm">
             {VIEWS.map((v) => (
@@ -681,7 +700,7 @@ export default function WillDoIt() {
                 key={v.id}
                 onClick={() => { setView(v.id); savePreferences({ view: v.id }); }}
                 aria-pressed={view === v.id}
-                className={`px-4 sm:px-6 py-2 text-base transition-colors whitespace-nowrap ${
+                className={`px-4 sm:px-6 py-2 text-base whitespace-nowrap ${initialLoading ? '' : 'transition-colors'} ${
                   view === v.id
                     ? 'bg-accent text-accent-ink'
                     : 'text-ink-soft hover:text-ink hover:bg-sunken'

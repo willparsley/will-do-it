@@ -5,6 +5,7 @@ export function driver(filename, exportName, props, overrides = {}) {
   const slots = [];
   let index = 0;
   const effects = [];
+  const layoutEffects = [];
   const hooks = {
     ...React,
     useState(initial) {
@@ -20,9 +21,10 @@ export function driver(filename, exportName, props, overrides = {}) {
     useMemo: compute => compute(),
     useCallback: callback => callback,
     useEffect: effect => { effects.push(effect); },
+    useLayoutEffect: effect => { layoutEffects.push(effect); },
   };
   const Component = loadTypeScript(filename, { react: hooks, ...overrides })[exportName];
-  return { effects, render() { index = 0; return Component(props); } };
+  return { effects, layoutEffects, render() { index = 0; return Component(props); } };
 }
 
 export function nodes(tree, predicate) {

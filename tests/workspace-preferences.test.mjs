@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { driver, nodes, button } from './helpers/react-driver.mjs';
 
-async function workspace(userId='user') {
+async function workspace(userId='user', authGate) {
   const supabase={
-    auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){return {data:{user:{id:userId}}};}},
+    auth:{onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}};},async getUser(){if(authGate) await authGate;return {data:{user:{id:userId}}};}},
     async rpc(){return {data:0};},
     from(table){return {select(){return this;},eq(){return table==='streams'?this:Promise.resolve({data:[]});},async order(){return {data:[{id:'unc',title:'Uncategorized',state:'in_progress',area:'neutral',position:999}]};}};},
   };
@@ -12,7 +12,7 @@ async function workspace(userId='user') {
     '@/lib/supabase/client':{createClient:()=>supabase},sonner:{toast:{error(){},success(){}}},
     '@dnd-kit/core':{useSensors:()=>[],useSensor:()=>null,MouseSensor(){},TouchSensor(){},KeyboardSensor: class { static activators = []; },DndContext(){},DragOverlay(){},pointerWithin(){}},
   });
-  ui.render();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
+  ui.render();ui.layoutEffects[0]();ui.effects[0]();await new Promise(resolve=>setTimeout(resolve,0));
   return ui;
 }
 
@@ -147,5 +147,63 @@ test('desktop defaults to Board and saves layout independently of mobile and oth
     ui = await workspace();
     assert.equal(desktop(ui).props.value, 'board');
     assert.equal(mobile(ui).props.layout, 'stream');
+  });
+});
+
+
+const toolbar = ui => nodes(ui.render(), node => node.props?.['data-workspace-toolbar'] !== undefined)[0];
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+
+for (const [view, label] of [['archive', 'Archive'], ['all', 'All'], ['backlog', 'Backlog']]) test(`cached ${label} and matching controls restore before authentication completes`, async () => {
+  const storage = memoryStorage();
+  storage.setItem('will-do-it:offline-account:v1', 'user');
+  storage.setItem('will-do-it:workspace:user', JSON.stringify({ view, area: 'personal', archivePeriod: 'year', desktopLayout: 'stream', mobileLayout: 'board', hideRecurring: true }));
+  await withStorage(storage, async () => {
+    const auth = deferred();
+    const ui = await workspace('user', auth.promise);
+    assert.equal(toolbar(ui).props['data-preferences-ready'], true);
+    assert.equal(button(ui.render(), label).props['aria-pressed'], true);
+    assert.equal(areaFilter(ui.render()).props.value, 'personal');
+    assert.equal(nodes(ui.render(), node => node.props?.['aria-label'] === 'Desktop layout')[0].props.value, 'stream');
+    const history = nodes(ui.render(), node => node.props?.['aria-label'] === 'Completed/canceled period');
+    assert.equal(history.length, view === 'backlog' ? 0 : 1);
+    if (history.length) assert.equal(history[0].props.value, 'year');
+    // A selection made while auth is pending is saved and stays selected when
+    // that same account is verified, rather than being reset by a second restore.
+    button(ui.render(), 'Backlog').props.onClick();
+    assert.equal(JSON.parse(storage.getItem('will-do-it:workspace:user')).view, 'backlog');
+    auth.resolve(); await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(button(ui.render(), 'Backlog').props['aria-pressed'], true);
+  });
+});
+
+test('a different authenticated account replaces every cached preference with its own defaults', async () => {
+  const storage = memoryStorage();
+  storage.setItem('will-do-it:offline-account:v1', 'previous');
+  storage.setItem('will-do-it:workspace:previous', JSON.stringify({ view: 'archive', area: 'work', archivePeriod: 'year', desktopLayout: 'stream', mobileLayout: 'board', hideRecurring: true }));
+  await withStorage(storage, async () => {
+    const auth = deferred();
+    const ui = await workspace('next', auth.promise);
+    assert.equal(button(ui.render(), 'Archive').props['aria-pressed'], true);
+    auth.resolve(); await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(button(ui.render(), 'Active').props['aria-pressed'], true);
+    assert.equal(areaFilter(ui.render()).props.value, 'all');
+    assert.equal(nodes(ui.render(), node => node.props?.['aria-label'] === 'Desktop layout')[0].props.value, 'board');
+    assert.equal(nodes(ui.render(), node => typeof node.props?.onLayout === 'function')[0].props.layout, 'status');
+    assert.equal(nodes(ui.render(), node => node.props?.role === 'switch')[0].props['aria-checked'], false);
+    button(ui.render(), 'All').props.onClick();
+    assert.equal(nodes(ui.render(), node => node.props?.['aria-label'] === 'Completed/canceled period')[0].props.value, 'week');
+    assert.equal(JSON.parse(storage.getItem('will-do-it:workspace:previous')).view, 'archive');
+  });
+});
+
+test('unresolved account preferences keep default toolbar controls hidden', async () => {
+  await withStorage(memoryStorage(), async () => {
+    const auth = deferred();
+    const ui = await workspace('user', auth.promise);
+    assert.equal(toolbar(ui).props.style.visibility, 'hidden');
+    auth.resolve(); await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(toolbar(ui).props['data-preferences-ready'], true);
+    assert.equal(toolbar(ui).props.style.visibility, undefined);
   });
 });
