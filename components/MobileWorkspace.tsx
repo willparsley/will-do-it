@@ -9,6 +9,8 @@ import { SortableStreamRow, StreamDragSurface } from './StreamOrdering';
 import { AppSelect } from './AppSelect';
 import { CardFormDialog } from './CardForm';
 import { AreaIndicator } from './AreaIndicator';
+import { LaterCards } from './LaterCards';
+import { DEFAULT_LATER_DAYS } from '@/lib/later-preferences';
 import { ArchiveCards } from './ArchiveCards';
 import { StatusHeader } from './StatusHeader';
 import { type Card, type CardStatus, type Stream, STATUS_LABELS } from '@/lib/types';
@@ -63,7 +65,9 @@ function StatusDropSection({ status, enabled, children }: { status: CardStatus; 
   </details>;
 }
 
-export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view, streams, columns, cardsForStream, renderCard, onAdd, onEditStream, enableStatusDrop = false, dragging = false }: {
+export function MobileCards({ laterDays = DEFAULT_LATER_DAYS, laterNow, historyLimit = DEFAULT_HISTORY_LIMIT, layout, view, streams, columns, cardsForStream, renderCard, onAdd, onEditStream, enableStatusDrop = false, dragging = false }: {
+  laterDays?: number;
+  laterNow?: Date;
   historyLimit?: HistoryLimit;
   enableStatusDrop?: boolean;
   dragging?: boolean;
@@ -89,7 +93,7 @@ export function MobileCards({ historyLimit = DEFAULT_HISTORY_LIMIT, layout, view
       });
       return <ArchiveCards key={`${cards[0] ? displayStreamId(cards[0]) : ''}:${status}:${historyLimit}`} limit={historyLimit} cards={cards} status={status} renderCard={renderCard} renderContext={context} />;
     }
-    return cards.map(renderCard);
+    return <LaterCards cards={cards} days={laterDays} now={laterNow} status={status} showStatus={layout === 'stream'} renderCard={renderCard} />;
   };
   const sections = layout === 'status' ? columns.map(status => ({
     id: status, title: STATUS_LABELS[status], status,
