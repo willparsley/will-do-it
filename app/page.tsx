@@ -683,7 +683,7 @@ export default function WillDoIt() {
 
             <ThemeToggle />
 
-            {user ? <AccountMenu email={user.email} /> : <span role="status" className="text-sm text-ink-soft">Connecting…</span>}
+            <AccountMenu email={user?.email} disabled={!user} />
           </div>
         </div>
       </header>
