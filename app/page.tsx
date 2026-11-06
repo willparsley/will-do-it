@@ -39,6 +39,7 @@ import { errorMessage } from '@/lib/errors';
 import { useStreamOrder } from '@/components/useStreamOrder';
 import { StreamOrdering, SortableStreamRow } from '@/components/StreamOrdering';
 import { clearOfflineWorkspace, saveOfflineWorkspace } from '@/lib/offline-workspace';
+import { watchWorkspaceRefresh } from '@/lib/workspace-refresh';
 
 const supabase = createClient();
 
@@ -67,6 +68,10 @@ export default function WillDoIt() {
   const statusDragEnabled = !mobileViewport && layout === 'status';
   const loadSequence = useRef(0);
   const accountActive = useRef(true);
+  const loadsInFlight = useRef(0);
+  const mutationsInFlight = useRef(0);
+  const dragging = useRef(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [activeFilter, setActiveFilter] = useState<Area | 'all'>('all');
   const [view, setView] = useState<View>('activated');
   const [initialLoading, setInitialLoading] = useState(true);
@@ -81,18 +86,18 @@ export default function WillDoIt() {
   const suppressCardClick = useRef(false);
   const [activeDragCard, setActiveDragCard] = useState<Card | null>(null);
 
-  const loadData = useCallback(async (userId: string, processTasks = true) => {
-    if (!accountActive.current) return;
+  const loadData = useCallback(async (userId: string, processTasks = true, background = false) => {
+    if (!accountActive.current || (background && (loadsInFlight.current > 0 || mutationsInFlight.current > 0 || dragging.current))) return;
+    ++loadsInFlight.current;
     const sequence = ++loadSequence.current;
-    // Keep the workspace mounted during mutation-triggered refreshes. Only the
-    // first load needs a full-screen placeholder; later loads update it in place.
+    // Keep controls and editors mounted; only the board has an initial placeholder.
     try {
       const { data: streamsData, error: streamsError } = await supabase
         .from('streams').select('*').eq('user_id', userId).order('position', { ascending: true });
       if (sequence !== loadSequence.current) return;
       if (streamsError) throw streamsError;
       let loadedStreams = (streamsData || []) as Stream[];
-      if (!loadedStreams.some(s => s.title === 'Uncategorized')) {
+      if (!background && !loadedStreams.some(s => s.title === 'Uncategorized')) {
         const { data: uncategorized, error } = await supabase.from('streams').insert({
           user_id: userId, title: 'Uncategorized', state: 'in_progress', area: 'neutral', position: 999,
         }).select().single<Stream>();
@@ -109,7 +114,7 @@ export default function WillDoIt() {
         return true;
       });
       const legacyIds = loadedStreams.filter(s => String(s.state) === 'backlog').map(s => s.id);
-      if (legacyIds.length > 0) {
+      if (!background && legacyIds.length > 0) {
         const { error } = await supabase.from('streams').update({ state: 'in_progress' }).in('id', legacyIds);
         if (sequence !== loadSequence.current) return;
         if (error) throw error;
@@ -133,14 +138,20 @@ export default function WillDoIt() {
       if (sourceResult.error) throw sourceResult.error;
       if (sequence !== loadSequence.current) return;
       const sources = (sourceResult.data || []) as RecurrenceSource[];
+      if (background && (mutationsInFlight.current > 0 || dragging.current)) return;
+      setLoadFailed(false);
       setRecurrenceSources(sources);
       setStreams(loadedStreams);
       const loadedCards = hydrateRecurringCards((cardResult.data || []) as Card[], sources);
       setCards(loadedCards);
       setOfflineSaveFailed(!saveOfflineWorkspace(userId, loadedStreams, loadedCards));
     } catch (error) {
-      if (sequence === loadSequence.current) toast.error(errorMessage(error, 'Could not load your workspace'));
+      if (sequence === loadSequence.current && !background) {
+        setLoadFailed(true);
+        toast.error(errorMessage(error, 'Could not load your workspace'));
+      }
     } finally {
+      --loadsInFlight.current;
       if (sequence === loadSequence.current) setInitialLoading(false);
     }
   }, []);
@@ -203,6 +214,13 @@ export default function WillDoIt() {
       boundary.dispose();
     };
   }, [loadData]);
+
+  useEffect(() => {
+    if (!user) return;
+    // Background reconciliation only reads: it must not re-promote a just-undone
+    // card or run recurrence writes every minute.
+    return watchWorkspaceRefresh(() => loadData(user.id, false, true));
+  }, [user, loadData]);
 
   useEffect(() => {
     if (!user) return;
@@ -300,14 +318,20 @@ export default function WillDoIt() {
     34 + streamColWidth + columns.length * COL_MAX + columns.length * GRID_GAP;
 
   const saveQuickAction = async (card: Card, changes: Partial<Card>) => {
-    const { data, error } = await supabase.rpc('save_card_with_undo', {
-      p_card_id: card.id,
-      p_expected_status: card.status,
-      p_changes: changes,
-      p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
-    if (error) throw error;
-    return data as { card: Card; undo_id: string };
+    ++mutationsInFlight.current;
+    ++loadSequence.current;
+    try {
+      const { data, error } = await supabase.rpc('save_card_with_undo', {
+        p_card_id: card.id,
+        p_expected_status: card.status,
+        p_changes: changes,
+        p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      if (error) throw error;
+      return data as { card: Card; undo_id: string };
+    } finally {
+      --mutationsInFlight.current;
+    }
   };
 
   const showUndoToast = (message: string, undoId: string) => {
@@ -323,6 +347,8 @@ export default function WillDoIt() {
           // Sonner dismisses the action toast after this callback returns.
           // Use a separate toast for the asynchronous result.
           const pendingId = toast.loading('Undoing…');
+          ++mutationsInFlight.current;
+          ++loadSequence.current;
           try {
             const { error } = await supabase.rpc('undo_card_action', { p_undo_id: undoId });
             if (!accountActive.current) return;
@@ -335,6 +361,7 @@ export default function WillDoIt() {
             toast.error(errorMessage(error, 'Could not undo'), { id: pendingId });
             await loadData(user.id, false);
           } finally {
+            --mutationsInFlight.current;
             toast.dismiss(toastId);
           }
         },
@@ -343,6 +370,8 @@ export default function WillDoIt() {
   };
 
   const handleDragStart = (event: DragStartEvent) => {
+    dragging.current = true;
+    ++loadSequence.current;
     suppressCardClick.current = true;
     setSelectedCardId(null);
     const card = cards.find((c) => c.id === event.active.id);
@@ -350,10 +379,12 @@ export default function WillDoIt() {
   };
 
   const handleDragCancel = () => {
+    dragging.current = false;
     setActiveDragCard(null);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    dragging.current = false;
     if (!accountActive.current) return;
     setActiveDragCard(null);
 
@@ -415,12 +446,14 @@ export default function WillDoIt() {
 
   const handleCardCreated = async (newCard: Card) => {
     if (!accountActive.current) return;
+    ++loadSequence.current;
     setCards((prev) => [...prev, newCard]);
     if (user) await loadData(user.id);
   };
 
   const handleCardUpdated = async (updatedCard: Card) => {
     if (!accountActive.current) return;
+    ++loadSequence.current;
     setCards((prev) =>
       prev.map((c) => (c.id === updatedCard.id ? hydrateRecurringCards([updatedCard], recurrenceSources)[0] : c))
     );
@@ -431,11 +464,13 @@ export default function WillDoIt() {
 
   const handleCardDeleted = (cardId: string) => {
     if (!accountActive.current) return;
+    ++loadSequence.current;
     setCards((prev) => prev.filter((c) => c.id !== cardId));
   };
 
   const handleStreamCreated = (newStream: Stream) => {
     if (!accountActive.current) return;
+    ++loadSequence.current;
     setStreams((prev) => {
       const unc = prev.find((s) => s.title === 'Uncategorized');
       const others = prev.filter((s) => s.title !== 'Uncategorized');
@@ -447,6 +482,7 @@ export default function WillDoIt() {
 
   const handleStreamUpdated = async (updatedStream: Stream) => {
     if (!accountActive.current) return;
+    ++loadSequence.current;
     setStreams((prev) =>
       prev.map((s) => (s.id === updatedStream.id ? updatedStream : s))
     );
@@ -455,6 +491,7 @@ export default function WillDoIt() {
 
   const handleStreamDeleted = async (streamId: string, targetStreamId?: string) => {
     if (!accountActive.current) return;
+    ++loadSequence.current;
     if (targetStreamId) {
       setCards((prev) =>
         prev.map((c) =>
@@ -556,14 +593,6 @@ export default function WillDoIt() {
     );
   };
 
-  if (initialLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-canvas text-ink-soft">
-        <div>Loading your workspace...</div>
-      </div>
-    );
-  }
-
   const filterControls = (
 <div data-secondary-filters className="flex items-center justify-center gap-2 sm:gap-4 lg:min-w-[24rem] lg:justify-start">
             <button
@@ -615,6 +644,7 @@ export default function WillDoIt() {
             <div className="hidden md:block">{!mobileViewport && <AreaFilter value={activeFilter} onChange={area => { setActiveFilter(area); savePreferences({ area }); }} />}</div>
 
             <div className="hidden md:flex gap-2 sm:gap-4"><TooltipButton
+              isDisabled={initialLoading || !user || streams.length === 0}
               tooltip="Add a new card"
               onPress={() => setCreationContext({ status: 'backlog' })}
               className="btn btn-primary px-4 py-1.5 text-sm"
@@ -623,17 +653,18 @@ export default function WillDoIt() {
             </TooltipButton>
 
             <TooltipButton
+              isDisabled={initialLoading || !user || streams.length === 0}
               tooltip="Create a stream to organize your cards"
               onPress={() => setShowStreamModal(true)}
               className="btn btn-secondary px-3 py-1.5 text-sm"
             >
               New Stream
             </TooltipButton></div>
-            <div className="md:hidden"><MobileAddMenu onCard={() => setCreationContext({ status: 'backlog' })} onStream={() => setShowStreamModal(true)} /></div>
+            <div className="md:hidden"><MobileAddMenu disabled={initialLoading || !user || streams.length === 0} onCard={() => setCreationContext({ status: 'backlog' })} onStream={() => setShowStreamModal(true)} /></div>
 
             <ThemeToggle />
 
-            <AccountMenu email={user.email} />
+            {user ? <AccountMenu email={user.email} /> : <span role="status" className="text-sm text-ink-soft">Connecting…</span>}
           </div>
         </div>
       </header>
@@ -673,8 +704,15 @@ export default function WillDoIt() {
 
       {/* One scroll container keeps sticky labels aligned on both axes, while
           the controls above take their natural height even when they wrap. */}
-      <div className="workspace-board w-full min-h-0 overflow-x-auto overflow-y-auto scroll-pt-14 px-4 sm:px-6 lg:px-8 pb-6 flex-1" role="region" aria-label="Task board" tabIndex={0}>
-        <StreamOrdering
+      <div className="workspace-board w-full min-h-0 overflow-x-auto overflow-y-auto scroll-pt-14 px-4 sm:px-6 lg:px-8 pb-6 flex-1" role="region" aria-label="Task board" aria-busy={initialLoading || !user} tabIndex={0}>
+        {initialLoading || !user ? (
+          <div role="status" className="py-12 text-center text-ink-soft">Loading streams and cards…</div>
+        ) : loadFailed && streams.length === 0 ? (
+          <div className="py-12 text-center text-ink-soft">
+            <p role="status">Could not load your workspace.</p>
+            <button type="button" className="btn btn-secondary mt-3 min-h-11" onClick={() => { setInitialLoading(true); void loadData(user.id); }}>Try again</button>
+          </div>
+        ) : <StreamOrdering
           streams={filteredStreams} disabled={streamOrder.disabled} onMove={streamOrder.move}
           horizontal={!mobileViewport && layout === 'stream'}
           onDragStart={handleDragStart}
@@ -760,7 +798,7 @@ export default function WillDoIt() {
               </div>
             ) : null}
           </DragOverlay>
-        </StreamOrdering>
+        </StreamOrdering>}
 
         {creationContext && (
           <AddCardModal
