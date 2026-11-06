@@ -14,7 +14,7 @@ const snapshot = {
   cards: [
     { id: 'a', user_id: owner, stream_id: 'work', title: 'Flight reading', notes: '<script>window.injected=true</script>\nRead the briefing', status: 'research', position: 0, due_at: '2026-10-21T14:00:00Z' },
     { id: 'b', user_id: owner, stream_id: 'personal', title: 'Packing checklist', notes: 'Passport and charger', status: 'backlog', position: 0 },
-    { id: 'c', user_id: owner, stream_id: 'personal', recurrence_stream_id: 'work', recurrence_source_id: 'source', recurrence_title: 'Daily routine', title: 'Archived routine', status: 'complete', completed_at: '2026-10-19T12:00:00Z', position: 0 },
+    { id: 'c', user_id: owner, stream_id: 'personal', recurrence_stream_id: 'work', recurrence_source_id: 'source', recurrence_title: 'Daily routine', title: 'Archived routine', scheduled_date: '2026-10-15', recurrence_timezone: 'America/Los_Angeles', status: 'complete', completed_at: '2026-10-19T12:00:00Z', position: 0 },
     { id: 'd', user_id: owner, stream_id: 'personal', title: 'Undated history', status: 'canceled', position: 0 },
   ],
 };
@@ -61,6 +61,10 @@ test('saved cards survive offline root navigation and refresh, support filters a
   await page.getByLabel('Search', { exact: true }).fill('');
   const work = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Work stream · Work', exact: true }) });
   await expect(work.getByText('Daily routine · 1', { exact: true })).toBeVisible();
+  await work.getByText('Daily routine · 1', { exact: true }).click();
+  await work.getByText('Archived routine', { exact: true }).click();
+  const scheduled = await page.evaluate(() => new Date('2026-10-15T00:00:00Z').toLocaleDateString(undefined, { timeZone: 'UTC' }));
+  await expect(work.getByText('Scheduled: ' + scheduled, { exact: true })).toBeVisible();
   await page.getByLabel('Hide recurring').check();
   await expect(page.getByText('Daily routine · 1', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Add|Edit|Complete|Move/i })).toHaveCount(0);

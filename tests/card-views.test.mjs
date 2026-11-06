@@ -216,3 +216,34 @@ test('history windows filter both terminal statuses in All and Archive and prese
     assert.equal(cardsForStream([active],'old-stream','activated',period,end).length,1);
   }
 });
+
+test('overdue badges include the due date in the source timezone', () => {
+  const card = {...base, recurrence_timezone:'America/New_York'};
+  assert.deepEqual(dueBadge(card, new Date('2026-10-16T16:00:00Z')), {
+    kind:'overdue', label:`Overdue · ${new Date(card.due_at).toLocaleDateString(undefined, {timeZone:'America/New_York'})}`,
+  });
+});
+
+test('archived recurring occurrences show the saved slot independently of completion and device timezone', () => {
+  const { scheduledOccurrenceLabel } = loadTypeScript('lib/card-views.ts');
+  const card = {...base, status:'complete', scheduled_date:'2026-10-15', recurrence_date:'2026-10-14',
+    recurrence_timezone:'America/Los_Angeles', completed_at:'2026-10-17T12:00:00Z'};
+  const expected = new Date('2026-10-15T00:00:00Z').toLocaleDateString(undefined, {timeZone:'UTC'});
+  const previous = process.env.TZ;
+  try {
+    for (const timezone of ['America/Los_Angeles','Pacific/Auckland']) {
+      process.env.TZ = timezone;
+      assert.equal(scheduledOccurrenceLabel(card), expected);
+      const html = renderToStaticMarkup(React.createElement(CardView,{card}));
+      assert.ok(html.includes(`Scheduled ${expected}`));
+      assert.ok(html.includes('Completed'));
+      assert.equal(scheduledOccurrenceLabel({...card,status:'waiting'}), undefined);
+      assert.equal(scheduledOccurrenceLabel({...card,recurrence_source_id:null}), undefined);
+      assert.equal(scheduledOccurrenceLabel({...card,scheduled_date:null}), new Date('2026-10-14T00:00:00Z').toLocaleDateString(undefined,{timeZone:'UTC'}));
+      assert.equal(scheduledOccurrenceLabel({...card,scheduled_date:null,recurrence_date:null}), new Date(card.due_at).toLocaleDateString(undefined,{timeZone:card.recurrence_timezone}));
+      assert.equal(scheduledOccurrenceLabel({...card,scheduled_date:null,recurrence_date:null,due_at:null}), undefined);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+  }
+});

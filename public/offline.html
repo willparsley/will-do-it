@@ -119,6 +119,12 @@
             }
             if (card.last_completed_at) item.append(node('p', 'Last completed: ' + date(card.last_completed_at, card.recurrence_timezone), 'metadata'));
           } else if (card.completed_at) item.append(node('p', labels[card.status] + ': ' + date(card.completed_at), 'metadata'));
+          if (terminal(card) && card.recurrence_source_id) {
+            var slot = card.scheduled_date || card.recurrence_date;
+            var scheduled = slot ? new Date(slot + 'T00:00:00Z').toLocaleDateString(undefined, { timeZone: 'UTC' })
+              : card.due_at ? new Date(card.due_at).toLocaleDateString(undefined, { timeZone: card.recurrence_timezone }) : null;
+            if (scheduled) item.append(node('p', 'Scheduled: ' + scheduled, 'metadata'));
+          }
           if (card.is_recurring || card.recurrence_source_id) item.append(node('p', 'Recurring', 'metadata'));
           item.append(node('p', card.notes || 'No notes.', 'notes'));
           return item;

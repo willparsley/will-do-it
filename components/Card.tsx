@@ -3,7 +3,7 @@
 import { Card as CardType, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { isCardBlocked } from '@/lib/card-prerequisites';
 import { Pencil, Check, ArrowRight, Repeat, LockKeyhole, MoveRight } from 'lucide-react';
-import { dueBadge, isTerminal } from '@/lib/card-views';
+import { dueBadge, isTerminal, scheduledOccurrenceLabel } from '@/lib/card-views';
 import { useDraggable } from '@dnd-kit/core';
 
 interface CardViewProps {
@@ -31,6 +31,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
   const isFinished = isTerminal(card);
   const hasReminder = !isFinished && !!card.remind_at;
   const badge = dueBadge(card);
+  const scheduled = scheduledOccurrenceLabel(card);
 
   const handleComplete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -92,6 +93,8 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
             Last completed on {new Date(card.last_completed_at).toLocaleDateString(undefined, { timeZone: card.recurrence_timezone })}
           </div>
         )}
+
+        {scheduled && <div className="card-metadata text-ink-muted mt-1">Scheduled {scheduled}</div>}
 
         {isFinished && card.completed_at && (
           <div className="card-metadata text-ink-muted mt-1">

@@ -114,12 +114,12 @@ test('recurrence edits update pending cards while preserving occurrence identity
   assert.equal(pending.id, before[0].id);
   assert.deepEqual(pending.recurrence_date, before[0].recurrence_date);
   assert.equal(pending.status, 'in_progress');
-  assert.ok(pending.title.startsWith('Long walk - '));
+  assert.equal(pending.title, 'Long walk');
   assert.ok(pending.due_at > before[0].due_at);
   await saveCard(original, 'in_progress', { status: 'complete' });
   assert.equal(await generate(), 1);
   const [next] = await instances();
-  assert.ok(next.title.startsWith('Long walk - '));
+  assert.equal(next.title, 'Long walk');
   assert.equal(next.day, (await query("select ((now() at time zone 'America/New_York')::date + 5)::text as day"))[0].day);
 });
 
@@ -1073,4 +1073,23 @@ test('recurrence removal rolls back on invalid edits and rejects stale or foreig
   await assert.rejects(removeRecurrence(),/not found/);
   await query("select set_config('request.jwt.claim.sub',$1,false)",[user]);
   await assert.rejects(query('update cards set recurrence_source_id=null,recurrence_date=null,scheduled_date=null,is_recurring=false where id=$1',[original]),/recurrence identity/);
+});
+
+for (const pattern of [
+  {frequency:'daily'}, {frequency:'every_n_days',interval:3},
+  {frequency:'weekly',weekdays:[0,1,2,3,4,5,6]}, {frequency:'monthly',monthDay:1},
+]) test(`plain ${pattern.frequency} titles keep stacking and generation idempotent without rewriting legacy titles`, async () => {
+  await fixture({...pattern,stack:true,daysAgo:70});
+  await query("update cards set title = 'Take a walk - legacy date' where id = $1", [original]);
+  assert.ok(await generate() > 1);
+  const cards = await instances();
+  assert.ok(cards.every(card => card.title === 'Take a walk'));
+  assert.equal(await generate(), 0);
+  assert.equal((await query('select title from cards where id = $1',[original]))[0].title, 'Take a walk - legacy date');
+  // A schedule-only edit must not reintroduce a date suffix.
+  await editRecurrence({interval:2});
+  const pending = await query("select title from cards where status not in ('complete','canceled')");
+  assert.ok(pending.length > 0);
+  assert.ok(pending.every(card => card.title === 'Take a walk'));
+  assert.equal((await query('select title from cards where id = $1',[original]))[0].title, 'Take a walk - legacy date');
 });
