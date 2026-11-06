@@ -194,8 +194,10 @@ export function RecurrenceForm({ source, streams, onClose, onRecurrenceUpdated }
               </div>
             )}
             <label className="flex items-center gap-2 text-sm text-ink-soft">
-              <input type="checkbox" checked={stackMissed} onChange={e => setStackMissed(e.target.checked)} />Stack missed occurrences
+              <input type="checkbox" aria-describedby="recurrence-stack-help" checked={stackMissed} onChange={e => setStackMissed(e.target.checked)} />Stack missed occurrences
             </label>
+            <p id="recurrence-stack-help" className="text-xs text-ink-muted">{stackMissed ? 'Keep the calendar schedule. Each missed occurrence stays as a separate card.' : 'Keep one pending card. The next repeat waits the full interval after completion or cancellation.'}</p>
+            {!stackMissed && (frequency === 'weekly' || frequency === 'monthly') && <p className="text-xs text-ink-muted">Weekday and day-of-month changes reschedule the pending card. Later repeats count from completion.</p>}
             <p className="text-xs text-ink-muted">Turn off stacking after completing or canceling any extra pending occurrences. Changing patterns reschedules existing pending cards in order.</p>
             <div>
               <label htmlFor="recurrence-end-date" className="field-label">End date (optional)</label>

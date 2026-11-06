@@ -140,8 +140,9 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
                   </div>}
                   <div>
                     <label className={styles.check}><input type="checkbox" checked={stackMissed} onChange={e => setStackMissed(e.target.checked)} aria-describedby="card-stack-help" />Keep missed occurrences</label>
-                    <p id="card-stack-help" className={styles.help}>{stackMissed ? 'Each missed occurrence stays as a separate card.' : 'Keep just one pending occurrence until you complete or cancel it.'}</p>
+                    <p id="card-stack-help" className={styles.help}>{stackMissed ? 'Keep the calendar schedule. Each missed occurrence stays as a separate card.' : 'Keep one pending card. The next repeat waits the full interval after completion or cancellation.'}</p>
                   </div>
+                  {!stackMissed && (frequency === 'weekly' || frequency === 'monthly') && <p className={styles.help}>Weekday and day-of-month choices set the first date. Later repeats count from completion.</p>}
                   <p className={styles.help}>Choose a frequency to enable recurrence. Close Repeat to make this a one-off card. Without a due date, the first occurrence starts on the next matching day, including today. Notes apply to this first card. You can change the schedule or set an end date after creation.</p>
                 </>}
               </div>

@@ -76,8 +76,14 @@ Non-stacking sources keep one pending instance; stacking sources catch up distin
 missed dates and keep one future instance (at most 1000 dates per refresh).
 New sources use their creator's timezone; legacy sources pin it on first
 generation so devices in different timezones agree. Direct inserts from older
-clients also acquire the source lock and receive an occurrence key. Non-stacking late completions schedule from the completion day;
-stacking continues from its generation cursor without skipping missed periods.
+clients also acquire the source lock and receive an occurrence key. Non-stacking repeats wait the full interval after completion or cancellation:
+weekly means interval × 7 calendar days and monthly adds interval calendar months
+(clamping to the last valid day in shorter months). This applies to early and late
+completion. Weekday/month-day choices place the initial card and reschedule pending
+pattern edits; they do not constrain subsequent non-stacking repeats. Stacking
+continues on its original calendar from its generation cursor without skipping missed periods.
+Apply `20261106222402_completion_based_recurrence.sql` to enable this behavior;
+existing pending dates and archived history are retained.
 Future instances enter Backlog; occurrences due today or earlier enter Waiting.
 Undated initial daily/every-N-days occurrences start today; weekly/monthly ones
 start on the next matching day, including today. Explicit initial due dates are
