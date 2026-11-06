@@ -160,3 +160,18 @@ test('removing recurrence is a draft until save and submits edited values atomic
   assert.equal(calls[0].args.p_changes.title,'One off');
   assert.equal(updated.is_recurring,false);
 });
+
+test('recurrence stacking help explains completion intervals and calendar schedules', () => {
+  const ui = driver('components/EditRecurrenceModal.tsx', 'RecurrenceForm', {
+    source: { ...source, frequency: 'weekly', interval: 2, weekdays: [1] },
+    streams, onClose() {}, onRecurrenceUpdated() {},
+  }, { '@/lib/supabase/client': { createClient: () => ({}) }, sonner: notices });
+  let tree = ui.render();
+  assert.match(text(field(tree, 'recurrence-stack-help')), /full interval after completion or cancellation/);
+  assert.match(text(tree), /Later repeats count from completion/);
+  nodes(tree, node => node.type === 'input' && node.props['aria-describedby'] === 'recurrence-stack-help')[0]
+    .props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  assert.match(text(field(tree, 'recurrence-stack-help')), /Keep the calendar schedule/);
+  assert.doesNotMatch(text(tree), /Later repeats count from completion/);
+});

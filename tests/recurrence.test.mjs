@@ -120,7 +120,7 @@ test('recurrence edits update pending cards while preserving occurrence identity
   assert.equal(await generate(), 1);
   const [next] = await instances();
   assert.equal(next.title, 'Long walk');
-  assert.equal(next.day, (await query("select ((now() at time zone 'America/New_York')::date + 5)::text as day"))[0].day);
+  assert.equal(next.day, (await query("select ((now() at time zone 'America/New_York')::date + 3)::text as day"))[0].day);
 });
 
 for (const stack of [false, true]) for (const daysAgo of [0, 7]) {
@@ -1092,4 +1092,76 @@ for (const pattern of [
   assert.ok(pending.length > 0);
   assert.ok(pending.every(card => card.title === 'Take a walk'));
   assert.equal((await query('select title from cards where id = $1',[original]))[0].title, 'Take a walk - legacy date');
+});
+
+
+for (const pattern of [
+  { frequency: 'weekly', interval: 2, weekdays: [1], due: '2026-01-05', completed: '2026-01-12', elapsed: '2026-01-26', calendar: '2026-01-19' },
+  { frequency: 'monthly', interval: 6, monthDay: 1, due: '2026-01-01', completed: '2026-01-15', elapsed: '2026-07-15', calendar: '2026-07-01' },
+]) for (const stack of [false, true]) {
+  test(`${pattern.frequency} late completion ${stack ? 'keeps the calendar' : 'waits a full interval'} and remains idempotent`, async () => {
+    await fixture({ ...pattern, stack });
+    await query(`update recurrence_sources set created_at = $1::date::timestamp at time zone 'America/New_York',
+      recurrence_timezone = 'America/New_York', generated_through = null, last_completed_at = $2::date::timestamp at time zone 'America/New_York'
+      where id = $3`, [pattern.due, pattern.completed, source]);
+    await query(`update cards set due_at = $1::date::timestamp at time zone 'America/New_York',
+      completed_at = $2::date::timestamp at time zone 'America/New_York' where id = $3`, [pattern.due, pattern.completed, original]);
+    const [history] = await query('select * from cards where id = $1', [original]);
+    assert.ok(await generate() > 0);
+    assert.equal((await instances())[0].day, stack ? pattern.calendar : pattern.elapsed);
+    assert.equal(await generate('Asia/Tokyo'), 0);
+    assert.deepEqual((await query('select * from cards where id = $1', [original]))[0], history);
+    if (!stack) assert.equal((await instances()).length, 1);
+  });
+}
+
+test('elapsed weekly/monthly generation ignores calendar pins and clamps short months including leap years', async () => {
+  const next = async (day, frequency, interval = 1, extra = {}) => (await query(`select
+    public.next_generated_recurrence_date($1::date, jsonb_populate_record(null::public.recurrence_sources, $2::jsonb))::text as day`,
+  [day, JSON.stringify({ frequency, interval, stack_missed: false, weekdays: [1, 3, 5], month_day: -1, ...extra })]))[0].day;
+  assert.equal(await next('2026-01-13', 'weekly', 2), '2026-01-27');
+  assert.equal(await next('2026-01-15', 'monthly', 6), '2026-07-15');
+  assert.equal(await next('2026-01-31', 'monthly'), '2026-02-28');
+  assert.equal(await next('2028-01-31', 'monthly'), '2028-02-29');
+  assert.equal(await next('2026-02-28', 'monthly'), '2026-03-28');
+  assert.equal(await next('2026-03-01', 'weekly'), '2026-03-08');
+});
+
+for (const status of ['complete', 'canceled']) test(`early ${status} uses the terminal day instead of a future scheduled slot`, async () => {
+  await fixture({ active: true, frequency: 'weekly', interval: 2, weekdays: [1] });
+  await query(`update cards set due_at = ((now() at time zone 'America/New_York')::date + 7)::timestamp
+    at time zone 'America/New_York' where id = $1`, [original]);
+  const [pending] = await query('select * from cards where id = $1', [original]);
+  assert.equal(await generate(), 0);
+  assert.deepEqual((await query('select due_at from cards where id = $1', [original]))[0].due_at, pending.due_at);
+  await saveCard(original, 'in_progress', { status });
+  assert.equal(await generate(), 1);
+  assert.equal((await instances())[0].day,
+    (await query("select ((now() at time zone 'America/New_York')::date + 14)::text as day"))[0].day);
+  assert.equal(await generate(), 0);
+});
+
+for (const stack of [false, true]) test(`stream closure and generation agree on the ${stack ? 'calendar' : 'elapsed'} monthly end date`, async () => {
+  await fixture({ stack, frequency: 'monthly', interval: 6, monthDay: 1 });
+  await query(`update recurrence_sources set created_at = '2026-01-01T05:00:00Z', recurrence_timezone = 'America/New_York',
+    last_completed_at = '2026-01-15T05:00:00Z', end_date = '2026-07-10T04:00:00Z' where id = $1`, [source]);
+  await query(`update cards set due_at = '2026-01-01T05:00:00Z', completed_at = '2026-01-15T05:00:00Z' where id = $1`, [original]);
+  assert.equal((await closingSources()).length, stack ? 1 : 0);
+  assert.equal(await generate(), stack ? 1 : 0);
+  assert.equal(await generate(), 0);
+});
+
+test('Undo of a non-stacking weekly completion removes its successor and restores the completion boundary', async () => {
+  await fixture({ active: true, frequency: 'weekly', interval: 2, weekdays: [1] });
+  const before = await cardSnapshot();
+  const settings = await recurrenceSettings();
+  const result = await quickAction(original, 'in_progress', { status: 'complete' });
+  assert.equal((await instances())[0].day,
+    (await query("select ((now() at time zone 'America/New_York')::date + 14)::text as day"))[0].day);
+  await undoAction(result.undo_id);
+  assert.deepEqual(await cardSnapshot(), before);
+  const restored = await recurrenceSettings();
+  assert.deepEqual(restored.last_completed_at, settings.last_completed_at);
+  assert.deepEqual(restored.generated_through, settings.generated_through);
+  assert.equal(await generate(), 0);
 });
