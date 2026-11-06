@@ -30,6 +30,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { toast } from 'sonner';
 import type { User } from '@supabase/supabase-js';
 import { DEFAULT_HISTORY_LIMIT, HISTORY_LIMIT_EVENT, readHistoryLimit, type HistoryLimit } from '@/lib/history-preferences';
+import { LaterCards } from '@/components/LaterCards';
+import { DEFAULT_LATER_DAYS, LATER_DAYS_EVENT, readLaterDays } from '@/lib/later-preferences';
 import { ArchiveCards } from '@/components/ArchiveCards';
 import { ArchivePeriod, HISTORY_PERIODS, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
 import { MobileAddMenu, MobileCards, MobileLayoutControls, MOBILE_LAYOUTS, type MobileLayout } from '@/components/MobileWorkspace';
@@ -59,6 +61,8 @@ export default function WillDoIt() {
   const [cards, setCards] = useState<Card[]>([]);
   const [recurrenceSources, setRecurrenceSources] = useState<RecurrenceSource[]>([]);
   const [archivePeriod, setArchivePeriod] = useState<ArchivePeriod>('week');
+  const [laterDays, setLaterDays] = useState(DEFAULT_LATER_DAYS);
+  const [laterNow, setLaterNow] = useState<Date | undefined>(undefined);
   const [historyLimit, setHistoryLimit] = useState<HistoryLimit>(DEFAULT_HISTORY_LIMIT);
   const [hideRecurring, setHideRecurring] = useState(false);
   const [mobileLayout, setMobileLayout] = useState<MobileLayout>('status');
@@ -249,6 +253,22 @@ export default function WillDoIt() {
     return () => {
       window.removeEventListener('storage', update);
       window.removeEventListener(HISTORY_LIMIT_EVENT, update);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const update = () => { setLaterDays(readLaterDays(user.id)); setLaterNow(new Date()); };
+    update();
+    const timer = window.setInterval(update, 60_000);
+    window.addEventListener('storage', update);
+    window.addEventListener(LATER_DAYS_EVENT, update);
+    window.addEventListener('focus', update);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('storage', update);
+      window.removeEventListener(LATER_DAYS_EVENT, update);
+      window.removeEventListener('focus', update);
     };
   }, [user]);
 
@@ -738,7 +758,7 @@ export default function WillDoIt() {
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
         >
-          {compact && filteredStreams.length > 0 ? <MobileCards enableStatusDrop={statusDragEnabled} dragging={!!activeDragCard} historyLimit={historyLimit} view={view} layout={layout as 'status' | 'stream'} streams={filteredStreams} columns={columns} cardsForStream={getCardsForStream} renderCard={renderCard} onAdd={setCreationContext} onEditStream={setEditingStream} /> :
+          {compact && filteredStreams.length > 0 ? <MobileCards laterDays={laterDays} laterNow={laterNow} enableStatusDrop={statusDragEnabled} dragging={!!activeDragCard} historyLimit={historyLimit} view={view} layout={layout as 'status' | 'stream'} streams={filteredStreams} columns={columns} cardsForStream={getCardsForStream} renderCard={renderCard} onAdd={setCreationContext} onEditStream={setEditingStream} /> :
           <div className={`space-y-3 mx-auto ${mobileViewport ? 'mobile-matrix' : ''}`} style={{ maxWidth: matrixMaxWidth, minWidth: compact ? 0 : mobileViewport ? 34 + columns.length * 240 + (columns.length - 1) * GRID_GAP : 34 + streamColWidth + columns.length * 180 + columns.length * GRID_GAP }}>
             {!compact && <div
               className="sticky top-0 z-20 grid gap-3 items-center px-4 py-2 bg-canvas border border-transparent border-b-line shadow-sm"
@@ -782,7 +802,7 @@ export default function WillDoIt() {
                               <div className="space-y-2">
                                 {status === 'complete' || status === 'canceled'
                                   ? <ArchiveCards key={`${stream.id}:${status}:${historyLimit}`} limit={historyLimit} cards={cellCards} status={status} renderCard={renderCard} />
-                                  : cellCards.map(renderCard)}
+                                  : <LaterCards cards={cellCards} days={laterDays} now={laterNow} status={status} renderCard={renderCard} />}
                               </div>
                             </DroppableCell>
                           </div>

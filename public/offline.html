@@ -84,6 +84,7 @@
       (function () {
         'use strict';
         var snapshot;
+        var laterDays = 3;
         var labels = { backlog: 'Backlog', priority_backlog: 'Priority Backlog', research: 'Research', waiting: 'Waiting', in_progress: 'In Progress', complete: 'Complete', canceled: 'Canceled' };
         var views = { activated: ['research', 'waiting', 'in_progress'], backlog: ['backlog', 'priority_backlog', 'research'], all: Object.keys(labels), archive: ['complete', 'canceled'] };
         var el = function (id) { return document.getElementById(id); };
@@ -103,6 +104,18 @@
             var parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value));
             return ['year', 'month', 'day'].map(function (type) { return parts.find(function (p) { return p.type === type; }).value; }).join('-');
           } catch (_) { return ''; }
+        }
+        function attentionDay(card) {
+          return [card.due_at, card.remind_at].filter(function (v) { return v && Number.isFinite(Date.parse(v)); })
+            .map(function (v) { return day(v, card.recurrence_timezone); }).sort()[0];
+        }
+        function isLater(card) {
+          if (card.status !== 'backlog' && card.status !== 'priority_backlog') return false;
+          var next = attentionDay(card);
+          if (!next) return false;
+          var cutoff = new Date(day(new Date(), card.recurrence_timezone) + 'T00:00:00Z');
+          cutoff.setUTCDate(cutoff.getUTCDate() + laterDays);
+          return next > cutoff.toISOString().slice(0, 10);
         }
         function cardNode(card) {
           var item = node('details', undefined, 'card');
@@ -175,7 +188,8 @@
               section.append(node('h3', labels[status] + ' · ' + items.length));
               var list = node('div', undefined, 'cards');
               var groups = new Map();
-              items.forEach(function (card) {
+              var later = items.filter(isLater).sort(function (a, b) { return attentionDay(a).localeCompare(attentionDay(b)) || a.position - b.position; });
+              items.filter(function (card) { return !isLater(card); }).forEach(function (card) {
                 if (terminal(card) && card.recurrence_source_id) {
                   var group = groups.get(card.recurrence_source_id);
                   if (!group) {
@@ -187,6 +201,14 @@
                   group.append(cardNode(card));
                 } else list.append(cardNode(card));
               });
+              if (later.length) {
+                var laterGroup = node('details', undefined, 'group');
+                laterGroup.dataset.laterStatus = status;
+                var nextDate = new Date(attentionDay(later[0]) + 'T00:00:00Z').toLocaleDateString(undefined, { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' });
+                laterGroup.append(node('summary', 'Later · ' + later.length + ' · Next ' + nextDate));
+                later.forEach(function (card) { laterGroup.append(cardNode(card)); });
+                list.append(laterGroup);
+              }
               section.append(list);
             });
             board.append(section);
@@ -203,6 +225,12 @@
                 && saved.streams.every(function (s) { return s && s.user_id === owner && typeof s.id === 'string' && typeof s.title === 'string' && ['work', 'personal', 'neutral'].includes(s.area); })
                 && saved.cards.every(function (c) { return c && c.user_id === owner && typeof c.id === 'string' && typeof c.title === 'string' && typeof c.stream_id === 'string' && Object.hasOwn(labels, c.status); })) {
               snapshot = saved;
+              laterDays = 3;
+              try {
+                var savedLater = JSON.parse(localStorage.getItem('will-do-it:later-days:' + owner) || 'null');
+                if (Number.isSafeInteger(savedLater) && savedLater >= 0 && savedLater <= 3650) laterDays = savedLater;
+              } catch (_) {}
+
               if (initial) {
                 var preferences = JSON.parse(localStorage.getItem('will-do-it:workspace:' + owner) || 'null') || {};
                 if (Object.hasOwn(views, preferences.view)) el('view').value = preferences.view;

@@ -156,3 +156,30 @@ test('successful workspace load saves real cards for an offline refresh and logo
   await context.setOffline(true); await page.reload();
   await expect(page.getByRole('heading', { name: "You're offline" })).toBeVisible();
 });
+
+
+test('offline Later groups respect the lead window, earlier reminders, filters, and saved preference', async ({ page }) => {
+  const future = new Date(); future.setDate(future.getDate() + 90); future.setHours(12, 0, 0, 0);
+  const soon = new Date(); soon.setDate(soon.getDate() + 2); soon.setHours(12, 0, 0, 0);
+  const make = (id, extra = {}) => ({ id, user_id: owner, stream_id: 'work', title: id, status: 'backlog', position: 0, due_at: future.toISOString(), ...extra });
+  await ready(page);
+  await seed(page, { ...snapshot, cards: [make('Distant ordinary'), make('Distant recurring', { is_recurring: true }), make('Early reminder', { remind_at: soon.toISOString() }), make('Visible research', { status: 'research' }), make('Undated', { due_at: undefined })] });
+  await page.goto('/offline.html');
+  await page.getByLabel('View', { exact: true }).selectOption('backlog');
+  const later = page.locator('[data-later-status="backlog"]');
+  await expect(later).not.toHaveAttribute('open');
+  await expect(later.locator(':scope > summary')).toContainText('Later · 2');
+  await expect(page.getByText('Distant ordinary', { exact: true })).toBeHidden();
+  await expect(page.getByText('Early reminder', { exact: true })).toBeVisible();
+  await expect(page.getByText('Visible research', { exact: true })).toBeVisible();
+  await expect(page.getByText('Undated', { exact: true })).toBeVisible();
+  await later.locator(':scope > summary').click();
+  await expect(page.getByText('Distant ordinary', { exact: true })).toBeVisible();
+  await page.getByLabel('Hide recurring').check();
+  await expect(later.locator(':scope > summary')).toContainText('Later · 1');
+  await page.evaluate(owner => localStorage.setItem('will-do-it:later-days:' + owner, '100'), owner);
+  await page.reload();
+  await page.getByLabel('View', { exact: true }).selectOption('backlog');
+  await expect(page.locator('[data-later-status]')).toHaveCount(0);
+  await expect(page.getByText('Distant ordinary', { exact: true })).toBeVisible();
+});
