@@ -81,7 +81,7 @@ export function RecurrenceForm({ source, streams, onClose, onRecurrenceUpdated }
   const [title, setTitle] = useState(source.base_title);
   const [streamId, setStreamId] = useState(source.stream_id);
   const [frequency, setFrequency] = useState(source.frequency || 'daily');
-  const [interval, setInterval] = useState(source.interval || 1);
+  const [interval, setInterval] = useState<number | ''>(source.interval || 1);
   const [weekdays, setWeekdays] = useState<number[]>(source.weekdays || []);
   const [monthDay, setMonthDay] = useState(source.month_day || (source.created_at
     ? Number(calendarDay(source.created_at, source.recurrence_timezone || undefined).slice(8)) : 1));
@@ -163,7 +163,7 @@ export function RecurrenceForm({ source, streams, onClose, onRecurrenceUpdated }
             {frequency !== 'daily' && (
               <div>
                 <label htmlFor="recurrence-interval" className="field-label">Every {frequency === 'weekly' ? 'N weeks' : frequency === 'monthly' ? 'N months' : 'N days'}</label>
-                <input id="recurrence-interval" type="number" min={1} step={1} required className="control" value={interval} onChange={e => setInterval(Math.max(1, parseInt(e.target.value, 10) || 1))} />
+                <input id="recurrence-interval" type="number" min={1} step={1} required className="control" value={interval} onChange={e => setInterval(e.target.value === '' ? '' : Number(e.target.value))} />
               </div>
             )}
             {frequency === 'weekly' && (
