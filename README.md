@@ -84,6 +84,20 @@ pattern edits; they do not constrain subsequent non-stacking repeats. Stacking
 continues on its original calendar from its generation cursor without skipping missed periods.
 Apply `20261106222402_completion_based_recurrence.sql` to enable this behavior;
 existing pending dates and archived history are retained.
+Dated unfinished cards offer **Bump** beside their due badge on desktop, or in the
+selected card’s actions on mobile. Choose 1 day/week/month or a custom amount
+(1–3650). The bump starts from the due date, or today if overdue, preserves local
+time, and clamps months to the last valid day. It returns the card to Backlog
+(or its known Priority Backlog origin). Any reminder shifts with the due date;
+if it would still be today or earlier, it moves to the new due time. The card
+returns to Waiting on its new due/reminder day. An eight-second Undo is available.
+
+Bumping changes only this occurrence. Non-stacking recurrences retain one pending
+card until completion/cancellation; stacking keeps its source calendar, even if
+another occurrence has the same due day. Occurrence identities, reserved schedule
+slots, source patterns, and history stay intact. Apply
+`supabase/migrations/20261108174108_bump_card.sql` before deploying the bump UI.
+
 Future instances enter Backlog; occurrences due today or earlier enter Waiting.
 Undated initial daily/every-N-days occurrences start today; weekly/monthly ones
 start on the next matching day, including today. Explicit initial due dates are

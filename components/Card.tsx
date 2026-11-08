@@ -2,7 +2,7 @@
 
 import { Card as CardType, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { isCardBlocked } from '@/lib/card-prerequisites';
-import { Pencil, Check, ArrowRight, Repeat, LockKeyhole, MoveRight } from 'lucide-react';
+import { Pencil, Check, ArrowRight, Repeat, LockKeyhole, MoveRight, CalendarArrowUp } from 'lucide-react';
 import { dueBadge, isTerminal, scheduledOccurrenceLabel } from '@/lib/card-views';
 import { useDraggable } from '@dnd-kit/core';
 
@@ -12,6 +12,7 @@ interface CardViewProps {
   onClick?: (event: React.MouseEvent) => void;
   onEdit?: (event: React.MouseEvent) => void;
   onMove?: () => void;
+  onBump?: () => void;
   compact?: boolean;
   context?: React.ReactNode;
   selected?: boolean;
@@ -26,7 +27,7 @@ interface CardViewProps {
  * Presentational card. Used both for the real, draggable card and for the
  * DragOverlay preview (so the preview doesn't register a duplicate draggable).
  */
-export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected = false, touchMode = false, desktop = false, compact = false, context, onMove }: CardViewProps) {
+export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected = false, touchMode = false, desktop = false, compact = false, context, onMove, onBump }: CardViewProps) {
   const blocked = isCardBlocked(card, prerequisite);
   const isFinished = isTerminal(card);
   const hasReminder = !isFinished && !!card.remind_at;
@@ -116,6 +117,13 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
               </button>
             ) : <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted" />
           )}
+          {!isFinished && card.due_at && onBump && desktop && !selected && <button type="button"
+            className="focus-ring inline-flex items-center gap-1 rounded p-1 text-ink-soft hover:text-accent hover:bg-accent-soft"
+            aria-label="Bump due date" title="Bump due date"
+            onPointerDown={event => event.stopPropagation()}
+            onClick={event => { event.stopPropagation(); onBump(); }}>
+            <CalendarArrowUp size={14} aria-hidden="true" /><span>Bump</span>
+          </button>}
           {hasReminder && (
             <span title="Has reminder" style={{ color: 'var(--status-priority_backlog)' }}>
               🔔
@@ -205,12 +213,15 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
         </div>
       )}
 
-      {selected && onClick && <div className="col-span-full flex border-t border-line bg-surface" role="group" aria-label={`Actions for ${card.title}`}
+      {selected && onClick && <div className="col-span-full flex flex-wrap border-t border-line bg-surface" role="group" aria-label={`Actions for ${card.title}`}
         onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
         <button type="button" className="card-touch-action text-ink-soft" aria-label={`Edit ${card.title}`} onClick={onEdit}>
           <Pencil size={16} aria-hidden="true" /><span>Edit</span>
         </button>
         {onMove && <button type="button" className="card-touch-action text-ink-soft" onClick={onMove}><MoveRight size={16} aria-hidden="true" /><span>Move</span></button>}
+        {!isFinished && card.due_at && onBump && <button type="button" className="card-touch-action text-ink-soft" onClick={onBump}>
+          <CalendarArrowUp size={16} aria-hidden="true" /><span>Bump</span>
+        </button>}
         {!isFinished && canComplete && <button type="button" className="card-touch-action card-touch-complete" aria-label="Mark complete" onClick={handleComplete}>
           <Check size={16} aria-hidden="true" /><span>Complete</span>
         </button>}
@@ -229,7 +240,7 @@ interface CardProps extends CardViewProps {
   dragEnabled?: boolean;
 }
 
-export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected, touchMode, desktop, compact, context, onMove, dragEnabled = !compact, overlay = false }: CardProps) {
+export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected, touchMode, desktop, compact, context, onMove, onBump, dragEnabled = !compact, overlay = false }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     disabled: overlay || !dragEnabled,
@@ -252,7 +263,7 @@ export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEdi
       tabIndex={undefined}
       className={isDragging ? 'opacity-40' : ''}
     >
-      <CardView card={card} prerequisite={prerequisite} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} selected={selected} touchMode={touchMode} desktop={desktop} onEdit={onEdit} compact={compact} context={context} onMove={onMove} />
+      <CardView card={card} prerequisite={prerequisite} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} selected={selected} touchMode={touchMode} desktop={desktop} onEdit={onEdit} compact={compact} context={context} onMove={onMove} onBump={onBump} />
     </div>
   );
 }

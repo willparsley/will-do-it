@@ -1165,3 +1165,127 @@ test('Undo of a non-stacking weekly completion removes its successor and restore
   assert.deepEqual(restored.generated_through, settings.generated_through);
   assert.equal(await generate(), 0);
 });
+
+const bumpCard = async (id, amount = 1, unit = 'weeks', expected) => {
+  const [card] = await query('select updated_at::text as version from cards where id=$1', [id]);
+  return (await query('select public.bump_card($1,$2,$3,$4,$5) as result',
+    [id, expected ?? card?.version, amount, unit, 'America/New_York']))[0].result;
+};
+
+test('bumping an ordinary overdue card moves its reminder, restores priority backlog, promotes on the new day, and supports Undo', async () => {
+  await db.exec('set role authenticated');
+  await query(`insert into cards(id,user_id,stream_id,title,status,due_at,remind_at,notes) values
+    ($1,$2,$3,'Bump me','priority_backlog',now()-interval '10 days',now()-interval '30 days','Keep notes')`, [original,user,stream]);
+  await promote();
+  const before = await cardSnapshot();
+  const result = await bumpCard(original);
+  const [after] = await query(`select status, auto_promoted_from, notes,
+    (due_at at time zone 'America/New_York')::date = (now() at time zone 'America/New_York')::date + 7 as next_week,
+    remind_at = due_at as safe_reminder from cards where id=$1`, [original]);
+  assert.deepEqual(after, {status:'priority_backlog',auto_promoted_from:null,notes:'Keep notes',next_week:true,safe_reminder:true});
+  assert.equal((await promote())[0].count, 0);
+  await undoAction(result.undo_id);
+  assert.deepEqual(await cardSnapshot(), before);
+  await bumpCard(original, 1, 'days');
+  await query("update cards set due_at=now(), remind_at=null where id=$1", [original]);
+  assert.equal((await promote())[0].count, 1);
+  assert.equal((await query('select status from cards where id=$1',[original]))[0].status,'waiting');
+});
+
+test('bumping a non-stacking two-week occurrence by two weeks never creates an overlapping successor', async () => {
+  await db.exec('set role authenticated');
+  const card = await createRecurring({frequency:'weekly',interval:2,weekdays:[1],due:new Date().toISOString()});
+  await generate();
+  await promote();
+  const before = await cardSnapshot();
+  const settings = (await query('select * from recurrence_sources where id=$1',[card.recurrence_source_id]))[0];
+  const result = await bumpCard(card.id, 2, 'weeks');
+  assert.equal(result.card.status,'backlog');
+  assert.equal(result.card.recurrence_date, card.recurrence_date);
+  assert.equal(result.card.scheduled_date, card.scheduled_date);
+  for(let i=0;i<3;i++) assert.equal(await generate(),0);
+  assert.equal((await query('select count(*)::int as n from cards'))[0].n,1);
+  const afterSettings = (await query('select * from recurrence_sources where id=$1',[card.recurrence_source_id]))[0];
+  assert.deepEqual(afterSettings,settings);
+  await undoAction(result.undo_id);
+  assert.deepEqual(await cardSnapshot(),before);
+  await bumpCard(card.id, 2, 'weeks');
+  await quickAction(card.id,'backlog',{status:'complete'});
+  const [next] = await query("select (due_at at time zone 'America/New_York')::date = (now() at time zone 'America/New_York')::date + 14 as correct from cards where status not in ('complete','canceled')");
+  assert.equal(next.correct,true);
+});
+
+test('bumping a stacking monthly occurrence leaves the next first-of-month generation intact', async () => {
+  await db.exec('set role authenticated');
+  const [date] = await query("select (date_trunc('month',now() at time zone 'America/New_York') at time zone 'America/New_York')::text as first");
+  const card = await createRecurring({frequency:'monthly',monthDay:1,stack:true,due:date.first});
+  const result = await bumpCard(card.id,1,'months');
+  // Current month may be overdue: bump starts today, while source keeps the 1st.
+  assert.equal(result.card.scheduled_date,card.scheduled_date);
+  assert.equal(result.card.recurrence_date,card.recurrence_date);
+  const [next] = await query("select * from cards where id<>$1",[card.id]);
+  const [calendar] = await query("select ((date_trunc('month',now() at time zone 'America/New_York') + interval '1 month')::date)::text as day");
+  assert.equal(next.scheduled_date.toISOString().slice(0,10),calendar.day);
+  assert.equal(next.status,'backlog');
+  assert.equal(await generate(),0);
+  await undoAction(result.undo_id);
+  assert.equal((await query('select count(*)::int as n from cards'))[0].n,1);
+});
+
+for (const [due, amount, unit, expected] of [
+  ['2030-01-31T14:30:15Z',1,'months','2030-02-28T14:30:15.000Z'],
+  ['2030-03-09T14:30:15Z',1,'days','2030-03-10T13:30:15.000Z'],
+  ['2030-11-02T13:30:15Z',1,'weeks','2030-11-09T14:30:15.000Z'],
+]) test(`bump calendar arithmetic: ${due} + ${amount} ${unit}`, async () => {
+  await db.exec('set role authenticated');
+  await query(`insert into cards(id,user_id,stream_id,title,status,due_at,remind_at)
+    values($1,$2,$3,'Calendar test','research',$4::timestamptz,$4::timestamptz-interval '1 day')`,[original,user,stream,due]);
+  const result = await bumpCard(original,amount,unit);
+  assert.equal(new Date(result.card.due_at).toISOString(),expected);
+  assert.equal(result.card.status,'backlog');
+  assert.equal((await query("select (due_at at time zone 'America/New_York')::date - (remind_at at time zone 'America/New_York')::date as days from cards"))[0].days,1);
+});
+
+test('bump rejects stale dates, invalid inputs, terminal and undated cards, and unauthorized accounts',async () => {
+  await db.exec('set role authenticated');
+  await query("insert into cards(id,user_id,stream_id,title,status,due_at) values($1,$2,$3,'Validation','waiting',now())",[original,user,stream]);
+  const [old] = await query('select updated_at::text as version from cards where id=$1',[original]);
+  await saveCard(original,'waiting',{due_at:'2030-01-01T05:00:00Z'});
+  await assert.rejects(bumpCard(original,1,'weeks',old.version),/changed elsewhere/);
+  for(const [amount,unit] of [[0,'days'],[-1,'weeks'],[3651,'days'],[1,'years'],[null,'days'],[1,null]]) {
+    await assert.rejects(bumpCard(original,amount,unit),/Choose 1/);
+  }
+  await query("select set_config('request.jwt.claim.sub',$1,false)",[other]);
+  await assert.rejects(bumpCard(original),/Card not found/);
+  await query("select set_config('request.jwt.claim.sub',$1,false)",[user]);
+  await saveCard(original,'waiting',{status:'complete'});
+  await assert.rejects(bumpCard(original),/unfinished card/);
+  await saveCard(original,'complete',{status:'backlog',due_at:null});
+  await assert.rejects(bumpCard(original),/unfinished card/);
+  await db.exec('set role anon');
+  await assert.rejects(bumpCard(original,1,'days',old.version),/permission denied/);
+});
+
+
+test('stacking occurrences can share a bumped due day without losing either schedule identity', async () => {
+  await db.exec('set role authenticated');
+  const card = await createRecurring({stack:true,due:new Date().toISOString()});
+  const result = await bumpCard(card.id,1,'days');
+  const rows = await query("select id, recurrence_date, (due_at at time zone 'America/New_York')::date::text as due from cards order by recurrence_date");
+  assert.equal(rows.length,2);
+  assert.equal(rows[0].due,rows[1].due);
+  assert.notEqual(String(rows[0].recurrence_date),String(rows[1].recurrence_date));
+  assert.equal(result.card.status,'backlog');
+  assert.equal(await generate(),0);
+});
+
+test('legacy stacking sources establish their original calendar boundary before a bump', async () => {
+  await fixture({active:true,stack:true,frequency:'monthly',monthDay:1});
+  await query("update cards set due_at=date_trunc('month',now() at time zone 'America/New_York') at time zone 'America/New_York', remind_at=null where id=$1",[original]);
+  const result = await bumpCard(original,3,'months');
+  const [next] = await query("select (due_at at time zone 'America/New_York')::date::text as day from cards where id<>$1",[original]);
+  const [calendar] = await query("select ((date_trunc('month',now() at time zone 'America/New_York')+interval '1 month')::date)::text as day");
+  assert.equal(next.day,calendar.day);
+  assert.equal(result.card.status,'backlog');
+  assert.equal(await generate(),0);
+});

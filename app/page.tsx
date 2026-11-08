@@ -35,6 +35,7 @@ import { DEFAULT_LATER_DAYS, LATER_DAYS_EVENT, readLaterDays } from '@/lib/later
 import { ArchiveCards } from '@/components/ArchiveCards';
 import { ArchivePeriod, HISTORY_PERIODS, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
 import { MobileAddMenu, MobileCards, MobileLayoutControls, MOBILE_LAYOUTS, type MobileLayout } from '@/components/MobileWorkspace';
+import { BumpCardModal } from '@/components/BumpCardModal';
 import { MoveCardModal } from '@/components/MoveCardModal';
 import { AreaIndicator } from '@/components/AreaIndicator';
 import { errorMessage } from '@/lib/errors';
@@ -68,6 +69,7 @@ export default function WillDoIt() {
   const [mobileLayout, setMobileLayout] = useState<MobileLayout>('status');
   const [desktopLayout, setDesktopLayout] = useState<MobileLayout>('board');
   const [mobileViewport, setMobileViewport] = useState(false);
+  const [bumpingCard, setBumpingCard] = useState<Card | null>(null);
   const [movingCard, setMovingCard] = useState<Card | null>(null);
   const layout = mobileViewport ? mobileLayout : desktopLayout;
   const compact = layout !== 'board';
@@ -195,6 +197,7 @@ export default function WillDoIt() {
       setCreationContext(null);
       setEditingCard(null);
       setMovingCard(null);
+      setBumpingCard(null);
       setEditingRecurrenceId(null);
       setShowStreamModal(false);
       setEditingStream(null);
@@ -325,7 +328,7 @@ export default function WillDoIt() {
   }
 
   // Adjust transient selection before rendering a changed workspace context.
-  const selectionContext = [mobileViewport, layout, movingCard?.id, view, activeFilter, archivePeriod, hideRecurring, editingCard?.id,
+  const selectionContext = [mobileViewport, layout, movingCard?.id, bumpingCard?.id, view, activeFilter, archivePeriod, hideRecurring, editingCard?.id,
     editingRecurrenceId, !!creationContext, showStreamModal, editingStream?.id].join(':');
   const [previousSelectionContext, setPreviousSelectionContext] = useState(selectionContext);
   if (previousSelectionContext !== selectionContext) {
@@ -618,6 +621,7 @@ export default function WillDoIt() {
     return (
     <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={(mobileViewport && compact) || touchMode} desktop={!mobileViewport} compact={compact} dragEnabled={!compact || statusDragEnabled}
       context={compact ? context : undefined}
+      onBump={() => { setSelectedCardId(null); setBumpingCard(card); }}
       onMove={mobileViewport || compact ? () => { setSelectedCardId(null); setMovingCard(card); } : undefined}
       onEdit={event => {
         if (activeDragCard || (suppressCardClick.current && event.detail !== 0)) return;
@@ -850,6 +854,21 @@ export default function WillDoIt() {
           />
         )}
 
+        {bumpingCard && <BumpCardModal card={bumpingCard} onClose={() => setBumpingCard(null)} onBump={async (amount, unit) => {
+          if (!accountActive.current) return;
+          ++mutationsInFlight.current;
+          ++loadSequence.current;
+          try {
+            const { data, error } = await supabase.rpc('bump_card', {
+              p_card_id: bumpingCard.id, p_expected_updated_at: bumpingCard.updated_at,
+              p_amount: amount, p_unit: unit, p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            });
+            if (!accountActive.current) return;
+            if (error) throw error;
+            if (user) await loadData(user.id, false);
+            showUndoToast('Card bumped', data.undo_id);
+          } finally { --mutationsInFlight.current; }
+        }} />}
         {movingCard && <MoveCardModal card={movingCard} streams={streams} onClose={() => setMovingCard(null)} onMove={async (streamId, status) => {
           if (!user || !accountActive.current) return;
           const position = Math.max(-1, ...cards.filter(card => card.id !== movingCard.id && card.stream_id === streamId && card.status === status).map(card => card.position || 0)) + 1;
