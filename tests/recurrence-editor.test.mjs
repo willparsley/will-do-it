@@ -13,6 +13,64 @@ const notices = {toast:{success(){},error(){}}};
 const field = (tree,id) => nodes(tree,node=>node.props?.id===id)[0];
 const submit = tree => nodes(tree,node=>node.type==='form')[0].props.onSubmit({preventDefault(){}});
 
+test('recurring deletion explains scope and requires explicit confirmation, including history', async () => {
+  for (const status of ['waiting', 'complete', 'canceled']) {
+    const writes = [];
+    let deleted, closed = false, edited;
+    const supabase = { from(table) { return { delete() { return { async eq(key, value) {
+      writes.push({ table, key, value }); return { error: null };
+    } }; } }; } };
+    const ui = driver('components/EditCardModal.tsx', 'EditCardModal', {
+      card: { ...card, status }, streams, onClose() { closed = true; }, onCardUpdated() {},
+      onCardDeleted(id) { deleted = id; }, onEditRecurrence(id) { edited = id; },
+    }, { '@/lib/supabase/client': { createClient: () => supabase }, sonner: notices });
+    let tree = ui.render();
+    await button(tree, 'Delete occurrence').props.onClick();
+    tree = ui.render();
+    assert.equal(tree.props.title, 'Delete this occurrence?');
+    assert.match(text(tree), /recurrence is kept, other cards stay/);
+    assert.match(text(tree), /turn off Generate future occurrences/);
+    assert.deepEqual(writes, []);
+    button(tree, 'Keep card').props.onClick();
+    tree = ui.render();
+    assert.equal(tree.props.title, 'Edit Card');
+    assert.equal(closed, false);
+    await button(tree, 'Delete occurrence').props.onClick();
+    tree = ui.render();
+    button(tree, 'Manage recurrence').props.onClick();
+    assert.equal(edited, 'source');
+    assert.deepEqual(writes, []);
+    await button(tree, 'Delete this occurrence').props.onClick();
+    assert.deepEqual(writes, [{ table: 'cards', key: 'id', value: 'card' }]);
+    assert.equal(deleted, 'card');
+    assert.equal(closed, true);
+  }
+});
+
+test('deleting with unsaved removal warns that recurrence is kept and preserves draft on failure', async () => {
+  let closed = false;
+  const ui = driver('components/EditCardModal.tsx', 'EditCardModal', {
+    card, streams, onClose() { closed = true; }, onCardUpdated() {}, onCardDeleted() {}, onEditRecurrence() {},
+  }, { '@/lib/supabase/client': { createClient: () => ({ from() { return { delete() { return {
+    async eq() { return { error: { message: 'Could not delete occurrence' } }; },
+  }; } }; } }) }, sonner: notices });
+  let tree = ui.render();
+  field(tree, 'card-title').props.onChange({ target: { value: 'Unsaved title' } });
+  nodes(tree, n => n.props?.['aria-describedby'] === 'remove-recurrence-help')[0].props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  await button(tree, 'Delete occurrence').props.onClick();
+  tree = ui.render();
+  assert.match(text(tree), /Deleting discards unsaved card changes, including Remove recurrence/);
+  await button(tree, 'Delete this occurrence').props.onClick();
+  tree = ui.render();
+  assert.equal(closed, false);
+  assert.match(text(nodes(tree, n => n.props?.role === 'alert')[0]), /Could not delete occurrence/);
+  button(tree, 'Keep card').props.onClick();
+  tree = ui.render();
+  assert.equal(field(tree, 'card-title').props.value, 'Unsaved title');
+  assert.equal(nodes(tree, n => n.props?.['aria-describedby'] === 'remove-recurrence-help')[0].props.checked, true);
+});
+
 test('recurrence form loads source settings and submits exact source version and calendar end day', async () => {
   const calls=[];
   let updated,closed=false;

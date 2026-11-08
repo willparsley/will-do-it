@@ -2,7 +2,7 @@
 
 import { CardFormDialog, CardFormCancel, cardFields, cardFormStyles as styles } from './CardForm';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CardPrerequisiteField } from './CardPrerequisiteField';
 import { createClient } from '@/lib/supabase/client';
 import { Stream, Card, CardStatus, streamsForSelect, UNCATEGORIZED_TITLE } from '@/lib/types';
@@ -45,6 +45,14 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
   const [removeRecurrence, setRemoveRecurrence] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [deleteRequested, setDeleteRequested] = useState(false);
+  const deleteButton = useRef<HTMLButtonElement>(null);
+  const wasConfirmingDelete = useRef(false);
+
+  useEffect(() => {
+    if (wasConfirmingDelete.current && !deleteRequested) deleteButton.current?.focus();
+    wasConfirmingDelete.current = deleteRequested;
+  }, [deleteRequested]);
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -83,13 +91,19 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmedOccurrence = false) => {
     if (loading) return;
     if (cards.some(other => other.prerequisite_card_id === card.id)) {
       setError('Another card uses this as a prerequisite. Remove that link before deleting this card.');
       return;
     }
-    if (!confirm('Delete this card? This cannot be undone.')) return;
+    if (card.recurrence_source_id) {
+      if (!confirmedOccurrence) {
+        setError('');
+        setDeleteRequested(true);
+        return;
+      }
+    } else if (!confirm('Delete this card? This cannot be undone.')) return;
 
     setLoading(true);
     setError('');
@@ -98,7 +112,7 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
       if (error) throw error;
 
       onCardDeleted(card.id);
-      toast.success('Card deleted');
+      toast.success(card.recurrence_source_id ? 'Occurrence deleted. Recurrence kept.' : 'Card deleted');
       onClose();
     } catch (err: unknown) {
       setError(errorMessage(err, 'Failed to delete'));
@@ -117,6 +131,25 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
     onEditRecurrence(card.recurrence_source_id);
   };
 
+  if (deleteRequested) return (
+    <CardFormDialog title="Delete this occurrence?" dirty={false} saving={loading} onClose={() => setDeleteRequested(false)}>
+      <div className={styles.body}>
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-ink">{card.title}</p>
+          <p className="text-sm text-ink-soft">This permanently deletes only this card. The recurrence is kept, other cards stay, and future repeats remain enabled unless the recurrence is already stopped.</p>
+          <p className="text-sm text-ink-soft">To stop future repeats, choose Manage recurrence and turn off Generate future occurrences. Existing cards and history are kept.</p>
+          {dirty && <p className="text-sm text-ink-soft">Deleting discards unsaved card changes{removeRecurrence ? ', including Remove recurrence' : ''}.</p>}
+          {onEditRecurrence && <button type="button" onClick={editRecurrence} disabled={loading} className="btn btn-secondary focus-ring px-4 py-2.5">Manage recurrence</button>}
+          {error && <p role="alert" className={styles.error}>{error}</p>}
+        </div>
+      </div>
+      <footer className={styles.footer}>
+        <button type="button" autoFocus disabled={loading} onClick={() => setDeleteRequested(false)} className="btn btn-secondary focus-ring px-5 py-2.5">Keep card</button>
+        <button type="button" disabled={loading} onClick={() => handleDelete(true)} className={`btn btn-ghost focus-ring px-4 py-2.5 ${styles.delete}`}>{loading ? 'Deleting…' : 'Delete this occurrence'}</button>
+      </footer>
+    </CardFormDialog>
+  );
+
   return (
     <CardFormDialog title="Edit Card" dirty={dirty} saving={loading} onClose={onClose}>
       <form onSubmit={handleSave} className={styles.form}>
@@ -130,6 +163,7 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
                 <h3 className="text-sm font-medium text-ink">Part of a recurring task</h3>
                 {card.recurrence_title && <p className="text-sm text-ink-soft">{card.recurrence_title}</p>}
                 <p className={styles.help}>Title, notes, dates, and status edits apply to this occurrence. To change the repeating title or schedule for pending and future cards, edit the recurrence.</p>
+                <p className={styles.help}>Deleting this occurrence keeps the recurrence. To stop future repeats while keeping existing cards and history, edit the recurrence and turn off Generate future occurrences.</p>
                 {!['complete', 'canceled'].includes(card.status) && <div>
                   <label className={styles.check}>
                     <input type="checkbox" checked={removeRecurrence} onChange={event => setRemoveRecurrence(event.target.checked)} aria-describedby="remove-recurrence-help" />Remove recurrence
@@ -143,7 +177,7 @@ export function EditCardModal({ cards = [], card, streams, onClose, onCardUpdate
         </div>
         {error && <p role="alert" className={styles.error}>{error}</p>}
         <footer className={styles.footer}>
-          <button type="button" onClick={handleDelete} disabled={loading} className={`btn btn-ghost focus-ring px-2 py-2.5 ${styles.delete}`}>Delete Card</button>
+          <button ref={deleteButton} type="button" onClick={() => handleDelete()} disabled={loading} className={`btn btn-ghost focus-ring px-2 py-2.5 ${styles.delete}`}>{card.recurrence_source_id ? 'Delete occurrence' : 'Delete Card'}</button>
           <CardFormCancel disabled={loading} />
           <button type="submit" disabled={loading || !title.trim()} className="btn btn-primary focus-ring px-5 py-2.5">{loading ? 'Saving...' : 'Save Changes'}</button>
         </footer>
