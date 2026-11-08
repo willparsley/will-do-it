@@ -38,7 +38,7 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
   const [isRecurring, setIsRecurring] = useState(false);
   const [stackMissed, setStackMissed] = useState(false);
   const [frequency, setFrequency] = useState<'' | 'daily' | 'every_n_days' | 'weekly' | 'monthly'>('');
-  const [recInterval, setRecInterval] = useState(1);
+  const [recInterval, setRecInterval] = useState<number | ''>(1);
   const [weekdays, setWeekdays] = useState<number[]>([]); // 0=Sun, 1=Mon, ..., 6=Sat
   const [monthDay, setMonthDay] = useState(1); // 1..31, or -1 for the last day
   const [prerequisiteId, setPrerequisiteId] = useState('');
@@ -121,7 +121,7 @@ export function AddCardModal({ cards = [], streams, onClose, onCardCreated, defa
                   </div>
                   {frequency && frequency !== 'daily' && <div>
                     <label htmlFor="card-interval" className="field-label">Every {frequency === 'weekly' ? 'N weeks' : frequency === 'monthly' ? 'N months' : 'N days'}</label>
-                    <input id="card-interval" type="number" min={1} step={1} required value={recInterval} onChange={e => setRecInterval(Math.max(1, parseInt(e.target.value, 10) || 1))} className="control" />
+                    <input id="card-interval" type="number" min={1} step={1} required value={recInterval} onChange={e => setRecInterval(e.target.value === '' ? '' : Number(e.target.value))} className="control" />
                   </div>}
                   {frequency === 'weekly' && <fieldset>
                     <legend className="field-label">On weekdays</legend>
