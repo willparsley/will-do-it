@@ -137,6 +137,15 @@ Special: "Uncategorized" stream is always `in_progress`, fixed at bottom, slight
 - Full history preserved.
 - Calm, easy-on-the-eyes UI with light/dark mode.
 
+## Connected Supabase Access & Migrations
+
+- Codex can use the connected Supabase plugin to inspect the database, apply hosted migrations with `apply_migration`, and verify results with `execute_sql`. This capability has been used successfully on this project; do not assume the user must run migrations manually or that a local Supabase CLI is required.
+- The production project is **Will do it**, project ref `iysmgaiiqqycwqccfryh`. Confirm the target against the app's configured Supabase URL and the connected project's identity before applying changes. Tool access can change between sessions; discover the available Supabase tools first.
+- When the user authorizes merging/deploying a feature, apply its reviewed, validated, required migrations as part of that deployment. Since merging to `main` triggers Vercel deployment, apply backward-compatible prerequisites before merging the dependent UI. An instruction elsewhere in this file to "apply before deploying" is an agent responsibility when connected access is available, not a reason to hand the work back to the user. This does not authorize unrelated or destructive database changes.
+- Inspect the live schema/functions and migration history before applying anything. Some earlier migrations were applied without migration-history entries, so an empty history does not mean the database is uninitialized. Apply the exact committed SQL from the relevant migration file, using `apply_migration` for hosted deployment; do not blindly replay all historical migrations.
+- Verify the deployed objects, intended behavior, and access permissions with non-destructive checks, and report which migration was applied and to which project. Keep local automated migration tests as well; a hosted verification does not replace them.
+- Ask the user to run a migration only when connected access is actually unavailable or an action genuinely requires their intervention. Explain the specific limitation or tool rejection instead of giving generic manual instructions. Follow the existing user-review-before-PR rule independently of this capability.
+
 ## Git Workflow
 - **Start from current main.** Before creating a new feature branch or worktree, run `git fetch origin` and explicitly base it on the latest `origin/main`, rather than the current checkout or a potentially stale local `main`. When continuing an existing feature branch, fetch and check for newer main commits before presenting a preview; integrate them while preserving feature commits and uncommitted work. If fetching fails, report that freshness could not be verified and never claim the branch is current.
 - Feature branches (`feat/`, `fix/`, `chore/`, etc.)
