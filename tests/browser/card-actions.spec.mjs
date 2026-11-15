@@ -99,7 +99,7 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await expect(editDialog).toBeHidden();
   await expect(first).toHaveCSS('outline-width', '2px');
   const actions = first.getByRole('group', { name: 'Actions for First task', exact: true });
-  await expect(actions.getByRole('button')).toHaveCount(isMobile ? 4 : 3);
+  await expect(actions.getByRole('button')).toHaveCount(3);
   for (const button of await actions.getByRole('button').all()) {
     const box = await button.boundingBox();
     expect(box.width).toBeGreaterThanOrEqual(44);
@@ -136,7 +136,18 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await page.keyboard.press('Escape');
   await expect(second).not.toHaveAttribute('data-selected');
   await select(first);
-  await press(actions.getByRole('button', { name: 'Edit First task', exact: true }));
+  const more = actions.getByRole('button', { name: 'More actions for First task', exact: true });
+  const menu = page.getByRole('menu', { name: 'More actions for First task', exact: true });
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+  await expect(menu.getByRole('menuitem', { name: 'Bump', exact: true })).toHaveCount(0);
+  await expect(menu.getByRole('menuitem', { name: 'Move', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(more).toBeFocused();
+  await press(more);
+  await press(menu.getByRole('menuitem', { name: 'Edit', exact: true }));
   await expect(editDialog).toBeVisible();
   await expect(first).not.toHaveAttribute('data-selected');
   await page.keyboard.press('Escape');
@@ -164,7 +175,9 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(page.getByText('Undone', { exact: true })).toBeVisible();
   await select(second);
-  await press(second.getByRole('button', { name: 'Advance to Complete', exact: true }));
+  await expect(second.getByRole('group', { name: 'Actions for Second task', exact: true }).getByRole('button')).toHaveCount(2);
+  await expect(second.getByRole('button', { name: 'Advance to Complete', exact: true })).toHaveCount(0);
+  await press(second.getByRole('button', { name: 'Mark complete', exact: true }));
   await expect(page.getByText('Card completed', { exact: true })).toBeVisible();
   expect(calls.filter(call => call.path.endsWith('/save_card_with_undo'))).toHaveLength(2);
   await select(first);
@@ -173,6 +186,18 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   const saves = calls.filter(call => call.path.endsWith('/save_card_with_undo'));
   expect(saves).toHaveLength(3);
   expect(saves.at(-1).body.p_changes.status).toBe('complete');
+  const recurringCard = page.locator('.card[data-card-id="recurring"]');
+  await select(recurringCard);
+  await press(recurringCard.getByRole('button', { name: 'More actions for Recurring task', exact: true }));
+  await press(page.getByRole('menuitem', { name: 'Cancel card', exact: true }));
+  await expect(recurringCard).toHaveCount(0);
+  const canceledToast = page.locator('[data-sonner-toast]').filter({ hasText: 'Card canceled' });
+  await expect(canceledToast).toBeVisible();
+  expect(calls.filter(call => call.path.endsWith('/save_card_with_undo')).at(-1).body).toMatchObject({
+    p_card_id: 'recurring', p_expected_status: 'research', p_changes: { status: 'canceled' },
+  });
+  await press(canceledToast.getByRole('button', { name: 'Undo', exact: true }));
+  await expect(recurringCard).toBeVisible();
   await page.getByRole('group', { name: 'Board view', exact: true }).locator('button[aria-pressed]').filter({ hasText: /^All$/ }).focus();
   await page.keyboard.press('Enter');
   const finished = page.locator('.card[data-card-id="finished"]');
@@ -183,7 +208,9 @@ for (const theme of ['light', 'dark']) test(`card selection and actions in ${the
   await expect(canceledRail).toHaveCSS('background-color', theme === 'dark' ? 'rgb(57, 38, 40)' : 'rgb(127, 29, 29)');
   await expect(canceledRail.locator('svg')).toHaveCSS('color', theme === 'dark' ? 'rgb(217, 148, 148)' : 'rgb(248, 113, 113)');
   await select(finished);
-  await expect(finished.getByRole('group', { name: 'Actions for Finished task', exact: true }).getByRole('button')).toHaveCount(isMobile ? 2 : 1);
+  const finishedActions = finished.getByRole('group', { name: 'Actions for Finished task', exact: true });
+  await expect(finishedActions.getByRole('button')).toHaveCount(1);
+  await expect(finishedActions.getByRole('button', { name: 'Edit Finished task', exact: true })).toBeVisible();
   if (isMobile) await page.touchscreen.tap(5, 5);
   else await page.mouse.click(5, 5);
   await expect(finished).not.toHaveAttribute('data-selected');

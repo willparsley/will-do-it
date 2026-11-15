@@ -2,15 +2,17 @@
 
 import { Card as CardType, nextStatus, STATUS_LABELS } from '@/lib/types';
 import { isCardBlocked } from '@/lib/card-prerequisites';
-import { Pencil, Check, ArrowRight, Repeat, LockKeyhole, MoveRight, CalendarArrowUp } from 'lucide-react';
+import { Pencil, Check, ArrowRight, Repeat, LockKeyhole, MoveRight, CalendarArrowUp, Ellipsis, X } from 'lucide-react';
+import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from 'react-aria-components';
 import { dueBadge, isTerminal, scheduledOccurrenceLabel } from '@/lib/card-views';
 import { useDraggable } from '@dnd-kit/core';
+import menuStyles from './HeaderControls.module.css';
 
 interface CardViewProps {
   card: CardType;
   prerequisite?: CardType;
   onClick?: (event: React.MouseEvent) => void;
-  onEdit?: (event: React.MouseEvent) => void;
+  onEdit?: (event?: React.MouseEvent) => void;
   onMove?: () => void;
   onBump?: () => void;
   compact?: boolean;
@@ -20,6 +22,7 @@ interface CardViewProps {
   desktop?: boolean;
   onComplete?: (id: string) => void;
   onAdvance?: (id: string) => void;
+  onCancel?: (id: string) => void;
   onEditRecurrence?: (sourceId: string) => void;
 }
 
@@ -27,7 +30,7 @@ interface CardViewProps {
  * Presentational card. Used both for the real, draggable card and for the
  * DragOverlay preview (so the preview doesn't register a duplicate draggable).
  */
-export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected = false, touchMode = false, desktop = false, compact = false, context, onMove, onBump }: CardViewProps) {
+export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, onCancel, onEditRecurrence, onEdit, selected = false, touchMode = false, desktop = false, compact = false, context, onMove, onBump }: CardViewProps) {
   const blocked = isCardBlocked(card, prerequisite);
   const isFinished = isTerminal(card);
   const hasReminder = !isFinished && !!card.remind_at;
@@ -42,8 +45,12 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
   const next = nextStatus(card.status);
   const isComplete = card.status === 'complete';
   const canComplete = !!onComplete;
-  const canPromote = !!(onAdvance && next);
+  const canPromote = !!(onAdvance && next && next !== 'complete');
   const showActions = !isFinished && (canComplete || canPromote);
+  const showHoverActions = showActions && desktop && !touchMode && !selected;
+  const canBump = !!(card.due_at && onBump);
+  const showMenu = !!(onEdit || onMove || canBump || onCancel);
+  const advanceLabel = next ? `Advance to ${STATUS_LABELS[next]}` : undefined;
   const promoteColor = next ? `var(--card-action-${next}, var(--status-${next}))` : undefined;
   const hasStatusBar = !isFinished;
 
@@ -67,7 +74,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
       data-card-id={card.id}
       data-selected={selected || undefined}
       data-compact={compact || undefined}
-      className={`card rounded-lg text-sm cursor-grab active:cursor-grabbing group grid ${(touchMode || selected) && !isFinished ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_2.25rem]'} overflow-hidden ${hasStatusBar ? 'status-bar' : ''} ${blocked ? 'card-blocked' : ''}`}
+      className={`card rounded-lg text-sm cursor-grab active:cursor-grabbing group grid ${showHoverActions || isFinished ? 'grid-cols-[minmax(0,1fr)_2.25rem]' : 'grid-cols-[minmax(0,1fr)]'} overflow-hidden ${hasStatusBar ? 'status-bar' : ''} ${blocked ? 'card-blocked' : ''}`}
       style={hasStatusBar ? ({ '--status-color': `var(--status-${card.status})` } as React.CSSProperties) : undefined}
     >
       {/* Left content */}
@@ -117,13 +124,6 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
               </button>
             ) : <Repeat className="h-3 w-3 flex-shrink-0 text-ink-muted" />
           )}
-          {!isFinished && card.due_at && onBump && desktop && !selected && <button type="button"
-            className="focus-ring inline-flex items-center gap-1 rounded p-1 text-ink-soft hover:text-accent hover:bg-accent-soft"
-            aria-label="Bump due date" title="Bump due date"
-            onPointerDown={event => event.stopPropagation()}
-            onClick={event => { event.stopPropagation(); onBump(); }}>
-            <CalendarArrowUp size={14} aria-hidden="true" /><span>Bump</span>
-          </button>}
           {hasReminder && (
             <span title="Has reminder" style={{ color: 'var(--status-priority_backlog)' }}>
               🔔
@@ -133,8 +133,8 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
       </div>
 
       {/* Right column: action rail for active cards, or static visual flair for finished cards */}
-      {showActions && !touchMode && !selected && (
-        <div className="grid grid-rows-[repeat(2,minmax(0,1fr))] w-9 self-stretch">
+      {showHoverActions && (
+        <div className={`grid w-9 self-stretch ${canPromote ? 'grid-rows-2' : 'grid-rows-1'}`}>
           {/* Upper row cell (complete tab) */}
           <div className="h-full w-full">
             {canComplete && (
@@ -157,14 +157,13 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
           </div>
 
           {/* Lower row cell (promote tab) */}
-          <div className="h-full w-full">
-            {canPromote && (
+          {canPromote && <div className="h-full w-full">
               <button
                 onClick={handleAdvance}
                 onPointerDown={(e) => e.stopPropagation()}
                 className="h-full w-full flex items-center justify-center hover:brightness-[0.72] transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto hover:shadow-[inset_0_3px_5px_rgba(0,0,0,0.45)]"
                 style={{ backgroundColor: promoteColor }}
-                type="button" aria-label={`Advance to ${next ? STATUS_LABELS[next] : ''}`} title={`Advance to ${next ? STATUS_LABELS[next] : ''}`}
+                type="button" aria-label={advanceLabel} title={advanceLabel}
               >
                 <svg
                   className="h-6 w-6 group-hover:brightness-[1.4]"
@@ -176,8 +175,7 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
                   <path d="M337.76,102.48c0.14-0.27,0.09-0.512,0.09-0.744 c0.004-3.43,0.003-6.858,0.003-10.287c0-0.193,0.004-0.389,0.002-0.582c-0.005-0.439,0.113-0.814,0.554-1.005 c0.445-0.192,0.81-0.007,1.115,0.292c0.832,0.813,16.838,16.805,18.977,18.965c0.87,0.879,0.858,1.221-0.017,2.098 c-6.264,6.27-12.53,12.534-18.797,18.799c-0.344,0.344-0.713,0.666-1.251,0.453c-0.572-0.227-0.586-0.73-0.585-1.244 c0.005-3.58,0.004-7.16,0.002-10.74c0-0.277,0.039-0.561-0.106-0.9c-0.967-0.293-2.01-0.43-3.049-0.574 c-7.589-1.055-14.792,0.398-21.77,3.341c-3.104,1.309-6.113,2.804-9.056,4.437c-0.485,0.269-0.953,0.355-1.356-0.076 c-0.384-0.412-0.276-0.873,0.011-1.307c0.059-0.091,0.116-0.182,0.175-0.272c1.858-2.843,3.986-5.468,6.403-7.855 c4.515-4.459,9.616-8.042,15.564-10.339c3.979-1.537,8.096-2.383,12.374-2.37c0.173,0.001,0.346-0.005,0.517-0.018 C337.622,102.545,337.679,102.51,337.76,102.48z" />
                 </svg>
               </button>
-            )}
-          </div>
+          </div>}
         </div>
       )}
 
@@ -215,19 +213,39 @@ export function CardView({ card, prerequisite, onClick, onComplete, onAdvance, o
 
       {selected && onClick && <div className="col-span-full flex flex-wrap border-t border-line bg-surface" role="group" aria-label={`Actions for ${card.title}`}
         onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
-        <button type="button" className="card-touch-action text-ink-soft" aria-label={`Edit ${card.title}`} onClick={onEdit}>
+        {isFinished && onEdit && <button type="button" className="card-touch-action text-ink-soft" aria-label={`Edit ${card.title}`} onClick={onEdit}>
           <Pencil size={16} aria-hidden="true" /><span>Edit</span>
-        </button>
-        {onMove && <button type="button" className="card-touch-action text-ink-soft" onClick={onMove}><MoveRight size={16} aria-hidden="true" /><span>Move</span></button>}
-        {!isFinished && card.due_at && onBump && <button type="button" className="card-touch-action text-ink-soft" onClick={onBump}>
-          <CalendarArrowUp size={16} aria-hidden="true" /><span>Bump</span>
         </button>}
         {!isFinished && canComplete && <button type="button" className="card-touch-action card-touch-complete" aria-label="Mark complete" onClick={handleComplete}>
           <Check size={16} aria-hidden="true" /><span>Complete</span>
         </button>}
-        {!isFinished && canPromote && <button type="button" className="card-touch-action" style={{ color: `color-mix(in srgb, var(--status-${next}) 55%, var(--text))` }} aria-label={`Advance to ${next ? STATUS_LABELS[next] : ''}`} onClick={handleAdvance}>
+        {!isFinished && canPromote && <button type="button" className="card-touch-action" style={{ color: `color-mix(in srgb, var(--status-${next}) 55%, var(--text))` }} aria-label={advanceLabel} title={advanceLabel} onClick={handleAdvance}>
           <ArrowRight size={16} aria-hidden="true" /><span>Advance</span>
         </button>}
+        {!isFinished && showMenu && <MenuTrigger>
+          <Button className="card-touch-action text-ink-soft" aria-label={`More actions for ${card.title}`}>
+            <Ellipsis size={18} aria-hidden="true" /><span>More</span>
+          </Button>
+          <Popover data-card-action-menu="" className={`${menuStyles.popover} ${menuStyles.cardMenu}`} placement="bottom end">
+            <Menu aria-label={`More actions for ${card.title}`} className={menuStyles.menu}>
+              {onEdit && <MenuItem className={menuStyles.item} onAction={() => onEdit()}>
+                <Pencil size={16} aria-hidden="true" /> Edit
+              </MenuItem>}
+              {onMove && <MenuItem className={menuStyles.item} onAction={onMove}>
+                <MoveRight size={16} aria-hidden="true" /> Move
+              </MenuItem>}
+              {canBump && <MenuItem className={menuStyles.item} onAction={onBump}>
+                <CalendarArrowUp size={16} aria-hidden="true" /> Bump
+              </MenuItem>}
+              {onCancel && <>
+                <Separator className="mx-2 my-1 border-t border-line" />
+                <MenuItem className={`${menuStyles.item} card-blocked-label`} onAction={() => onCancel(card.id)}>
+                  <X size={16} aria-hidden="true" /> Cancel card
+                </MenuItem>
+              </>}
+            </Menu>
+          </Popover>
+        </MenuTrigger>}
       </div>}
     </div>
   );
@@ -240,7 +258,7 @@ interface CardProps extends CardViewProps {
   dragEnabled?: boolean;
 }
 
-export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEditRecurrence, onEdit, selected, touchMode, desktop, compact, context, onMove, onBump, dragEnabled = !compact, overlay = false }: CardProps) {
+export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onCancel, onEditRecurrence, onEdit, selected, touchMode, desktop, compact, context, onMove, onBump, dragEnabled = !compact, overlay = false }: CardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     disabled: overlay || !dragEnabled,
@@ -263,7 +281,7 @@ export function Card({ card, prerequisite, onClick, onComplete, onAdvance, onEdi
       tabIndex={undefined}
       className={isDragging ? 'opacity-40' : ''}
     >
-      <CardView card={card} prerequisite={prerequisite} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onEditRecurrence={onEditRecurrence} selected={selected} touchMode={touchMode} desktop={desktop} onEdit={onEdit} compact={compact} context={context} onMove={onMove} onBump={onBump} />
+      <CardView card={card} prerequisite={prerequisite} onClick={onClick} onComplete={onComplete} onAdvance={onAdvance} onCancel={onCancel} onEditRecurrence={onEditRecurrence} selected={selected} touchMode={touchMode} desktop={desktop} onEdit={onEdit} compact={compact} context={context} onMove={onMove} onBump={onBump} />
     </div>
   );
 }

@@ -8,6 +8,10 @@
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
 }
 
+.popover.cardMenu {
+  width: min(12rem, calc(100vw - 2rem));
+}
+
 .tooltip {
   z-index: 100;
   max-width: min(16rem, calc(100vw - 2rem));

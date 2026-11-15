@@ -48,8 +48,10 @@ for (const theme of ['light', 'dark']) test(`bump action, validation, errors and
   await page.goto('http://app.test');
   const card = page.locator('[data-card-id="dated"]');
   await expect(card).toBeVisible();
-  if(isMobile) { await card.getByRole('button',{name:'Actions for Dated task'}).click(); await card.getByRole('button',{name:'Bump',exact:true}).click(); }
-  else await card.getByRole('button',{name:'Bump due date',exact:true}).click();
+  if (isMobile) await card.getByRole('button', { name: 'Actions for Dated task', exact: true }).tap();
+  else await card.press('Enter');
+  await card.getByRole('button', { name: 'More actions for Dated task', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Bump', exact: true }).click();
   const dialog = page.getByRole('dialog',{name:'Bump due date',exact:true});
   await expect(dialog).toContainText('Only this occurrence moves');
   await dialog.getByRole('button',{name:'1 month',exact:true}).click();
@@ -71,6 +73,5 @@ for (const theme of ['light', 'dark']) test(`bump action, validation, errors and
   await expect(card).toHaveCount(0);
   await page.getByRole('button',{name:'Undo',exact:true}).click();
   await expect(page.locator('[data-card-id="dated"]')).toBeVisible();
-  await expect(page.locator('[data-card-id="undated"]').getByRole('button',{name:'Bump due date',exact:true})).toHaveCount(0);
   expect(errors).toEqual([]);
 });
