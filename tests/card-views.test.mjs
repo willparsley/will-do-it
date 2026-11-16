@@ -19,8 +19,11 @@ test('status progression completes directly from In Progress and exposes seven c
   assert.equal(nextStatus('complete'), null);
   assert.equal(nextStatus('canceled'), null);
   assert.deepEqual(statusesForView('all'), [...STATUS_FLOW, 'canceled']);
-  const html = renderToStaticMarkup(React.createElement(CardView, { card: { ...base, status: 'in_progress' }, onAdvance() {} }));
-  assert.match(html, /Advance to Complete/);
+  const html = renderToStaticMarkup(React.createElement(CardView, {
+    card: { ...base, status: 'in_progress' }, desktop: true, onComplete() {}, onAdvance() {},
+  }));
+  assert.match(html, /Mark complete/);
+  assert.doesNotMatch(html, /Advance to Complete/);
 });
 
 test('hydration supplies last completion, timezone, and current stream without rewriting stored stream', () => {

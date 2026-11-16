@@ -33,7 +33,7 @@ import { DEFAULT_HISTORY_LIMIT, HISTORY_LIMIT_EVENT, readHistoryLimit, type Hist
 import { LaterCards } from '@/components/LaterCards';
 import { DEFAULT_LATER_DAYS, LATER_DAYS_EVENT, readLaterDays } from '@/lib/later-preferences';
 import { ArchiveCards } from '@/components/ArchiveCards';
-import { ArchivePeriod, HISTORY_PERIODS, View, cardsForStream, displayStreamId, hydrateRecurringCards, statusesForView } from '@/lib/card-views';
+import { ArchivePeriod, HISTORY_PERIODS, View, cardsForStream, displayStreamId, hydrateRecurringCards, isTerminal, statusesForView } from '@/lib/card-views';
 import { MobileAddMenu, MobileCards, MobileLayoutControls, MOBILE_LAYOUTS, type MobileLayout } from '@/components/MobileWorkspace';
 import { BumpCardModal } from '@/components/BumpCardModal';
 import { MoveCardModal } from '@/components/MoveCardModal';
@@ -90,7 +90,6 @@ export default function WillDoIt() {
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [touchMode, setTouchMode] = useState(false);
-  const touchInput = useRef(false);
   const suppressCardClick = useRef(false);
   const [activeDragCard, setActiveDragCard] = useState<Card | null>(null);
 
@@ -292,14 +291,15 @@ export default function WillDoIt() {
     resize();
     media.addEventListener('change', resize);
     const pointer = (event: PointerEvent) => {
-      touchInput.current = event.pointerType === 'touch' || event.pointerType === 'pen';
-      setTouchMode(touchInput.current);
+      setTouchMode(event.pointerType === 'touch' || event.pointerType === 'pen');
       suppressCardClick.current = false;
       const target = event.target as Element;
-      if (!target.closest('[data-card-id]')) setSelectedCardId(null);
+      if (!target.closest('[data-card-id], [data-card-action-menu]')) setSelectedCardId(null);
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedCardId(null);
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.target instanceof Element && event.target.closest('[data-card-action-menu]')) return;
+      setSelectedCardId(null);
     };
     document.addEventListener('pointerdown', pointer, true);
     document.addEventListener('keydown', escape);
@@ -545,65 +545,32 @@ export default function WillDoIt() {
     if (user) await loadData(user.id);
   };
 
-  const handleCompleteCard = async (cardId: string) => {
+  const handleCardStatus = async (cardId: string, status: CardStatus | 'advance') => {
     if (!accountActive.current) return;
     setSelectedCardId(null);
     const card = cards.find(c => c.id === cardId);
-    if (!card) return;
-
-    const newStatus = 'complete';
-    const completedAt = new Date().toISOString();
-
-    // Optimistic
-    setCards(prev => prev.map(c => 
-      c.id === cardId ? { ...c, status: newStatus, completed_at: completedAt } : c
-    ));
-
-    try {
-      const result = await saveQuickAction(card, { status: newStatus });
-      if (user) await loadData(user.id, false);
-      showUndoToast('Card completed', result.undo_id);
-    } catch (err) {
-      if (!accountActive.current) return;
-      console.error(err);
-      setCards(prev => prev.map(c => c.id === cardId ? card : c));
-      toast.error(errorMessage(err, 'Failed to complete'));
-      if (user) await loadData(user.id);
-    }
-  };
-
-  const handleAdvanceCard = async (cardId: string) => {
-    if (!accountActive.current) return;
-    setSelectedCardId(null);
-    const card = cards.find(c => c.id === cardId);
-    if (!card) return;
-
-    const next = nextStatus(card.status);
+    if (!card || isTerminal(card)) return;
+    const next = status === 'advance' ? nextStatus(card.status) : status;
     if (!next) return;
-
-    // Landing on complete goes through the full completion path so
-    // completed_at and recurring-bookkeeping stay consistent.
-    if (next === 'complete') {
-      return handleCompleteCard(cardId);
-    }
+    const changes: Partial<Card> = { status: next };
+    if (next === 'complete' || next === 'canceled') changes.completed_at = new Date().toISOString();
 
     // Optimistic
     setCards(prev => prev.map(c =>
-      c.id === cardId ? { ...c, status: next } : c
+      c.id === cardId ? { ...c, ...changes } : c
     ));
 
     try {
       const result = await saveQuickAction(card, { status: next });
       if (user) await loadData(user.id, false);
-      showUndoToast(`Moved to ${STATUS_LABELS[next]}`, result.undo_id);
+      const message = next === 'complete' ? 'Card completed' : next === 'canceled' ? 'Card canceled' : `Moved to ${STATUS_LABELS[next]}`;
+      showUndoToast(message, result.undo_id);
     } catch (err) {
       if (!accountActive.current) return;
       console.error(err);
-      // Revert on failure
-      setCards(prev => prev.map(c =>
-        c.id === cardId ? { ...c, status: card.status } : c
-      ));
-      toast.error(errorMessage(err, 'Failed to move card'));
+      setCards(prev => prev.map(c => c.id === cardId ? card : c));
+      const action = next === 'complete' ? 'complete' : next === 'canceled' ? 'cancel' : 'move';
+      toast.error(errorMessage(err, `Failed to ${action} card`));
       if (user) await loadData(user.id);
     }
   };
@@ -622,17 +589,17 @@ export default function WillDoIt() {
     <CardComponent key={card.id} card={card} prerequisite={cards.find(other => other.id === card.prerequisite_card_id)} selected={selectedCardId === card.id} touchMode={(mobileViewport && compact) || touchMode} desktop={!mobileViewport} compact={compact} dragEnabled={!compact || statusDragEnabled}
       context={compact ? context : undefined}
       onBump={() => { setSelectedCardId(null); setBumpingCard(card); }}
-      onMove={mobileViewport || compact ? () => { setSelectedCardId(null); setMovingCard(card); } : undefined}
+      onMove={() => { setSelectedCardId(null); setMovingCard(card); }}
       onEdit={event => {
-        if (activeDragCard || (suppressCardClick.current && event.detail !== 0)) return;
+        if (activeDragCard || (suppressCardClick.current && event && event.detail !== 0)) return;
         setSelectedCardId(null); setEditingCard(card);
       }}
       onClick={event => {
-        if (activeDragCard || (suppressCardClick.current && event?.detail !== 0)) return;
-        if (!mobileViewport || compact || touchInput.current || event.detail === 0) setSelectedCardId(current => current === card.id ? null : card.id);
-        else { setSelectedCardId(null); setEditingCard(card); }
+        if (activeDragCard || (suppressCardClick.current && event.detail !== 0)) return;
+        setSelectedCardId(current => current === card.id ? null : card.id);
       }}
-      onComplete={handleCompleteCard} onAdvance={handleAdvanceCard} onEditRecurrence={openRecurrenceEditor} />
+      onComplete={id => handleCardStatus(id, 'complete')} onAdvance={id => handleCardStatus(id, 'advance')}
+      onCancel={id => handleCardStatus(id, 'canceled')} onEditRecurrence={openRecurrenceEditor} />
     );
   };
 

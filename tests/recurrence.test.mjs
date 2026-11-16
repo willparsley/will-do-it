@@ -854,13 +854,15 @@ const quickAction = async (id, status, changes) => (await query(
 const undoAction = id => query('select public.undo_card_action($1)', [id]);
 const cardSnapshot = async () => (await query("select jsonb_agg(to_jsonb(c) - 'updated_at' order by id) as cards from cards c"))[0].cards;
 
-for (const stack of [false, true]) test(`Undo recurring completion restores reminders and bookkeeping (${stack ? 'stacking' : 'non-stacking'})`, async () => {
+for (const [status, stack] of [['complete', false], ['complete', true], ['canceled', false]]) test(`Undo recurring ${status} restores reminders and bookkeeping (${stack ? 'stacking' : 'non-stacking'})`, async () => {
   await fixture({ active: true, stack });
   await generate();
   const before = await cardSnapshot();
   const settings = await recurrenceSettings();
-  const result = await quickAction(original, 'in_progress', { status: 'complete' });
-  assert.equal(result.card.status, 'complete');
+  const result = await quickAction(original, 'in_progress', { status });
+  assert.equal(result.card.status, status);
+  assert.ok(result.card.completed_at);
+  assert.equal(result.card.remind_at, null);
   await generate(); // A normal refresh must not invalidate Undo.
   await undoAction(result.undo_id);
   assert.deepEqual(await cardSnapshot(), before);

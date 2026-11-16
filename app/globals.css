@@ -52,7 +52,6 @@
   --card-action-research: #a78bfa;
   --card-action-waiting: #2dd4bf;
   --card-action-in_progress: #4d94ff;
-  --card-action-complete: #34d399;
 
   color-scheme: light;
 }
@@ -470,6 +469,7 @@ textarea::placeholder {
   cursor: pointer;
 }
 .card-touch-action:hover { background: var(--surface-sunken); }
+.card-touch-action[data-pressed] { background: var(--surface-sunken); }
 .card-touch-action:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .card-touch-complete { color: #008751; }
 .dark .card-touch-complete { color: #00c177; }

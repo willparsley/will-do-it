@@ -151,7 +151,8 @@ for (const theme of ['light', 'dark']) test(`list layouts preserve filtering, mo
   await closeFilters(page);
   if (isMobile) await card('waiting').locator('.card-title button').tap();
   else { await card('waiting').focus(); await page.keyboard.press('Enter'); }
-  await card('waiting').getByRole('button', { name: 'Move', exact: true }).click();
+  await card('waiting').getByRole('button', { name: 'More actions for Confirm delivery date', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Move', exact: true }).click();
   const move = page.getByRole('dialog', { name: 'Move Card', exact: true });
   await move.getByRole('button', { name: 'Destination stream' }).click();
   await page.getByRole('option', { name: 'Website refresh', exact: true }).click();
